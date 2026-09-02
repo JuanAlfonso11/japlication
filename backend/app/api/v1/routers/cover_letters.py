@@ -1,0 +1,103 @@
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.deps import get_current_user
+from app.db.session import get_db
+from app.models.career_profile import CareerProfile
+from app.models.cover_letter import CoverLetter
+from app.models.enums import GenerationSource
+from app.models.job import Job
+from app.models.job_match import JobMatch
+from app.models.resume_version import ResumeVersion
+from app.models.user import User
+from app.schemas.cover_letter import CoverLetter as CoverLetterSchema
+from app.schemas.cover_letter import CoverLetterGenerateRequest
+from app.services.cover_letter_generator import generate_cover_letter
+
+router = APIRouter(tags=["cover-letters"])
+
+
+@router.post(
+    "/jobs/{job_id}/cover-letter", response_model=CoverLetterSchema, status_code=status.HTTP_201_CREATED
+)
+async def generate_cover_letter_endpoint(
+    job_id: UUID,
+    payload: CoverLetterGenerateRequest | None = None,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> CoverLetterSchema:
+    payload = payload or CoverLetterGenerateRequest()
+
+    job = (await db.execute(select(Job).where(Job.id == job_id))).scalar_one_or_none()
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found.")
+
+    profile = (
+        await db.execute(select(CareerProfile).where(CareerProfile.user_id == current_user.id))
+    ).scalar_one_or_none()
+    if profile is None:
+        raise HTTPException(
+            status_code=400, detail="Create your career profile before generating a cover letter."
+        )
+
+    if payload.resume_version_id is not None:
+        resume_version = (
+            await db.execute(
+                select(ResumeVersion).where(
+                    ResumeVersion.id == payload.resume_version_id,
+                    ResumeVersion.user_id == current_user.id,
+                )
+            )
+        ).scalar_one_or_none()
+        if resume_version is None:
+            raise HTTPException(status_code=404, detail="Resume version not found.")
+
+    match_row = (
+        await db.execute(
+            select(JobMatch).where(JobMatch.user_id == current_user.id, JobMatch.job_id == job_id)
+        )
+    ).scalar_one_or_none()
+    matched_skills = list(match_row.matched_skills) if match_row else []
+
+    tone = payload.tone or "professional"
+    generated = generate_cover_letter(
+        profile=profile,
+        job=job,
+        candidate_name=current_user.full_name,
+        matched_skills=matched_skills,
+        tone=tone,
+    )
+
+    cover_letter = CoverLetter(
+        user_id=current_user.id,
+        job_id=job.id,
+        resume_version_id=payload.resume_version_id,
+        content=generated["content"],
+        tone=generated["tone"],
+        generated_by=GenerationSource(generated["generated_by"]),
+    )
+    db.add(cover_letter)
+    await db.commit()
+    await db.refresh(cover_letter)
+    return CoverLetterSchema.model_validate(cover_letter)
+
+
+@router.get("/cover-letters/{cover_letter_id}", response_model=CoverLetterSchema)
+async def get_cover_letter(
+    cover_letter_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> CoverLetterSchema:
+    row = (
+        await db.execute(
+            select(CoverLetter).where(
+                CoverLetter.id == cover_letter_id, CoverLetter.user_id == current_user.id
+            )
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Cover letter not found.")
+    return CoverLetterSchema.model_validate(row)
