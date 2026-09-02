@@ -76,10 +76,12 @@ async def swipe_decision(
         app_row = existing
 
     await db.commit()
-    await db.refresh(app_row)
     app_row = (
         await db.execute(
-            select(Application).options(selectinload(Application.job)).where(Application.id == app_row.id)
+            select(Application)
+            .options(selectinload(Application.job))
+            .where(Application.id == app_row.id)
+            .execution_options(populate_existing=True)
         )
     ).scalar_one()
     return _serialize(app_row)
@@ -143,7 +145,10 @@ async def update_application(
     await db.commit()
     row = (
         await db.execute(
-            select(Application).options(selectinload(Application.job)).where(Application.id == row.id)
+            select(Application)
+            .options(selectinload(Application.job))
+            .where(Application.id == row.id)
+            .execution_options(populate_existing=True)
         )
     ).scalar_one()
     return _serialize(row)

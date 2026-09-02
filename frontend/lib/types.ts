@@ -179,20 +179,40 @@ export interface ApplicationUpdatePayload {
 
 // ---------- Resume adaptation ----------
 
-export interface ResumeSection {
-  heading: string;
-  content: string[];
+export interface ResumeExperienceEntry {
+  company: string;
+  title: string;
+  start_date?: string | null;
+  end_date?: string | null;
+  location?: string;
+  bullets: string[];
+}
+
+export interface ResumeEducationEntry {
+  institution: string;
+  degree: string;
+  field?: string;
+  start_date?: string | null;
+  end_date?: string | null;
+}
+
+export interface ResumeContent {
+  summary: string;
+  skills: string[];
+  experience: ResumeExperienceEntry[];
+  education: ResumeEducationEntry[];
 }
 
 export interface ResumeVersion {
   id: string;
-  job_id: string;
-  tone?: string;
-  headline: string;
-  summary: string;
-  sections: ResumeSection[];
-  plain_text?: string;
-  created_at?: string;
+  user_id: string;
+  career_profile_id: string;
+  job_id?: string | null;
+  title: string;
+  content: ResumeContent;
+  change_log: string[];
+  generated_by: "manual" | "ai";
+  created_at: string;
 }
 
 export interface ResumeGeneratePayload {
@@ -203,11 +223,13 @@ export interface ResumeGeneratePayload {
 
 export interface CoverLetter {
   id: string;
+  user_id: string;
   job_id: string;
   resume_version_id?: string | null;
-  tone?: string;
-  body: string;
-  created_at?: string;
+  content: string;
+  tone: string;
+  generated_by: "manual" | "ai";
+  created_at: string;
 }
 
 export interface CoverLetterGeneratePayload {

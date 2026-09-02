@@ -33,14 +33,6 @@ async def apply_schema() -> None:
             # asyncpg driver does not support multiple statements in one execute();
             # run the raw DDL through the underlying driver connection instead.
             raw_conn = await conn.get_raw_connection()
-            # db/schema.sql creates the `citext` extension *after* the `users`
-            # table already declares an `email CITEXT` column, so applying the
-            # file as-is against a fresh database fails partway through.
-            # Create it first (idempotent — the file's own later
-            # `CREATE EXTENSION IF NOT EXISTS citext` becomes a no-op) so this
-            # faithfully produces the schema schema.sql intends, without
-            # editing that file.
-            await raw_conn.driver_connection.execute("CREATE EXTENSION IF NOT EXISTS citext;")
             await raw_conn.driver_connection.execute(sql)
     finally:
         await engine.dispose()

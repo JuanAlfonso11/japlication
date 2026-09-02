@@ -66,17 +66,6 @@ def _split_sql_statements(sql: str) -> list[str]:
 
 
 def upgrade() -> None:
-    # db/schema.sql creates the `citext` extension *after* the `users` table
-    # already declares an `email CITEXT` column (its own comment above that
-    # line even flags this as a known gap: "citext extension needed ... /
-    # fallback to text+lower index if unavailable"). Applying the file
-    # statement-by-statement against a fresh database therefore fails before
-    # ever reaching that line. Create it first (idempotent - the file's own
-    # later `CREATE EXTENSION IF NOT EXISTS citext` becomes a harmless no-op)
-    # so the migration faithfully produces the schema schema.sql *intends*
-    # without editing that file.
-    op.execute("CREATE EXTENSION IF NOT EXISTS citext")
-
     sql = SCHEMA_SQL_PATH.read_text()
     for statement in _split_sql_statements(sql):
         op.execute(statement)

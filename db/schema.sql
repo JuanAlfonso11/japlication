@@ -4,21 +4,19 @@
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 CREATE EXTENSION IF NOT EXISTS vector;
+CREATE EXTENSION IF NOT EXISTS citext;
 
 -- =========================================================
 -- users
 -- =========================================================
 CREATE TABLE users (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    email           CITEXT UNIQUE,
+    email           CITEXT UNIQUE NOT NULL,
     hashed_password TEXT NOT NULL,
     full_name       TEXT NOT NULL,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-
--- citext extension needed for case-insensitive email; fallback to text+lower index if unavailable
-CREATE EXTENSION IF NOT EXISTS citext;
 
 -- =========================================================
 -- career_profiles  (the "CV Maestro" - factual, user-owned truth)

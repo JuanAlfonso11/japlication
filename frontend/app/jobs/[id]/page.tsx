@@ -7,8 +7,33 @@ import Spinner from "@/components/Spinner";
 import ErrorNotice from "@/components/ErrorNotice";
 import MatchBreakdown from "@/components/MatchBreakdown";
 import ScoreBadge from "@/components/ScoreBadge";
+import SkillTag from "@/components/SkillTag";
 import { ApiError, jobsApi } from "@/lib/api";
 import type { CoverLetter, Job, MatchResult, ResumeVersion } from "@/lib/types";
+
+function resumeToPlainText(resume: ResumeVersion): string {
+  const lines: string[] = [resume.title, ""];
+  if (resume.content.summary) lines.push(resume.content.summary, "");
+  if (resume.content.skills.length) {
+    lines.push("SKILLS", resume.content.skills.join(", "), "");
+  }
+  if (resume.content.experience.length) {
+    lines.push("EXPERIENCE");
+    for (const entry of resume.content.experience) {
+      const dates = [entry.start_date, entry.end_date ?? "Present"].filter(Boolean).join(" – ");
+      lines.push(`${entry.title} — ${entry.company}${dates ? ` (${dates})` : ""}`);
+      for (const bullet of entry.bullets) lines.push(`- ${bullet}`);
+      lines.push("");
+    }
+  }
+  if (resume.content.education.length) {
+    lines.push("EDUCATION");
+    for (const entry of resume.content.education) {
+      lines.push(`${entry.degree}${entry.field ? `, ${entry.field}` : ""} — ${entry.institution}`);
+    }
+  }
+  return lines.join("\n").trim();
+}
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -205,25 +230,52 @@ function JobDetailContent() {
           <div className="mt-2 space-y-3 rounded-xl border border-gray-100 bg-gray-50 p-4">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="font-semibold text-gray-900">{resume.headline}</p>
-                {resume.summary && (
-                  <p className="mt-1 text-sm text-gray-600">{resume.summary}</p>
+                <p className="font-semibold text-gray-900">{resume.title}</p>
+                {resume.content.summary && (
+                  <p className="mt-1 text-sm text-gray-600">{resume.content.summary}</p>
                 )}
               </div>
-              {resume.plain_text && <CopyButton text={resume.plain_text} />}
+              <CopyButton text={resumeToPlainText(resume)} />
             </div>
-            {resume.sections?.map((section, i) => (
+
+            {resume.content.skills.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  Skills
+                </p>
+                <div className="mt-1 flex flex-wrap gap-1.5">
+                  {resume.content.skills.map((skill) => (
+                    <SkillTag key={skill} label={skill} />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {resume.content.experience.map((entry, i) => (
               <div key={i}>
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                  {section.heading}
+                  {entry.title} — {entry.company}
                 </p>
                 <ul className="mt-1 list-inside list-disc space-y-0.5 text-sm text-gray-700">
-                  {section.content.map((line, j) => (
+                  {entry.bullets.map((line, j) => (
                     <li key={j}>{line}</li>
                   ))}
                 </ul>
               </div>
             ))}
+
+            {resume.change_log.length > 0 && (
+              <div className="border-t border-gray-200 pt-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  What changed
+                </p>
+                <ul className="mt-1 list-inside list-disc space-y-0.5 text-xs text-gray-500">
+                  {resume.change_log.map((line, i) => (
+                    <li key={i}>{line}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -244,10 +296,10 @@ function JobDetailContent() {
         {coverLetter && (
           <div className="mt-2 space-y-3 rounded-xl border border-gray-100 bg-gray-50 p-4">
             <div className="flex justify-end">
-              <CopyButton text={coverLetter.body} />
+              <CopyButton text={coverLetter.content} />
             </div>
             <p className="whitespace-pre-line text-sm leading-relaxed text-gray-700">
-              {coverLetter.body}
+              {coverLetter.content}
             </p>
           </div>
         )}
