@@ -6,7 +6,7 @@ Uso personal — ver el diseño conceptual completo en [`docs/DESIGN.md`](docs/D
 
 ## Stack
 
-- **Frontend**: Next.js (App Router) + React + TypeScript + Tailwind CSS — responsive / PWA instalable en móvil, con un shell nativo Android opcional (Capacitor) para acceso remoto seguro vía Tailscale.
+- **Frontend**: Next.js (App Router) + React + TypeScript + Tailwind CSS — responsive / PWA instalable en móvil, con un shell nativo Android opcional (Capacitor) para acceso remoto seguro vía VPN privada (WireGuard / Tailscale).
 - **Backend**: FastAPI (Python 3.11, async SQLAlchemy 2.0).
 - **Base de datos**: PostgreSQL con `pgvector` y `pg_trgm` (búsqueda full-text + semántica opcional).
 
@@ -16,7 +16,7 @@ japlication/
 ├── docs/
 │   ├── DESIGN.md           # diseño conceptual (pantallas, flujos, UX)
 │   ├── API_CONTRACT.md     # contrato REST usado por frontend y backend
-│   └── ANDROID_APP.md      # app Android (Capacitor) + acceso remoto seguro vía Tailscale
+│   └── ANDROID_APP.md      # app Android (Capacitor) + acceso remoto seguro vía VPN privada
 ├── backend/                 # API FastAPI
 ├── frontend/                 # App Next.js (incluye frontend/android/, el proyecto nativo)
 └── docker-compose.yml
