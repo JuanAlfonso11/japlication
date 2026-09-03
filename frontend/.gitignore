@@ -24,3 +24,14 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Capacitor / Android (native shell — generated project, machine-specific
+# SDK paths, and build output should never be committed)
+/android/.gradle/
+/android/build/
+/android/app/build/
+/android/local.properties
+/android/*.keystore
+/android/*.jks
+/android/captures/
+/android/.idea/

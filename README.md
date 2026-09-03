@@ -2,11 +2,11 @@
 
 Plataforma personal de búsqueda y postulación a empleo: perfil de carrera (CV maestro, con importación desde PDF), búsqueda en vivo agregada contra 6 APIs públicas sin autenticación + importación de vacantes desde URL, motor de coincidencia (match engine) híbrido, evaluador de CV, adaptación de CV, generación de cover letters, verificación de cuenta por correo, y una interfaz de decisión estilo Tinder.
 
-Uso personal — ver el diseño conceptual completo en [`docs/DESIGN.md`](docs/DESIGN.md) y el contrato de API en [`docs/API_CONTRACT.md`](docs/API_CONTRACT.md).
+Uso personal — ver el diseño conceptual completo en [`docs/DESIGN.md`](docs/DESIGN.md), el contrato de API en [`docs/API_CONTRACT.md`](docs/API_CONTRACT.md), y cómo instalarla como app Android en [`docs/ANDROID_APP.md`](docs/ANDROID_APP.md).
 
 ## Stack
 
-- **Frontend**: Next.js (App Router) + React + TypeScript + Tailwind CSS — responsive / PWA instalable en móvil.
+- **Frontend**: Next.js (App Router) + React + TypeScript + Tailwind CSS — responsive / PWA instalable en móvil, con un shell nativo Android opcional (Capacitor) para acceso remoto seguro vía Tailscale.
 - **Backend**: FastAPI (Python 3.11, async SQLAlchemy 2.0).
 - **Base de datos**: PostgreSQL con `pgvector` y `pg_trgm` (búsqueda full-text + semántica opcional).
 
@@ -15,9 +15,10 @@ japlication/
 ├── db/schema.sql          # esquema SQL fuente de verdad
 ├── docs/
 │   ├── DESIGN.md           # diseño conceptual (pantallas, flujos, UX)
-│   └── API_CONTRACT.md     # contrato REST usado por frontend y backend
+│   ├── API_CONTRACT.md     # contrato REST usado por frontend y backend
+│   └── ANDROID_APP.md      # app Android (Capacitor) + acceso remoto seguro vía Tailscale
 ├── backend/                 # API FastAPI
-├── frontend/                 # App Next.js
+├── frontend/                 # App Next.js (incluye frontend/android/, el proyecto nativo)
 └── docker-compose.yml
 ```
 

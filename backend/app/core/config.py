@@ -33,12 +33,23 @@ class Settings(BaseSettings):
     # CV upload (PDF -> CareerProfile draft)
     MAX_CV_UPLOAD_MB: int = 8
 
-    # CORS
+    # CORS. FRONTEND_ORIGIN is also used to build the email-verification link,
+    # so it stays the single "canonical" origin. CORS_EXTRA_ORIGINS is a
+    # comma-separated list of additional origins allowed to call the API —
+    # e.g. a Tailscale hostname, so the same backend serves both the local
+    # dev frontend and the Android app / phone browser over Tailscale.
     FRONTEND_ORIGIN: str = "http://localhost:3000"
+    CORS_EXTRA_ORIGINS: Optional[str] = None
 
     # App metadata
     PROJECT_NAME: str = "JobFlow AI"
     API_V1_PREFIX: str = "/api/v1"
+
+    def cors_origins(self) -> list[str]:
+        origins = [self.FRONTEND_ORIGIN]
+        if self.CORS_EXTRA_ORIGINS:
+            origins += [o.strip() for o in self.CORS_EXTRA_ORIGINS.split(",") if o.strip()]
+        return origins
 
 
 @lru_cache
