@@ -1,4 +1,5 @@
 import type {
+  AggregateSearchResponse,
   ApiErrorShape,
   Application,
   ApplicationUpdatePayload,
@@ -8,6 +9,7 @@ import type {
   CVEvaluation,
   CoverLetterGeneratePayload,
   DecisionPayload,
+  ExperienceLevel,
   ExternalJobImportPayload,
   ExternalJobsSearchResponse,
   ExternalProvider,
@@ -190,6 +192,8 @@ export const jobsApi = {
     provider: ExternalProvider;
     q?: string;
     location?: string;
+    experience_level?: ExperienceLevel;
+    category?: string;
     country?: string;
     worldwide?: boolean;
     seniority?: string;
@@ -198,6 +202,12 @@ export const jobsApi = {
     page?: number;
     next_page_token?: string;
   }) => request<ExternalJobsSearchResponse>("/jobs/search", { query: params }),
+  searchAggregate: (params: {
+    q?: string;
+    location?: string;
+    experience_level?: ExperienceLevel;
+    category?: string;
+  }) => request<AggregateSearchResponse>("/jobs/search/aggregate", { query: params }),
   importExternal: (payload: ExternalJobImportPayload) =>
     request<Job>("/jobs/search/import", { method: "POST", body: payload }),
 };

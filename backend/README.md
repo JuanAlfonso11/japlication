@@ -66,17 +66,25 @@ Tests are fully offline (no live network calls, no live database) — they
 exercise `match_engine.py` (skill overlap, experience-years extraction,
 weighted scoring), `job_importer.py` (JSON-LD parsing against a sample
 `JobPosting` HTML fixture, and heuristic fallback parsing against plain HTML
-with no JSON-LD), and the three search integrations (`google_jobs.py`,
-`himalayas.py`, `upwork.py` — normalization, salary/date parsing, OAuth URL
-building, and cache expiry, all with `httpx` mocked; no live calls to
-serpapi.com / himalayas.app / api.upwork.com are made by the suite).
+with no JSON-LD), `experience_level.py` (keyword inference + native-value
+mapping for Himalayas/The Muse/Jobicy), and all eight search integrations
+(`google_jobs.py`, `himalayas.py`, `upwork.py`, `arbeitnow.py`,
+`remotive.py`, `jobicy.py`, `remotejobs_org.py`, `themuse.py` —
+normalization, salary/date parsing, OAuth URL building, and cache expiry,
+all with `httpx` mocked; no live calls to any of those providers are made by
+the suite).
 
 ## Live job search
 
-`GET /jobs/search?provider=himalayas|google_jobs|upwork` and
-`POST /jobs/search/import` are documented in `../docs/API_CONTRACT.md`.
+`GET /jobs/search/aggregate` (all 6 no-auth providers at once — what Discover uses by default),
+`GET /jobs/search?provider=` (single provider), and `POST /jobs/search/import` are documented in
+`../docs/API_CONTRACT.md`. The research behind each no-auth provider (endpoint, params, response shape,
+rate limits) is in `../docs/PUBLIC_APIS_RESEARCH.md`.
 
-- **Himalayas** needs no configuration.
+- **Himalayas, Arbeitnow, Remotive, Jobicy, RemoteJobs.org, The Muse** need no configuration — zero API
+  keys, zero OAuth, zero signup. `app/services/experience_level.py` normalizes each one's notion of
+  seniority (native where the provider has it, inferred from title/description otherwise) into one shared
+  `internship|entry|mid|senior|lead` taxonomy so the level filter works uniformly across all six.
 - **Google Jobs** (SerpApi) needs `SERPAPI_API_KEY` — get one at
   [serpapi.com](https://serpapi.com). Without it, `provider=google_jobs`
   returns a clean `503`.
@@ -119,10 +127,18 @@ app/
     cover_letter_generator.py  personalized cover letter (AI when configured, template fallback)
     cv_evaluator.py          CV quality check, independent of any job (AI summary when configured)
     google_jobs.py          Google Jobs search via SerpApi (server-side API key)
-    himalayas.py             Himalayas remote-jobs search (no key needed)
     upwork.py                 Upwork OAuth2 + GraphQL job search (per-user token)
+    experience_level.py     shared internship/entry/mid/senior/lead taxonomy
+    himalayas.py             no-auth: Himalayas remote-jobs search
+    arbeitnow.py             no-auth: Arbeitnow job board
+    remotive.py               no-auth: Remotive remote-jobs search
+    jobicy.py                   no-auth: Jobicy remote-jobs search
+    remotejobs_org.py         no-auth: RemoteJobs.org search
+    themuse.py                 no-auth: The Muse (api_key optional)
 alembic/                   migrations (0001 mirrors db/schema.sql)
-tests/                     pytest suite (match_engine, job_importer, cv_evaluator, google_jobs, himalayas, upwork)
+tests/                     pytest suite (match_engine, job_importer, cv_evaluator, experience_level,
+                           google_jobs, himalayas, upwork, arbeitnow, remotive, jobicy,
+                           remotejobs_org, themuse)
 ```
 
 ## CV Evaluator

@@ -46,7 +46,11 @@ CREATE INDEX idx_career_profiles_search ON career_profiles USING gin (search_vec
 -- =========================================================
 -- jobs  (normalized job postings, imported from a URL or search)
 -- =========================================================
-CREATE TYPE job_source AS ENUM ('url_import', 'google_jobs', 'himalayas', 'upwork', 'linkedin', 'indeed', 'manual');
+CREATE TYPE job_source AS ENUM (
+    'url_import', 'google_jobs', 'himalayas', 'upwork',
+    'arbeitnow', 'remotive', 'jobicy', 'remotejobs_org', 'themuse',
+    'linkedin', 'indeed', 'manual'
+);
 
 CREATE TABLE jobs (
     id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),

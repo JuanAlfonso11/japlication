@@ -56,19 +56,36 @@ All bodies/responses are JSON. IDs are UUID strings. Timestamps are ISO-8601.
   `summary` is AI-written (`summary_generated_by: "ai"`) when `ANTHROPIC_API_KEY` is configured, else a
   deterministic fallback sentence built from the top issue.
 
-## Live job search (Google Jobs / Himalayas / Upwork)
+## Live job search
 Search results are **not persisted** — pick one and call the import endpoint to add it to `jobs`.
 
-- `GET /jobs/search?provider=himalayas|google_jobs|upwork&q=&location=&country=&worldwide=&seniority=&employment_type=&sort=&page=&next_page_token=`
-  -> `{provider, results: ExternalJobResult[], next_page_token?, page?, has_more}`
-  - `provider` defaults to `himalayas` (free, no key). `google_jobs` requires the backend's `SERPAPI_API_KEY`
-    (else `503`). `upwork` requires the user to have connected their account (else `409`) — see below.
+Eight providers total. Six require **zero credentials** (no API key, no OAuth, no signup) — see
+`docs/PUBLIC_APIS_RESEARCH.md` for the full research behind each one: `himalayas`, `arbeitnow`, `remotive`,
+`jobicy`, `remotejobs_org`, `themuse`. Two remain opt-in because they genuinely need credentials:
+`google_jobs` (`SERPAPI_API_KEY`) and `upwork` (per-user OAuth2 connect).
+
+- `GET /jobs/search/aggregate?q=&location=Remote&experience_level=&category=`
+  -> `{results: ExternalJobResult[], sources: [{provider, count, error?}]}`
+  — fans out to **all six no-auth providers in parallel** and merges the results, newest first. This is
+  what Discover's default "Todas las fuentes" search calls. A provider that errors doesn't drop the others'
+  results; its failure shows up in `sources` instead. `location` defaults to `"Remote"` when omitted.
+  `experience_level` is one of `internship|entry|mid|senior|lead` (see below).
+- `GET /jobs/search?provider=himalayas|arbeitnow|remotive|jobicy|remotejobs_org|themuse|google_jobs|upwork&q=&location=&experience_level=&category=&country=&worldwide=&seniority=&employment_type=&sort=&page=&next_page_token=`
+  -> `{provider, results: ExternalJobResult[], next_page_token?, page?, has_more}` — single-provider search,
+  used directly for `google_jobs`/`upwork` (which the aggregate endpoint intentionally excludes) and
+  available for any individual no-auth source too.
+  - `provider` defaults to `himalayas`. `google_jobs` requires the backend's `SERPAPI_API_KEY` (else `503`).
+    `upwork` requires the user to have connected their account (else `409`) — see below.
   - `ExternalJobResult`: same shape as `Job` (minus id/timestamps) plus `external_id` and `source`.
+    `seniority` holds the normalized experience level (`internship|entry|mid|senior|lead`) whenever it could
+    be determined — natively from the provider (Himalayas, The Muse, Jobicy) or inferred from the title/
+    description text (Arbeitnow, Remotive, RemoteJobs.org) via `app/services/experience_level.py`.
     ```json
     {
       "external_id": "hj-001", "source": "himalayas",
       "source_url": "https://...", "title": "Senior React Engineer", "company": "Northbeam",
       "location": "United States, Canada", "remote_type": "remote", "employment_type": "full_time",
+      "seniority": "senior",
       "description": "...", "requirements": ["..."], "skills_required": [{"name": "React", "importance": "required"}],
       "salary_min": 90000, "salary_max": 120000, "salary_currency": "USD", "posted_at": "2023-11-14T22:13:20Z"
     }

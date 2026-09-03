@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
@@ -16,6 +17,8 @@ from app.models.user import User
 from app.models.oauth_connection import OAuthConnection
 from app.schemas.job import Job as JobSchema
 from app.schemas.job import (
+    AggregateSearchResponse,
+    AggregateSourceStatus,
     ExternalJobImportRequest,
     ExternalJobResult,
     ExternalJobsSearchResponse,
@@ -24,14 +27,32 @@ from app.schemas.job import (
     JobListResponse,
 )
 from app.schemas.job_match import MatchResult
-from app.services import google_jobs, himalayas, upwork
+from app.services import (
+    arbeitnow,
+    experience_level,
+    google_jobs,
+    himalayas,
+    jobicy,
+    remotejobs_org,
+    remotive,
+    themuse,
+    upwork,
+)
 from app.services.job_importer import import_job_from_url
 
 router = APIRouter(tags=["jobs"])
 
 # Every JobSource enum value that comes from a live search provider (as
 # opposed to url_import/manual) maps to the service module that handles it.
-_SEARCH_PROVIDERS = {"google_jobs", "himalayas", "upwork"}
+_SEARCH_PROVIDERS = {
+    "google_jobs", "himalayas", "upwork",
+    "arbeitnow", "remotive", "jobicy", "remotejobs_org", "themuse",
+}
+
+# The providers that require zero credentials of any kind — these are the
+# ones GET /jobs/search/aggregate fans out to. google_jobs (SerpApi key) and
+# upwork (per-user OAuth) stay opt-in, single-provider only.
+_NO_AUTH_PROVIDERS = ("himalayas", "arbeitnow", "remotive", "jobicy", "remotejobs_org", "themuse")
 
 
 async def _attach_match(job: Job, user_id: UUID, db: AsyncSession) -> JobSchema:
@@ -199,9 +220,15 @@ async def _get_upwork_access_token(user_id: UUID, db: AsyncSession) -> str:
 
 @router.get("/jobs/search", response_model=ExternalJobsSearchResponse)
 async def search_jobs(
-    provider: str = Query("himalayas", pattern="^(himalayas|google_jobs|upwork)$"),
+    provider: str = Query(
+        "himalayas",
+        pattern="^(himalayas|google_jobs|upwork|arbeitnow|remotive|jobicy|remotejobs_org|themuse)$",
+    ),
     q: Optional[str] = Query(None),
     location: Optional[str] = Query(None),
+    experience_level_filter: Optional[str] = Query(
+        None, alias="experience_level", pattern="^(internship|entry|mid|senior|lead)$"
+    ),
     hl: Optional[str] = Query(None),
     gl: Optional[str] = Query(None),
     next_page_token: Optional[str] = Query(None),
@@ -210,14 +237,18 @@ async def search_jobs(
     seniority: Optional[str] = Query(None),
     employment_type: Optional[str] = Query(None),
     sort: Optional[str] = Query(None),
+    category: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> ExternalJobsSearchResponse:
-    """Live-search one of three external providers. Nothing is persisted —
-    pick a result and call POST /jobs/search/import to add it to `jobs`.
+    """Live-search one external provider. Nothing is persisted — pick a
+    result and call POST /jobs/search/import to add it to `jobs`.
 
-    - himalayas (default): free, no API key, remote-only listings.
+    No-auth providers: himalayas (default), arbeitnow, remotive, jobicy,
+    remotejobs_org, themuse — see GET /jobs/search/aggregate to query all of
+    them in one call, which is what Discover uses by default.
+
     - google_jobs: requires SERPAPI_API_KEY (backend .env).
     - upwork: requires the user to connect their account first (see
       /integrations/upwork/*); freelance/contract postings.
@@ -228,7 +259,7 @@ async def search_jobs(
                 q=q,
                 country=country,
                 worldwide=worldwide,
-                seniority=seniority,
+                seniority=seniority or (experience_level.to_himalayas(experience_level_filter) if experience_level_filter else None),
                 employment_type=employment_type,
                 sort=sort,
                 page=page,
@@ -242,6 +273,90 @@ async def search_jobs(
         ]
         return ExternalJobsSearchResponse(
             provider="himalayas", results=results, page=page + 1 if data["has_more"] else None, has_more=data["has_more"]
+        )
+
+    if provider == "arbeitnow":
+        try:
+            data = await arbeitnow.search_arbeitnow_jobs(
+                q=q, location=location, experience_level_filter=experience_level_filter, page=page
+            )
+        except arbeitnow.ArbeitnowError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        results = [
+            ExternalJobResult(external_id=r["arbeitnow_job_id"], **{k: v for k, v in r.items() if k != "arbeitnow_job_id"})
+            for r in data["results"]
+            if r.get("arbeitnow_job_id")
+        ]
+        return ExternalJobsSearchResponse(
+            provider="arbeitnow", results=results, page=page + 1 if data["has_more"] else None, has_more=data["has_more"]
+        )
+
+    if provider == "remotive":
+        try:
+            data = await remotive.search_remotive_jobs(
+                q=q, location=location, experience_level_filter=experience_level_filter, category=category
+            )
+        except remotive.RemotiveError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        results = [
+            ExternalJobResult(external_id=r["remotive_job_id"], **{k: v for k, v in r.items() if k != "remotive_job_id"})
+            for r in data["results"]
+            if r.get("remotive_job_id")
+        ]
+        return ExternalJobsSearchResponse(provider="remotive", results=results, has_more=False)
+
+    if provider == "jobicy":
+        try:
+            data = await jobicy.search_jobicy_jobs(
+                q=q, location=location, experience_level_filter=experience_level_filter, industry=category
+            )
+        except jobicy.JobicyError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        results = [
+            ExternalJobResult(external_id=r["jobicy_job_id"], **{k: v for k, v in r.items() if k != "jobicy_job_id"})
+            for r in data["results"]
+            if r.get("jobicy_job_id")
+        ]
+        return ExternalJobsSearchResponse(provider="jobicy", results=results, has_more=False)
+
+    if provider == "remotejobs_org":
+        offset = (page - 1) * 50
+        try:
+            data = await remotejobs_org.search_remotejobs_org_jobs(
+                q=q, location=location, experience_level_filter=experience_level_filter, category=category, offset=offset
+            )
+        except remotejobs_org.RemoteJobsOrgError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        results = [
+            ExternalJobResult(
+                external_id=r["remotejobs_org_job_id"],
+                **{k: v for k, v in r.items() if k != "remotejobs_org_job_id"},
+            )
+            for r in data["results"]
+            if r.get("remotejobs_org_job_id")
+        ]
+        return ExternalJobsSearchResponse(
+            provider="remotejobs_org", results=results, page=page + 1 if data["has_more"] else None, has_more=data["has_more"]
+        )
+
+    if provider == "themuse":
+        try:
+            data = await themuse.search_themuse_jobs(
+                q=q,
+                location=location or "Remote",
+                experience_level_filter=experience_level_filter,
+                category=category,
+                page=page - 1,
+            )
+        except themuse.TheMuseError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        results = [
+            ExternalJobResult(external_id=r["themuse_job_id"], **{k: v for k, v in r.items() if k != "themuse_job_id"})
+            for r in data["results"]
+            if r.get("themuse_job_id")
+        ]
+        return ExternalJobsSearchResponse(
+            provider="themuse", results=results, page=page + 1 if data["has_more"] else None, has_more=data["has_more"]
         )
 
     if provider == "google_jobs":
@@ -301,6 +416,111 @@ async def search_jobs(
     return ExternalJobsSearchResponse(provider="upwork", results=results, has_more=data["has_more"])
 
 
+def _is_remote_location(location: Optional[str]) -> bool:
+    return (location or "").strip().lower() in ("", "remote", "remoto")
+
+
+async def _run_no_auth_provider(
+    provider: str,
+    q: Optional[str],
+    location: Optional[str],
+    experience_level_filter: Optional[str],
+    category: Optional[str],
+) -> tuple[str, list[ExternalJobResult], Optional[str]]:
+    """Runs one no-auth provider search and normalizes both its results and
+    any failure into a uniform (provider, results, error) tuple, so one
+    provider erroring never breaks the others in the aggregate fan-out."""
+    try:
+        if provider == "himalayas":
+            data = await himalayas.search_himalayas_jobs(
+                q=q,
+                country=None if _is_remote_location(location) else location,
+                worldwide=True if _is_remote_location(location) else None,
+                seniority=experience_level.to_himalayas(experience_level_filter) if experience_level_filter else None,
+            )
+            id_key = "himalayas_job_id"
+        elif provider == "arbeitnow":
+            data = await arbeitnow.search_arbeitnow_jobs(
+                q=q, location=location, experience_level_filter=experience_level_filter
+            )
+            id_key = "arbeitnow_job_id"
+        elif provider == "remotive":
+            data = await remotive.search_remotive_jobs(
+                q=q, location=None if _is_remote_location(location) else location,
+                experience_level_filter=experience_level_filter, category=category,
+            )
+            id_key = "remotive_job_id"
+        elif provider == "jobicy":
+            data = await jobicy.search_jobicy_jobs(
+                q=q, location=location, experience_level_filter=experience_level_filter, industry=category
+            )
+            id_key = "jobicy_job_id"
+        elif provider == "remotejobs_org":
+            data = await remotejobs_org.search_remotejobs_org_jobs(
+                q=q, location=None if _is_remote_location(location) else location,
+                experience_level_filter=experience_level_filter, category=category,
+            )
+            id_key = "remotejobs_org_job_id"
+        elif provider == "themuse":
+            data = await themuse.search_themuse_jobs(
+                q=q, location=location or "Remote", experience_level_filter=experience_level_filter, category=category
+            )
+            id_key = "themuse_job_id"
+        else:
+            return provider, [], f"Unknown provider '{provider}'."
+    except Exception as exc:  # noqa: BLE001 — any provider failure is reported, never raised
+        return provider, [], str(exc)
+
+    results = [
+        ExternalJobResult(external_id=r[id_key], **{k: v for k, v in r.items() if k != id_key})
+        for r in data["results"]
+        if r.get(id_key)
+    ]
+    return provider, results, None
+
+
+def _aggregate_sort_key(result: ExternalJobResult) -> datetime:
+    posted_at = result.posted_at
+    if posted_at is None:
+        return datetime.min.replace(tzinfo=timezone.utc)
+    if posted_at.tzinfo is None:
+        return posted_at.replace(tzinfo=timezone.utc)
+    return posted_at
+
+
+@router.get("/jobs/search/aggregate", response_model=AggregateSearchResponse)
+async def search_jobs_aggregate(
+    q: Optional[str] = Query(None),
+    location: Optional[str] = Query("Remote"),
+    experience_level_filter: Optional[str] = Query(
+        None, alias="experience_level", pattern="^(internship|entry|mid|senior|lead)$"
+    ),
+    category: Optional[str] = Query(None),
+    current_user: User = Depends(get_current_user),
+) -> AggregateSearchResponse:
+    """Fans out to every no-auth job-search provider at once
+    (Himalayas, Arbeitnow, Remotive, Jobicy, RemoteJobs.org, The Muse) and
+    merges the results into one list, newest first — this is what the
+    Discover tab's default "search all sources" action calls. A provider
+    that errors doesn't take the others down with it: its failure shows up
+    in `sources` instead of the result list."""
+    outcomes = await asyncio.gather(
+        *[
+            _run_no_auth_provider(p, q, location, experience_level_filter, category)
+            for p in _NO_AUTH_PROVIDERS
+        ]
+    )
+
+    all_results: list[ExternalJobResult] = []
+    sources: list[AggregateSourceStatus] = []
+    for provider, results, error in outcomes:
+        all_results.extend(results)
+        sources.append(AggregateSourceStatus(provider=provider, count=len(results), error=error))
+
+    all_results.sort(key=_aggregate_sort_key, reverse=True)
+    return AggregateSearchResponse(results=all_results, sources=sources)
+
+
 @router.post("/jobs/search/import", response_model=JobSchema, status_code=status.HTTP_201_CREATED)
 async def import_external_job(
     payload: ExternalJobImportRequest,
@@ -317,6 +537,11 @@ async def import_external_job(
         "google_jobs": google_jobs.get_cached_result,
         "himalayas": himalayas.get_cached_result,
         "upwork": upwork.get_cached_result,
+        "arbeitnow": arbeitnow.get_cached_result,
+        "remotive": remotive.get_cached_result,
+        "jobicy": jobicy.get_cached_result,
+        "remotejobs_org": remotejobs_org.get_cached_result,
+        "themuse": themuse.get_cached_result,
     }[payload.source]
     cached = cache_lookup(payload.external_id)
     if cached is None:

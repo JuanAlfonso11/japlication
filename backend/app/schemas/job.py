@@ -74,7 +74,8 @@ class ApplyOption(BaseModel):
     link: Optional[str] = None
 
 
-ExternalProvider = str  # "google_jobs" | "himalayas" | "upwork" — kept loose so a new provider needs no migration
+ExternalProvider = str  # "himalayas"|"arbeitnow"|"remotive"|"jobicy"|"remotejobs_org"|"themuse"|"google_jobs"|"upwork"
+ExperienceLevel = str  # "internship" | "entry" | "mid" | "senior" | "lead" — see app/services/experience_level.py
 
 
 class ExternalJobResult(BaseModel):
@@ -117,3 +118,18 @@ class ExternalJobsSearchResponse(BaseModel):
 class ExternalJobImportRequest(BaseModel):
     source: ExternalProvider
     external_id: str
+
+
+class AggregateSourceStatus(BaseModel):
+    """Per-provider outcome of GET /jobs/search/aggregate — lets the
+    frontend show "3 results from Remotive" or surface which source
+    failed without hiding the results the other sources did return."""
+
+    provider: ExternalProvider
+    count: int
+    error: Optional[str] = None
+
+
+class AggregateSearchResponse(BaseModel):
+    results: list[ExternalJobResult]
+    sources: list[AggregateSourceStatus]

@@ -8,13 +8,43 @@ import ImportedJobCard from "@/components/ImportedJobCard";
 import SkillTag from "@/components/SkillTag";
 import { ApiError, integrationsApi, jobsApi } from "@/lib/api";
 import { importAndMatch } from "@/lib/jobActions";
-import type { ExternalJobResult, ExternalProvider, Job, UpworkStatus } from "@/lib/types";
+import {
+  EXPERIENCE_LEVEL_LABELS,
+  PROVIDER_LABELS,
+  type AggregateSourceStatus,
+  type ExperienceLevel,
+  type ExternalJobResult,
+  type ExternalProvider,
+  type Job,
+  type UpworkStatus,
+} from "@/lib/types";
 
-const PROVIDERS: { id: ExternalProvider; label: string; hint: string }[] = [
-  { id: "himalayas", label: "Himalayas", hint: "Free, remote jobs, no setup" },
+type Mode = "aggregate" | "google_jobs" | "upwork";
+
+const MODES: { id: Mode; label: string; hint: string }[] = [
+  { id: "aggregate", label: "Todas las fuentes", hint: "6 APIs públicas, sin login — resultados combinados" },
   { id: "google_jobs", label: "Google Jobs", hint: "Needs SERPAPI_API_KEY" },
   { id: "upwork", label: "Upwork", hint: "Freelance — connect your account" },
 ];
+
+const EXPERIENCE_LEVELS: ExperienceLevel[] = ["internship", "entry", "mid", "senior", "lead"];
+
+function SourceBadge({ source }: { source: ExternalProvider }) {
+  return (
+    <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+      {PROVIDER_LABELS[source] ?? source}
+    </span>
+  );
+}
+
+function LevelBadge({ level }: { level: string }) {
+  const label = EXPERIENCE_LEVEL_LABELS[level as ExperienceLevel] ?? level;
+  return (
+    <span className="inline-flex items-center rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-brand-700">
+      {label}
+    </span>
+  );
+}
 
 function ExternalResultCard({
   result,
@@ -53,6 +83,10 @@ function ExternalResultCard({
     <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
       <div className="flex items-start justify-between gap-3">
         <div>
+          <div className="mb-1 flex items-center gap-2">
+            <SourceBadge source={result.source} />
+            {result.seniority && <LevelBadge level={result.seniority} />}
+          </div>
           <h3 className="font-semibold text-gray-900">{result.title}</h3>
           <p className="text-sm text-gray-600">
             {result.company}
@@ -83,6 +117,30 @@ function ExternalResultCard({
         </div>
       )}
       {error && <p className="mt-2 text-xs text-rose-600">{error}</p>}
+    </div>
+  );
+}
+
+function SourcesSummary({ sources }: { sources: AggregateSourceStatus[] }) {
+  const failed = sources.filter((s) => s.error);
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-400">
+      {sources.map((s) => (
+        <span
+          key={s.provider}
+          className={`rounded-full px-2 py-0.5 ${
+            s.error ? "bg-rose-50 text-rose-600" : "bg-gray-50 text-gray-500"
+          }`}
+          title={s.error ?? undefined}
+        >
+          {PROVIDER_LABELS[s.provider] ?? s.provider}: {s.error ? "error" : s.count}
+        </span>
+      ))}
+      {failed.length > 0 && (
+        <span className="text-rose-500">
+          {failed.length} fuente{failed.length > 1 ? "s" : ""} no respondió — el resto de resultados sigue completo.
+        </span>
+      )}
     </div>
   );
 }
@@ -159,10 +217,12 @@ function UpworkCallbackBanner() {
 }
 
 function DiscoverContent() {
-  const [provider, setProvider] = useState<ExternalProvider>("himalayas");
+  const [mode, setMode] = useState<Mode>("aggregate");
   const [q, setQ] = useState("");
-  const [location, setLocation] = useState("");
+  const [location, setLocation] = useState("Remote");
+  const [experienceLevelFilter, setExperienceLevelFilter] = useState<ExperienceLevel | "">("");
   const [results, setResults] = useState<ExternalJobResult[]>([]);
+  const [sources, setSources] = useState<AggregateSourceStatus[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
@@ -179,25 +239,36 @@ function DiscoverContent() {
   }, []);
 
   useEffect(() => {
-    if (provider === "upwork") refreshUpworkStatus();
-  }, [provider, refreshUpworkStatus]);
+    if (mode === "upwork") refreshUpworkStatus();
+  }, [mode, refreshUpworkStatus]);
 
   async function runSearch(reset: boolean) {
     setLoading(true);
     setError(null);
     try {
-      const data = await jobsApi.search({
-        provider,
-        q: q || undefined,
-        location: provider === "google_jobs" ? location || undefined : undefined,
-        country: provider === "himalayas" ? location || undefined : undefined,
-        next_page_token: reset ? undefined : nextPageToken,
-        page: reset ? undefined : nextPage,
-      });
-      setResults((prev) => (reset ? data.results : [...prev, ...data.results]));
-      setHasMore(data.has_more);
-      setNextPageToken(data.next_page_token ?? undefined);
-      setNextPage(data.page ?? undefined);
+      if (mode === "aggregate") {
+        const data = await jobsApi.searchAggregate({
+          q: q || undefined,
+          location: location || undefined,
+          experience_level: experienceLevelFilter || undefined,
+        });
+        setResults(data.results);
+        setSources(data.sources);
+        setHasMore(false);
+      } else {
+        const data = await jobsApi.search({
+          provider: mode,
+          q: q || undefined,
+          location: mode === "google_jobs" ? location || undefined : undefined,
+          next_page_token: reset ? undefined : nextPageToken,
+          page: reset ? undefined : nextPage,
+        });
+        setResults((prev) => (reset ? data.results : [...prev, ...data.results]));
+        setSources([]);
+        setHasMore(data.has_more);
+        setNextPageToken(data.next_page_token ?? undefined);
+        setNextPage(data.page ?? undefined);
+      }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Search failed.");
     } finally {
@@ -208,6 +279,7 @@ function DiscoverContent() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setResults([]);
+    setSources([]);
     setLastAdded(null);
     await runSearch(true);
   }
@@ -217,15 +289,17 @@ function DiscoverContent() {
     setLastAdded(await importAndMatch(job));
   }
 
-  const showForm = provider !== "upwork" || upworkStatus?.connected;
+  const showForm = mode !== "upwork" || upworkStatus?.connected;
 
   return (
     <div className="space-y-6 pb-4 animate-fade-in">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Discover jobs</h1>
         <p className="mt-1 text-sm text-gray-500">
-          Search live listings from Himalayas, Google Jobs, or Upwork. Anything you add shows up
-          matched against your profile back on Home.
+          &quot;Todas las fuentes&quot; busca a la vez en 6 APIs públicas sin login (Himalayas, Arbeitnow,
+          Remotive, Jobicy, RemoteJobs.org y The Muse) y combina los resultados. Google Jobs y Upwork son
+          opcionales y requieren credenciales. Anything you add shows up matched against your profile back
+          on Home.
         </p>
       </div>
 
@@ -236,28 +310,29 @@ function DiscoverContent() {
       <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-100">
         <div className="space-y-4">
           <div className="flex flex-wrap gap-2">
-            {PROVIDERS.map((p) => (
+            {MODES.map((m) => (
               <button
-                key={p.id}
+                key={m.id}
                 type="button"
                 onClick={() => {
-                  setProvider(p.id);
+                  setMode(m.id);
                   setResults([]);
+                  setSources([]);
                   setError(null);
                 }}
                 className={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${
-                  provider === p.id
+                  mode === m.id
                     ? "border-brand-500 bg-brand-50 text-brand-700"
                     : "border-gray-200 text-gray-600 hover:border-gray-300"
                 }`}
               >
-                <span className="block font-semibold">{p.label}</span>
-                <span className="block text-xs text-gray-400">{p.hint}</span>
+                <span className="block font-semibold">{m.label}</span>
+                <span className="block text-xs text-gray-400">{m.hint}</span>
               </button>
             ))}
           </div>
 
-          {provider === "upwork" && upworkStatus && !upworkStatus.connected && (
+          {mode === "upwork" && upworkStatus && !upworkStatus.connected && (
             <UpworkConnectPanel status={upworkStatus} />
           )}
 
@@ -268,19 +343,31 @@ function DiscoverContent() {
                   type="text"
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
-                  placeholder={
-                    provider === "upwork" ? "Skills or title, e.g. Django, React" : "Job title or keywords"
-                  }
+                  placeholder={mode === "upwork" ? "Skills or title, e.g. Django, React" : "Job title or keywords"}
                   className="min-w-[200px] flex-1 rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
                 />
-                {provider !== "upwork" && (
+                {mode !== "upwork" && (
                   <input
                     type="text"
                     value={location}
                     onChange={(e) => setLocation(e.target.value)}
-                    placeholder={provider === "himalayas" ? "Country (optional)" : "Location (optional)"}
+                    placeholder="Location (default: Remote)"
                     className="min-w-[160px] flex-1 rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
                   />
+                )}
+                {mode === "aggregate" && (
+                  <select
+                    value={experienceLevelFilter}
+                    onChange={(e) => setExperienceLevelFilter(e.target.value as ExperienceLevel | "")}
+                    className="min-w-[170px] rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+                  >
+                    <option value="">Cualquier nivel</option>
+                    {EXPERIENCE_LEVELS.map((lvl) => (
+                      <option key={lvl} value={lvl}>
+                        {EXPERIENCE_LEVEL_LABELS[lvl]}
+                      </option>
+                    ))}
+                  </select>
                 )}
                 <button
                   type="submit"
@@ -293,9 +380,11 @@ function DiscoverContent() {
 
               {error && <ErrorNotice message={error} />}
 
+              {mode === "aggregate" && sources.length > 0 && <SourcesSummary sources={sources} />}
+
               <div className="space-y-3">
                 {results.map((r) => (
-                  <ExternalResultCard key={r.external_id} result={r} onImport={handleImport} />
+                  <ExternalResultCard key={`${r.source}:${r.external_id}`} result={r} onImport={handleImport} />
                 ))}
               </div>
 
@@ -312,7 +401,9 @@ function DiscoverContent() {
 
               {!loading && results.length === 0 && !error && (
                 <p className="py-6 text-center text-sm text-gray-400">
-                  Search {PROVIDERS.find((p) => p.id === provider)?.label} to see live results here.
+                  {mode === "aggregate"
+                    ? "Busca algo para ver resultados combinados de las 6 fuentes sin login."
+                    : `Search ${MODES.find((m) => m.id === mode)?.label} to see live results here.`}
                 </p>
               )}
             </>

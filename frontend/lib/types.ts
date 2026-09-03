@@ -139,9 +139,49 @@ export interface JobCreatePayload {
   source_url?: string | null;
 }
 
-// ---------- External job search (Google Jobs / Himalayas / Upwork) ----------
+// ---------- External job search (no-auth aggregate + Google Jobs / Upwork) ----------
 
-export type ExternalProvider = "himalayas" | "google_jobs" | "upwork";
+export type ExternalProvider =
+  | "himalayas"
+  | "arbeitnow"
+  | "remotive"
+  | "jobicy"
+  | "remotejobs_org"
+  | "themuse"
+  | "google_jobs"
+  | "upwork";
+
+/** The providers GET /jobs/search/aggregate fans out to — no API key, no
+ * OAuth, no signup required for any of them. */
+export const NO_AUTH_PROVIDERS: ExternalProvider[] = [
+  "himalayas",
+  "arbeitnow",
+  "remotive",
+  "jobicy",
+  "remotejobs_org",
+  "themuse",
+];
+
+export const PROVIDER_LABELS: Record<ExternalProvider, string> = {
+  himalayas: "Himalayas",
+  arbeitnow: "Arbeitnow",
+  remotive: "Remotive",
+  jobicy: "Jobicy",
+  remotejobs_org: "RemoteJobs.org",
+  themuse: "The Muse",
+  google_jobs: "Google Jobs",
+  upwork: "Upwork",
+};
+
+export type ExperienceLevel = "internship" | "entry" | "mid" | "senior" | "lead";
+
+export const EXPERIENCE_LEVEL_LABELS: Record<ExperienceLevel, string> = {
+  internship: "Practicante / Internship",
+  entry: "Junior / Entry level",
+  mid: "Nivel medio",
+  senior: "Senior",
+  lead: "Liderazgo / Management",
+};
 
 export interface ApplyOption {
   title: string;
@@ -183,6 +223,17 @@ export interface ExternalJobsSearchResponse {
 export interface ExternalJobImportPayload {
   source: ExternalProvider;
   external_id: string;
+}
+
+export interface AggregateSourceStatus {
+  provider: ExternalProvider;
+  count: number;
+  error?: string | null;
+}
+
+export interface AggregateSearchResponse {
+  results: ExternalJobResult[];
+  sources: AggregateSourceStatus[];
 }
 
 export interface UpworkStatus {

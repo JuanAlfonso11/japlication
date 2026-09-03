@@ -45,15 +45,27 @@ Detalle de empleo                    Discover   Agregar vacante  Perfil         
 - Estado vacío ("ya estás al día") enlaza directo a **Discover** para seguir alimentando la cola.
 
 ### 2.2 Discover — búsqueda en vivo
-Pantalla dedicada a buscar vacantes nuevas (a diferencia de Home, que solo recomienda lo ya cargado). Un
-selector de proveedor consulta una API externa en tiempo real y muestra resultados normalizados que aún
-**no** se guardan (`GET /jobs/search?provider=`); el usuario elige cuáles agregar con un botón "Add to
-queue" por resultado:
-- **Himalayas** (himalayas.app) — sin API key, funciona out-of-the-box; proveedor por defecto.
+Pantalla dedicada a buscar vacantes nuevas (a diferencia de Home, que solo recomienda lo ya cargado).
+Muestra resultados normalizados que aún **no** se guardan; el usuario elige cuáles agregar con un botón
+"Add to queue" por resultado. Tres modos:
+
+- **"Todas las fuentes" (por defecto)** — dispara `GET /jobs/search/aggregate` en paralelo contra las
+  **6 APIs públicas sin ningún tipo de autenticación** (investigación completa en
+  `docs/PUBLIC_APIS_RESEARCH.md`): **Himalayas, Arbeitnow, Remotive, Jobicy, RemoteJobs.org y The Muse**.
+  Los resultados de todas se combinan en una sola lista (ordenada por fecha de publicación), cada tarjeta
+  muestra de qué fuente vino, y si alguna API falla no tumba a las demás — se reporta aparte y el resto de
+  resultados se sigue mostrando.
 - **Google Jobs** (vía SerpApi) — requiere `SERPAPI_API_KEY` del backend; agrega los resultados agregados
   de LinkedIn/Indeed/sitios corporativos que Google Jobs ya consolida, con enlaces de aplicación reales.
 - **Upwork** — freelance/contratos; requiere que el usuario conecte su cuenta vía OAuth2 (botón "Conectar
   Upwork" → consentimiento en upwork.com → vuelve a Discover ya conectado).
+
+**Filtros**: el campo de ubicación arranca precargado en **"Remote"** (el usuario puede cambiarlo o
+borrarlo), y un selector de **Nivel de experiencia** (Practicante, Junior, Nivel medio, Senior, Liderazgo)
+filtra las 6 fuentes sin login de forma uniforme — algunas lo exponen de forma nativa (Himalayas, The Muse
+mandan el filtro directo al proveedor; Jobicy lo trae en la respuesta), las que no lo hacen (Arbeitnow,
+Remotive, RemoteJobs.org) lo infieren por heurística de texto sobre título+descripción
+(`backend/app/services/experience_level.py`) — mismo criterio, aplicado parejo en las 6.
 
 Al agregar un resultado se normaliza, se persiste y se calcula su match automáticamente — reaparece listo
 en la cola de **Home** sin pasos adicionales.
