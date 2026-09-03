@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.application import Application
+from app.models.career_profile import CareerProfile
 from app.models.enums import ApplicationStatus, JobSource
 from app.models.job import Job
 from app.models.job_match import JobMatch
@@ -18,6 +19,7 @@ from app.schemas.job import Job as JobSchema
 from app.schemas.job import (
     AggregateSearchResponse,
     AggregateSourceStatus,
+    AutoImportResponse,
     ExternalJobImportRequest,
     ExternalJobResult,
     ExternalJobsSearchResponse,
@@ -36,6 +38,7 @@ from app.services import (
     themuse,
 )
 from app.services.job_importer import import_job_from_url
+from app.services.match_engine import compute_and_persist_match
 
 router = APIRouter(tags=["jobs"])
 
@@ -489,6 +492,53 @@ async def search_jobs_aggregate(
     return AggregateSearchResponse(results=all_results, sources=sources)
 
 
+async def _get_or_create_external_job(
+    cached: dict, source: str, user_id: UUID, db: AsyncSession
+) -> tuple[Job, bool]:
+    """Creates a `jobs` row from a normalized external search result, or
+    returns the existing one if this source_url was already imported by
+    anyone. Returns (job, created) — shared by the manual "Add to queue"
+    import and the CV-upload auto-import."""
+    if cached.get("source_url"):
+        existing = await db.execute(select(Job).where(Job.source_url == cached["source_url"]))
+        existing_job = existing.scalar_one_or_none()
+        if existing_job is not None:
+            return existing_job, False
+
+    job = Job(
+        imported_by=user_id,
+        source=JobSource(source),
+        source_url=cached.get("source_url"),
+        title=cached["title"],
+        company=cached["company"],
+        location=cached.get("location"),
+        remote_type=cached.get("remote_type"),
+        employment_type=cached.get("employment_type"),
+        seniority=cached.get("seniority"),
+        description=cached["description"],
+        requirements=cached.get("requirements") or [],
+        responsibilities=cached.get("responsibilities") or [],
+        skills_required=cached.get("skills_required") or [],
+        salary_min=cached.get("salary_min"),
+        salary_max=cached.get("salary_max"),
+        salary_currency=cached.get("salary_currency"),
+        posted_at=cached.get("posted_at"),
+    )
+    db.add(job)
+    try:
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        if cached.get("source_url"):
+            existing = await db.execute(select(Job).where(Job.source_url == cached["source_url"]))
+            existing_job = existing.scalar_one_or_none()
+            if existing_job is not None:
+                return existing_job, False
+        raise
+    await db.refresh(job)
+    return job, True
+
+
 @router.post("/jobs/search/import", response_model=JobSchema, status_code=status.HTTP_201_CREATED)
 async def import_external_job(
     payload: ExternalJobImportRequest,
@@ -516,44 +566,83 @@ async def import_external_job(
             detail="This search result has expired — run the search again and import it right away.",
         )
 
-    if cached.get("source_url"):
-        existing = await db.execute(select(Job).where(Job.source_url == cached["source_url"]))
-        existing_job = existing.scalar_one_or_none()
-        if existing_job is not None:
-            return await _attach_match(existing_job, current_user.id, db)
-
-    job = Job(
-        imported_by=current_user.id,
-        source=JobSource(payload.source),
-        source_url=cached.get("source_url"),
-        title=cached["title"],
-        company=cached["company"],
-        location=cached.get("location"),
-        remote_type=cached.get("remote_type"),
-        employment_type=cached.get("employment_type"),
-        seniority=cached.get("seniority"),
-        description=cached["description"],
-        requirements=cached.get("requirements") or [],
-        responsibilities=cached.get("responsibilities") or [],
-        skills_required=cached.get("skills_required") or [],
-        salary_min=cached.get("salary_min"),
-        salary_max=cached.get("salary_max"),
-        salary_currency=cached.get("salary_currency"),
-        posted_at=cached.get("posted_at"),
-    )
-    db.add(job)
     try:
-        await db.commit()
+        job, _created = await _get_or_create_external_job(cached, payload.source, current_user.id, db)
     except Exception:
-        await db.rollback()
-        if cached.get("source_url"):
-            existing = await db.execute(select(Job).where(Job.source_url == cached["source_url"]))
-            existing_job = existing.scalar_one_or_none()
-            if existing_job is not None:
-                return await _attach_match(existing_job, current_user.id, db)
         raise HTTPException(status_code=409, detail="This job was already imported.")
-    await db.refresh(job)
     return await _attach_match(job, current_user.id, db)
+
+
+def _profile_search_query(profile: CareerProfile) -> Optional[str]:
+    """Best-effort search term derived from a saved career profile: the
+    headline (usually a target job title) first, then the most recent
+    listed role, then a handful of top skills — whichever is available
+    first, since the free-text `q` providers accept is a single string."""
+    if profile.headline and profile.headline.strip():
+        return profile.headline.strip()
+    for entry in profile.experience or []:
+        title = (entry or {}).get("title")
+        if title and str(title).strip():
+            return str(title).strip()
+    skill_names = [s.get("name") for s in (profile.skills or []) if isinstance(s, dict) and s.get("name")]
+    if skill_names:
+        return ", ".join(skill_names[:3])
+    return None
+
+
+_AUTO_IMPORT_LIMIT = 20
+
+
+@router.post("/jobs/search/auto-import", response_model=AutoImportResponse)
+async def auto_import_matching_jobs(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> AutoImportResponse:
+    """Searches every no-auth provider using the saved career profile
+    (headline, most recent role, or top skills) and imports the newest
+    matches straight into `jobs` with a computed match score — this is
+    what runs right after a CV-derived profile is saved, so Home's swipe
+    queue has something to show without the user having to visit Discover
+    first. Only genuinely new postings are counted/matched; ones already
+    in the database (by source_url) are left alone."""
+    profile = (
+        await db.execute(select(CareerProfile).where(CareerProfile.user_id == current_user.id))
+    ).scalar_one_or_none()
+    if profile is None:
+        raise HTTPException(status_code=400, detail="Save your career profile before auto-searching for matches.")
+
+    q = _profile_search_query(profile)
+    if not q:
+        raise HTTPException(
+            status_code=400,
+            detail="Add a headline, a recent role, or a few skills to your profile first so we know what to search for.",
+        )
+
+    outcomes = await asyncio.gather(
+        *[_run_no_auth_provider(p, q, None, None, None, None) for p in _SEARCH_PROVIDERS]
+    )
+
+    all_results: list[ExternalJobResult] = []
+    sources: list[AggregateSourceStatus] = []
+    for provider, results, error in outcomes:
+        all_results.extend(results)
+        sources.append(AggregateSourceStatus(provider=provider, count=len(results), error=error))
+    all_results.sort(key=_aggregate_sort_key, reverse=True)
+
+    imported = 0
+    for result in all_results[:_AUTO_IMPORT_LIMIT]:
+        try:
+            job, created = await _get_or_create_external_job(
+                result.model_dump(), result.source, current_user.id, db
+            )
+        except Exception:
+            continue
+        if not created:
+            continue
+        await compute_and_persist_match(profile, job, current_user.id, db)
+        imported += 1
+
+    return AutoImportResponse(imported=imported, query=q, sources=sources)
 
 
 @router.get("/jobs/{job_id}", response_model=JobSchema)

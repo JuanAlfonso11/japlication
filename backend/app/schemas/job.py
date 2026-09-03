@@ -134,3 +134,13 @@ class AggregateSourceStatus(BaseModel):
 class AggregateSearchResponse(BaseModel):
     results: list[ExternalJobResult]
     sources: list[AggregateSourceStatus]
+
+
+class AutoImportResponse(BaseModel):
+    """Result of POST /jobs/search/auto-import — how many new jobs were
+    queued for Home's swipe deck, and per-provider status same as the
+    aggregate search this reuses under the hood."""
+
+    imported: int
+    query: Optional[str] = None
+    sources: list[AggregateSourceStatus]

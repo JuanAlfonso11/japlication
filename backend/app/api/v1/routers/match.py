@@ -2,8 +2,7 @@ from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, select
-from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
@@ -16,7 +15,7 @@ from app.models.user import User
 from app.schemas.job import Job as JobSchema
 from app.schemas.job import JobListResponse
 from app.schemas.job_match import MatchResult
-from app.services.match_engine import compute_match
+from app.services.match_engine import compute_and_persist_match
 
 router = APIRouter(tags=["match"])
 
@@ -29,42 +28,6 @@ async def _get_profile_or_400(user_id: UUID, db: AsyncSession) -> CareerProfile:
             status_code=400, detail="Create your career profile before computing matches."
         )
     return profile
-
-
-async def _compute_and_persist_match(profile: CareerProfile, job: Job, user_id: UUID, db: AsyncSession) -> JobMatch:
-    result = compute_match(profile, job)
-    stmt = (
-        pg_insert(JobMatch)
-        .values(
-            user_id=user_id,
-            job_id=job.id,
-            overall_score=result["overall_score"],
-            technical_score=result["technical_score"],
-            experience_score=result["experience_score"],
-            semantic_score=result["semantic_score"],
-            matched_skills=result["matched_skills"],
-            missing_skills=result["missing_skills"],
-            concerns=result["concerns"],
-        )
-        .on_conflict_do_update(
-            index_elements=[JobMatch.user_id, JobMatch.job_id],
-            set_={
-                "overall_score": result["overall_score"],
-                "technical_score": result["technical_score"],
-                "experience_score": result["experience_score"],
-                "semantic_score": result["semantic_score"],
-                "matched_skills": result["matched_skills"],
-                "missing_skills": result["missing_skills"],
-                "concerns": result["concerns"],
-                "computed_at": func.now(),
-            },
-        )
-        .returning(JobMatch)
-    )
-    row = (await db.execute(stmt)).scalar_one()
-    await db.commit()
-    await db.refresh(row)
-    return row
 
 
 @router.get("/jobs/{job_id}/match", response_model=MatchResult)
@@ -88,7 +51,7 @@ async def get_job_match(
             return MatchResult.model_validate(existing)
 
     profile = await _get_profile_or_400(current_user.id, db)
-    match_row = await _compute_and_persist_match(profile, job, current_user.id, db)
+    match_row = await compute_and_persist_match(profile, job, current_user.id, db)
     return MatchResult.model_validate(match_row)
 
 

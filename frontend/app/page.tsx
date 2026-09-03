@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import RouteGuard from "@/components/RouteGuard";
 import Spinner from "@/components/Spinner";
 import ErrorNotice from "@/components/ErrorNotice";
@@ -9,9 +9,70 @@ import StatusBadge from "@/components/StatusBadge";
 import SwipeCard from "@/components/SwipeCard";
 import { useAuth } from "@/context/AuthContext";
 import { applicationsApi, ApiError, jobsApi } from "@/lib/api";
+import {
+  detectUserLocation,
+  jobMatchesScope,
+  loadCachedLocation,
+  SCOPE_LEVELS,
+  type UserLocation,
+} from "@/lib/geoScope";
 import type { Application, Job } from "@/lib/types";
 
 const PIPELINE_STATUSES = ["applied", "interviewing", "offer"];
+const DEFAULT_SCOPE_INDEX = SCOPE_LEVELS.length - 1; // "Cualquier lugar" — never hides jobs by default
+
+function ScopeSlider({
+  scopeIndex,
+  onChange,
+  geoStatus,
+  geoError,
+  userLocation,
+}: {
+  scopeIndex: number;
+  onChange: (index: number) => void;
+  geoStatus: "idle" | "locating" | "granted" | "denied";
+  geoError: string | null;
+  userLocation: UserLocation | null;
+}) {
+  const locationText = userLocation
+    ? [userLocation.city, userLocation.region, userLocation.country].filter(Boolean).join(", ")
+    : null;
+
+  return (
+    <div className="w-full max-w-md rounded-xl border border-gray-100 bg-white p-3 shadow-sm">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-semibold text-gray-700">
+          📍 Alcance: {SCOPE_LEVELS[scopeIndex].label}
+        </span>
+        {geoStatus === "locating" && <span className="text-[11px] text-gray-400">Ubicando…</span>}
+      </div>
+      <input
+        type="range"
+        min={0}
+        max={SCOPE_LEVELS.length - 1}
+        step={1}
+        value={scopeIndex}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="mt-2 w-full accent-brand-600"
+      />
+      <div className="mt-1 flex justify-between text-[9px] leading-tight text-gray-400">
+        {SCOPE_LEVELS.map((lvl) => (
+          <span key={lvl.scope} className="w-12 text-center first:text-left last:text-right">
+            {lvl.label}
+          </span>
+        ))}
+      </div>
+      {geoStatus === "denied" && geoError && (
+        <p className="mt-1.5 text-[11px] text-rose-500">
+          {geoError} Activa el permiso de ubicación en tu navegador o elige &quot;Cualquier lugar&quot;.
+        </p>
+      )}
+      {locationText && (
+        <p className="mt-1.5 text-[11px] text-gray-400">Tu ubicación: {locationText}</p>
+      )}
+    </div>
+  );
+}
 
 function StatsStrip({ applications, queueCount }: { applications: Application[]; queueCount: number }) {
   const counts = PIPELINE_STATUSES.reduce<Record<string, number>>((acc, status) => {
@@ -50,6 +111,41 @@ function HomeContent() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
+  const [scopeIndex, setScopeIndex] = useState(DEFAULT_SCOPE_INDEX);
+  const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
+  const [geoStatus, setGeoStatus] = useState<"idle" | "locating" | "granted" | "denied">("idle");
+  const [geoError, setGeoError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const cached = loadCachedLocation();
+    if (cached) {
+      setUserLocation(cached);
+      setGeoStatus("granted");
+    }
+  }, []);
+
+  const handleScopeChange = useCallback(
+    (index: number) => {
+      setScopeIndex(index);
+      const scope = SCOPE_LEVELS[index].scope;
+      if (scope === "remote" || scope === "any") return;
+      if (userLocation || geoStatus === "locating") return;
+
+      setGeoStatus("locating");
+      setGeoError(null);
+      detectUserLocation()
+        .then((loc) => {
+          setUserLocation(loc);
+          setGeoStatus("granted");
+        })
+        .catch((err) => {
+          setGeoStatus("denied");
+          setGeoError(err instanceof Error ? err.message : "No se pudo obtener tu ubicación.");
+        });
+    },
+    [userLocation, geoStatus]
+  );
+
   const load = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
@@ -71,15 +167,23 @@ function HomeContent() {
     load();
   }, [load]);
 
+  const scope = SCOPE_LEVELS[scopeIndex].scope;
+  const filteredQueue = useMemo(
+    () => (queue ? queue.filter((job) => jobMatchesScope(job, scope, userLocation)) : null),
+    [queue, scope, userLocation]
+  );
+  const current = filteredQueue && filteredQueue.length > 0 ? filteredQueue[0] : null;
+  const next = filteredQueue && filteredQueue.length > 1 ? filteredQueue[1] : null;
+
   const decide = useCallback(
     async (decision: "left" | "right") => {
-      if (!queue || queue.length === 0 || pending) return;
-      const current = queue[0];
+      if (!current || pending) return;
+      const target = current;
       setPending(true);
       setActionError(null);
       try {
-        await jobsApi.decide(current.id, { decision });
-        setQueue((prev) => (prev ? prev.slice(1) : prev));
+        await jobsApi.decide(target.id, { decision });
+        setQueue((prev) => (prev ? prev.filter((j) => j.id !== target.id) : prev));
       } catch (err) {
         setActionError(
           err instanceof ApiError ? err.message : "Could not record your decision. Try again."
@@ -88,7 +192,7 @@ function HomeContent() {
         setPending(false);
       }
     },
-    [queue, pending]
+    [current, pending]
   );
 
   useEffect(() => {
@@ -103,8 +207,7 @@ function HomeContent() {
   if (loading) return <Spinner label="Finding your best matches…" />;
   if (loadError) return <ErrorNotice message={loadError} onRetry={load} />;
 
-  const current = queue && queue.length > 0 ? queue[0] : null;
-  const next = queue && queue.length > 1 ? queue[1] : null;
+  const hiddenByScope = (queue?.length ?? 0) > 0 && (filteredQueue?.length ?? 0) === 0;
 
   return (
     <div className="flex flex-col items-center gap-5 pb-4 animate-fade-in">
@@ -117,7 +220,15 @@ function HomeContent() {
         </p>
       </div>
 
-      {applications && <div className="w-full max-w-md"><StatsStrip applications={applications} queueCount={queue?.length ?? 0} /></div>}
+      <ScopeSlider
+        scopeIndex={scopeIndex}
+        onChange={handleScopeChange}
+        geoStatus={geoStatus}
+        geoError={geoError}
+        userLocation={userLocation}
+      />
+
+      {applications && <div className="w-full max-w-md"><StatsStrip applications={applications} queueCount={filteredQueue?.length ?? 0} /></div>}
 
       {actionError && (
         <div className="w-full max-w-md">
@@ -126,7 +237,25 @@ function HomeContent() {
       )}
 
       <div className="relative h-[520px] w-full max-w-md">
-        {!current && (
+        {!current && hiddenByScope && (
+          <div className="flex h-full flex-col items-center justify-center gap-3 rounded-3xl border-2 border-dashed border-gray-300 p-8 text-center">
+            <span className="text-4xl">📍</span>
+            <p className="text-lg font-semibold text-gray-800">Nada en este alcance</p>
+            <p className="text-sm text-gray-500">
+              Hay recomendaciones esperando, pero ninguna coincide con &quot;
+              {SCOPE_LEVELS[scopeIndex].label}&quot;. Prueba un alcance más amplio.
+            </p>
+            <button
+              type="button"
+              onClick={() => setScopeIndex(DEFAULT_SCOPE_INDEX)}
+              className="mt-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+            >
+              Ver cualquier lugar
+            </button>
+          </div>
+        )}
+
+        {!current && !hiddenByScope && (
           <div className="flex h-full flex-col items-center justify-center gap-3 rounded-3xl border-2 border-dashed border-gray-300 p-8 text-center">
             <span className="text-4xl">🎉</span>
             <p className="text-lg font-semibold text-gray-800">You&apos;re all caught up</p>
@@ -169,8 +298,8 @@ function HomeContent() {
         </div>
       )}
 
-      {queue && current && (
-        <p className="text-xs text-gray-400">{queue.length} left in your queue</p>
+      {filteredQueue && current && (
+        <p className="text-xs text-gray-400">{filteredQueue.length} left in your queue</p>
       )}
     </div>
   );

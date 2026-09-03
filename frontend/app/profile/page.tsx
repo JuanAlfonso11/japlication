@@ -12,7 +12,7 @@ import ExperienceSection from "@/components/profile/ExperienceSection";
 import EducationSection from "@/components/profile/EducationSection";
 import CertificationsSection from "@/components/profile/CertificationsSection";
 import LanguagesSection from "@/components/profile/LanguagesSection";
-import { ApiError, profileApi } from "@/lib/api";
+import { ApiError, jobsApi, profileApi } from "@/lib/api";
 import type { CareerProfile, CVEvaluation } from "@/lib/types";
 
 function mergeCvDraft(current: CareerProfile, draft: CareerProfile): CareerProfile {
@@ -73,6 +73,9 @@ function ProfileContent() {
   const [uploadingCv, setUploadingCv] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadNotice, setUploadNotice] = useState<{ warnings: string[]; generatedBy: string } | null>(null);
+  const [cvImportedPendingSave, setCvImportedPendingSave] = useState(false);
+  const [autoSearching, setAutoSearching] = useState(false);
+  const [autoSearchNotice, setAutoSearchNotice] = useState<string | null>(null);
 
   const loadEvaluation = useCallback(async () => {
     setEvalLoading(true);
@@ -134,6 +137,28 @@ function ProfileContent() {
       setDirty(false);
       setLastSavedAt(new Date());
       loadEvaluation();
+
+      if (cvImportedPendingSave) {
+        setCvImportedPendingSave(false);
+        setAutoSearching(true);
+        setAutoSearchNotice(null);
+        try {
+          const result = await jobsApi.autoImport();
+          setAutoSearchNotice(
+            result.imported > 0
+              ? `Encontramos ${result.imported} vacante${result.imported === 1 ? "" : "s"} nueva${
+                  result.imported === 1 ? "" : "s"
+                } que hacen match — ya están en tu cola de Inicio.`
+              : "Buscamos vacantes que hagan match con tu perfil, pero no encontramos nada nuevo por ahora — prueba Discover más tarde."
+          );
+        } catch {
+          // Non-fatal — the profile itself saved fine; the user can still
+          // find jobs manually via Discover.
+          setAutoSearchNotice(null);
+        } finally {
+          setAutoSearching(false);
+        }
+      }
     } catch (err) {
       setSaveError(err instanceof ApiError ? err.message : "Failed to save your profile.");
     } finally {
@@ -152,6 +177,7 @@ function ProfileContent() {
       const result = await profileApi.importCv(file);
       setProfile((prev) => (prev ? mergeCvDraft(prev, result.profile) : prev));
       setDirty(true);
+      setCvImportedPendingSave(true);
       setUploadNotice({ warnings: result.warnings, generatedBy: result.generated_by });
     } catch (err) {
       setUploadError(err instanceof ApiError ? err.message : "Could not read that PDF.");
@@ -197,6 +223,17 @@ function ProfileContent() {
       </div>
 
       {saveError && <ErrorNotice message={saveError} />}
+
+      {autoSearching && (
+        <div className="rounded-lg bg-brand-50 p-3 text-xs font-medium text-brand-700 ring-1 ring-inset ring-brand-600/20">
+          Buscando vacantes que hagan match con tu nuevo perfil…
+        </div>
+      )}
+      {!autoSearching && autoSearchNotice && (
+        <div className="rounded-lg bg-emerald-50 p-3 text-xs font-medium text-emerald-800 ring-1 ring-inset ring-emerald-600/20">
+          {autoSearchNotice}
+        </div>
+      )}
 
       <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-100">
         <div className="flex flex-wrap items-center justify-between gap-3">

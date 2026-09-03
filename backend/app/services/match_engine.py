@@ -10,9 +10,19 @@ import math
 import re
 from collections import Counter
 from datetime import date, datetime
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
+from uuid import UUID
 
+from sqlalchemy import func
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.job_match import JobMatch
 from app.services.skills_taxonomy import canonical_skill_set, normalize_skill
+
+if TYPE_CHECKING:
+    from app.models.career_profile import CareerProfile
+    from app.models.job import Job
 
 TECHNICAL_WEIGHT = 0.5
 EXPERIENCE_WEIGHT = 0.3
@@ -337,3 +347,45 @@ def compute_match(profile, job) -> dict[str, Any]:
         "missing_skills": missing_skills,
         "concerns": concerns,
     }
+
+
+async def compute_and_persist_match(
+    profile: "CareerProfile", job: "Job", user_id: UUID, db: AsyncSession
+) -> JobMatch:
+    """Computes a match score and upserts it as a `job_matches` row —
+    shared by the on-demand GET /jobs/{id}/match route and the CV-upload
+    auto-import flow, so a freshly imported job shows up in the Home swipe
+    queue (GET /matches only returns jobs that already have a match row)."""
+    result = compute_match(profile, job)
+    stmt = (
+        pg_insert(JobMatch)
+        .values(
+            user_id=user_id,
+            job_id=job.id,
+            overall_score=result["overall_score"],
+            technical_score=result["technical_score"],
+            experience_score=result["experience_score"],
+            semantic_score=result["semantic_score"],
+            matched_skills=result["matched_skills"],
+            missing_skills=result["missing_skills"],
+            concerns=result["concerns"],
+        )
+        .on_conflict_do_update(
+            index_elements=[JobMatch.user_id, JobMatch.job_id],
+            set_={
+                "overall_score": result["overall_score"],
+                "technical_score": result["technical_score"],
+                "experience_score": result["experience_score"],
+                "semantic_score": result["semantic_score"],
+                "matched_skills": result["matched_skills"],
+                "missing_skills": result["missing_skills"],
+                "concerns": result["concerns"],
+                "computed_at": func.now(),
+            },
+        )
+        .returning(JobMatch)
+    )
+    row = (await db.execute(stmt)).scalar_one()
+    await db.commit()
+    await db.refresh(row)
+    return row

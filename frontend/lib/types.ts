@@ -128,6 +128,7 @@ export interface Job {
   title: string;
   company: string;
   location: string;
+  remote_type?: string | null;
   description: string;
   requirements: string[];
   responsibilities?: string[];
@@ -326,6 +327,12 @@ export interface AggregateSourceStatus {
 
 export interface AggregateSearchResponse {
   results: ExternalJobResult[];
+  sources: AggregateSourceStatus[];
+}
+
+export interface AutoImportResponse {
+  imported: number;
+  query?: string | null;
   sources: AggregateSourceStatus[];
 }
 

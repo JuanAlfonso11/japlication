@@ -118,6 +118,14 @@ options for a personal project at all: `himalayas`, `arbeitnow`, `remotive`, `jo
     ```
 - `POST /jobs/search/import` `{source, external_id}` -> `Job` (reads the normalized result from that
   provider's short-lived search cache — re-run the search if it expired, `404`)
+- `POST /jobs/search/auto-import` -> `{imported: int, query?: string, sources: [{provider, count, error?}]}`
+  — searches all six providers using the saved career profile (headline, most recent role, or top
+  skills, whichever is available first) and imports the newest matches into `jobs` with a computed
+  match score in one call, so they show up in `GET /matches` immediately. This is what the frontend
+  calls right after a CV-derived profile is saved (`POST /profile/import-cv` followed by
+  `PUT /profile`), so Home's swipe queue has something to show without a manual Discover search.
+  Only genuinely new postings (by `source_url`) are imported/counted. `400` if no career profile
+  exists yet, or if it has no headline, experience, or skills to search by.
 
 ## Match Engine
 - `GET /jobs/{id}/match` -> computes (or returns fresh cached) `MatchResult`, recompute with `?refresh=true`

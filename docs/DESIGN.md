@@ -43,6 +43,15 @@ Detalle de empleo                    Discover   Agregar vacante  Perfil         
 - Cola ordenada por score descendente; soporta teclado (flechas) para uso rápido en desktop.
 - Diseñada mobile-first: es el flujo de mayor fricción y el que más se beneficia de un gesto rápido en el celular.
 - Estado vacío ("ya estás al día") enlaza directo a **Discover** para seguir alimentando la cola.
+- **Slider de alcance geográfico**: como las vacantes solo traen ubicación en texto libre (sin coordenadas)
+  y varias fuentes son 100% remotas sin ubicación fija, en vez de un radio literal en km es un slider de 5
+  niveles — Solo remoto / Mi ciudad / Mi región / Mi país / Cualquier lugar — que arranca en "Cualquier
+  lugar" (nunca oculta nada por defecto). Al mover el slider a un nivel que necesita ubicación, pide
+  geolocalización del navegador y la resuelve a ciudad/región/país vía OpenStreetMap Nominatim (reverse
+  geocoding gratis, sin API key), cacheada 24h en `localStorage`. El filtrado es 100% client-side sobre la
+  cola ya cargada — una vacante sin ubicación reconocible, o sin ubicación de usuario resuelta todavía,
+  nunca se oculta (mismo criterio "mejor mostrar de más que esconder un match real" que el resto de filtros
+  de la app).
 
 ### 2.2 Discover — búsqueda en vivo
 Pantalla dedicada a buscar vacantes nuevas (a diferencia de Home, que solo recomienda lo ya cargado).
@@ -55,12 +64,19 @@ fecha de publicación), cada tarjeta muestra de qué fuente vino, y si alguna AP
 demás — se reporta aparte y el resto de resultados se sigue mostrando. El usuario elige cuáles agregar
 con un botón "Add to queue" por resultado; nada se persiste hasta que hace eso.
 
-**Filtros**: el campo de ubicación arranca precargado en **"Remote"** (el usuario puede cambiarlo o
-borrarlo), y un selector de **Nivel de experiencia** (Practicante, Junior, Nivel medio, Senior, Liderazgo)
-filtra las 6 fuentes sin login de forma uniforme — algunas lo exponen de forma nativa (Himalayas, The Muse
-mandan el filtro directo al proveedor; Jobicy lo trae en la respuesta), las que no lo hacen (Arbeitnow,
-Remotive, RemoteJobs.org) lo infieren por heurística de texto sobre título+descripción
-(`backend/app/services/experience_level.py`) — mismo criterio, aplicado parejo en las 6.
+**Filtros**: tres selectores independientes en vez de texto libre. **Puesto** es un dropdown agrupado por
+disciplina (ingeniería de software, infraestructura y datos, otras ingenierías, producto/diseño, otros
+roles) en vez de una caja de texto. **Ubicación** es puramente geográfica (país/región, ej. "Mexico",
+"Europe" — vacío significa cualquier lugar) y **Modalidad** (Remoto/Híbrido/Presencial, arranca en
+"Remoto" para preservar el comportamiento por defecto histórico) es un filtro aparte e independiente —
+antes "ubicación" y "remoto" estaban mezclados en un solo campo con un caso especial para
+`location=Remote`; ahora cada proveedor los trata como dos filtros ortogonales
+(`backend/app/api/v1/routers/jobs.py`). Un cuarto selector de **Nivel de experiencia** (Practicante,
+Junior, Nivel medio, Senior, Liderazgo) filtra las 6 fuentes sin login de forma uniforme — algunas lo
+exponen de forma nativa (Himalayas, The Muse mandan el filtro directo al proveedor; Jobicy lo trae en la
+respuesta), las que no lo hacen (Arbeitnow, Remotive, RemoteJobs.org) lo infieren por heurística de texto
+sobre título+descripción (`backend/app/services/experience_level.py`) — mismo criterio, aplicado parejo
+en las 6.
 
 Al agregar un resultado se normaliza, se persiste y se calcula su match automáticamente — reaparece listo
 en la cola de **Home** sin pasos adicionales.
@@ -81,6 +97,13 @@ o pega el texto de la descripción directamente. Mismo resultado normalizado + m
   **precarga el formulario sin guardar nada todavía** — el usuario revisa, completa lo que falte y recién
   ahí hace clic en Guardar. Mismo principio que el resto de la app: el perfil nunca se sobreescribe a
   ciegas.
+- **Auto-búsqueda tras subir CV** (`POST /jobs/search/auto-import`): justo después de que el usuario
+  guarda el perfil que acaba de precargar desde un PDF, el frontend dispara automáticamente una búsqueda
+  en las 6 fuentes sin login usando el headline (o el cargo más reciente, o las primeras skills como
+  respaldo) y **importa y calcula el match** de las vacantes más nuevas de una sola vez — así la cola de
+  **Home** ya tiene algo que mostrar sin que el usuario tenga que pasar por Discover primero. Solo se
+  cuentan/matchean vacantes realmente nuevas (por `source_url`); guardados posteriores del perfil que no
+  vinieron de un CV recién subido no vuelven a disparar la búsqueda.
 - **Evaluador de CV** (`GET /profile/evaluation`): tarjeta fija arriba del editor, siempre visible, que responde
   "¿en qué está flaqueando mi CV?" — a diferencia del Match Engine (que compara contra *una* vacante), esto
   evalúa el perfil por sí solo: completitud (¿falta headline, resumen, skills, experiencia?), impacto de los

@@ -3,6 +3,7 @@ import type {
   ApiErrorShape,
   Application,
   ApplicationUpdatePayload,
+  AutoImportResponse,
   AuthResponse,
   CareerProfile,
   CoverLetter,
@@ -249,6 +250,7 @@ export const jobsApi = {
   }) => request<AggregateSearchResponse>("/jobs/search/aggregate", { query: params }),
   importExternal: (payload: ExternalJobImportPayload) =>
     request<Job>("/jobs/search/import", { method: "POST", body: payload }),
+  autoImport: () => request<AutoImportResponse>("/jobs/search/auto-import", { method: "POST" }),
 };
 
 // ---------- Applications ----------
