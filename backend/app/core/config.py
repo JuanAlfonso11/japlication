@@ -20,6 +20,19 @@ class Settings(BaseSettings):
     # Optional AI features
     ANTHROPIC_API_KEY: Optional[str] = None
 
+    # Optional live job search (SerpApi's Google Jobs engine — https://serpapi.com/search?engine=google_jobs)
+    SERPAPI_API_KEY: Optional[str] = None
+    SERPAPI_DEFAULT_HL: str = "es"
+    SERPAPI_DEFAULT_GL: str = "us"
+
+    # Optional live job search — Upwork GraphQL API (OAuth2 authorization-code
+    # flow; register an app at https://www.upwork.com/developer/apps to get
+    # these). Unset by default: the "Upwork" search provider stays hidden
+    # until configured.
+    UPWORK_CLIENT_ID: Optional[str] = None
+    UPWORK_CLIENT_SECRET: Optional[str] = None
+    UPWORK_REDIRECT_URI: str = "http://localhost:8000/api/v1/integrations/upwork/callback"
+
     # CORS
     FRONTEND_ORIGIN: str = "http://localhost:3000"
 

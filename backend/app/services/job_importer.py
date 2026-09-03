@@ -139,7 +139,7 @@ def _text_or_none(value: Any) -> Optional[str]:
     return str(value)
 
 
-def _html_to_text(html_fragment: Optional[str]) -> str:
+def html_to_text(html_fragment: Optional[str]) -> str:
     if not html_fragment:
         return ""
     frag_soup = BeautifulSoup(html_fragment, "lxml")
@@ -283,7 +283,7 @@ def parse_jobposting_jsonld(item: dict[str, Any], fallback_text: str = "") -> di
         remote_type = "remote"
 
     description_html = item.get("description") or ""
-    description_text = _html_to_text(description_html) or fallback_text
+    description_text = html_to_text(description_html) or fallback_text
 
     employment_type_raw = item.get("employmentType")
     employment_type = None

@@ -4,6 +4,8 @@ import enum
 class JobSource(str, enum.Enum):
     url_import = "url_import"
     google_jobs = "google_jobs"
+    himalayas = "himalayas"
+    upwork = "upwork"
     linkedin = "linkedin"
     indeed = "indeed"
     manual = "manual"

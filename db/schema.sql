@@ -46,7 +46,7 @@ CREATE INDEX idx_career_profiles_search ON career_profiles USING gin (search_vec
 -- =========================================================
 -- jobs  (normalized job postings, imported from a URL or search)
 -- =========================================================
-CREATE TYPE job_source AS ENUM ('url_import', 'google_jobs', 'linkedin', 'indeed', 'manual');
+CREATE TYPE job_source AS ENUM ('url_import', 'google_jobs', 'himalayas', 'upwork', 'linkedin', 'indeed', 'manual');
 
 CREATE TABLE jobs (
     id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -173,6 +173,25 @@ ALTER TABLE applications
         FOREIGN KEY (cover_letter_id) REFERENCES cover_letters(id) ON DELETE SET NULL;
 
 -- =========================================================
+-- oauth_connections  (per-user OAuth2 tokens for external job sources
+-- that require user authorization, e.g. Upwork — as opposed to Google
+-- Jobs/SerpApi, which use one shared server-side API key)
+-- =========================================================
+CREATE TABLE oauth_connections (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    provider        TEXT NOT NULL,               -- 'upwork', ...
+    access_token    TEXT NOT NULL,
+    refresh_token   TEXT,
+    token_type      TEXT NOT NULL DEFAULT 'Bearer',
+    expires_at      TIMESTAMPTZ,
+    scope           TEXT,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (user_id, provider)
+);
+
+-- =========================================================
 -- updated_at triggers
 -- =========================================================
 CREATE OR REPLACE FUNCTION set_updated_at() RETURNS TRIGGER AS $$
@@ -189,4 +208,6 @@ CREATE TRIGGER trg_career_profiles_updated_at BEFORE UPDATE ON career_profiles
 CREATE TRIGGER trg_jobs_updated_at BEFORE UPDATE ON jobs
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 CREATE TRIGGER trg_applications_updated_at BEFORE UPDATE ON applications
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+CREATE TRIGGER trg_oauth_connections_updated_at BEFORE UPDATE ON oauth_connections
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();
