@@ -1,18 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Allows plain http:// only to this PC's LAN IP — not to the public internet.
-  Reachable specifically because the phone connects through the user's own
-  WireGuard road-warrior VPN back into this LAN first; WireGuard already
-  encrypts everything between the devices, so http:// on top of that never
-  touches the public internet in the clear. Everything else the WebView
-  might try to load stays blocked from cleartext.
-
-  This IP is DHCP-assigned — if it changes, update it here and in
-  ../../../../../capacitor.config.ts (consider a DHCP reservation on the
-  router so it stays fixed). See docs/ANDROID_APP.md.
+  Allows plain http:// only to Tailscale hostnames (the *.ts.net domain
+  Tailscale assigns via MagicDNS) — not to the public internet. This is
+  intentionally narrow: Tailscale traffic is already end-to-end encrypted at
+  the VPN layer, so http:// within the tailnet never touches the internet
+  in the clear, but this config still blocks cleartext to any other host,
+  so nothing else the WebView might load can silently downgrade to http://.
+  See ../../../../../capacitor.config.ts and docs/ANDROID_APP.md.
 -->
 <network-security-config>
     <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="false">10.0.0.232</domain>
+        <domain includeSubdomains="true">ts.net</domain>
     </domain-config>
 </network-security-config>
