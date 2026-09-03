@@ -43,33 +43,36 @@ a fast path to "always available" with zero extra tooling: Chrome on Android wil
 Home Screen** on that URL (JobFlow AI ships a PWA manifest), which installs a full-screen icon. Do
 this now if you don't need the native `.apk` at all.
 
-## Remaining steps — building the `.apk`
+## Building the `.apk` — done, and how it was set up
 
-### 1. Install a JDK + the Android SDK
+Already installed and working on this machine:
 
-Neither is installed on this machine yet. The simplest way to get both correctly configured on
-Windows is to install **Android Studio** (https://developer.android.com/studio) and let its setup
-wizard install the SDK + accept licenses — **you never have to open Android Studio's editor**, VS
-Code stays your editor for everything; Android Studio is just the standard installer for the
-SDK/build tools on Windows.
+- **Android Studio** (via `winget install Google.AndroidStudio`) — installed purely as the
+  standard way to get licensed SDK components on Windows. You never need to open its editor; VS
+  Code stays your editor for everything.
+- **Android SDK** at `%LOCALAPPDATA%\Android\Sdk` — `platform-tools`, `platforms;android-36`,
+  `build-tools;36.0.0` (installed headlessly via `cmdline-tools`' `sdkmanager`, licenses
+  pre-accepted). `ANDROID_HOME` is set to this path (`setx`, persists across new terminals).
+- **Eclipse Temurin JDK 21** (via `winget install EclipseAdoptium.Temurin.21.JDK`) — **this is the
+  JDK Gradle actually needs to build with**, not Android Studio's bundled JBR. Two things bit us
+  getting here, worth knowing if a rebuild ever breaks:
+  - Android Studio's bundled JBR is JDK 25, too new for Gradle 8.14.3 (`Unsupported class file
+    major version 69`).
+  - Temurin 17 is too *old* — Capacitor 8's Android module targets Java 21 (`invalid source
+    release: 21`).
+  - JDK 21 is the one that actually works.
 
-After installing, note the SDK path (Android Studio → More Actions → SDK Manager, or
-`%LOCALAPPDATA%\Android\Sdk` by default) and set it once:
+To build (or rebuild after a config/plugin change), from `frontend/android/` in PowerShell or VS
+Code's integrated terminal:
 
 ```powershell
-setx ANDROID_HOME "$env:LOCALAPPDATA\Android\Sdk"
-```
-
-(Open a new terminal after `setx` for it to take effect.)
-
-### 2. Build
-
-From `frontend/android/`, in a terminal that has `ANDROID_HOME` set (PowerShell, or VS Code's
-integrated terminal):
-
-```
+$env:JAVA_HOME = "C:\Program Files\Eclipse Adoptium\jdk-21.0.12.101-hotspot"
 .\gradlew.bat assembleDebug
 ```
+
+(`ANDROID_HOME` is already set persistently via `setx`, so it doesn't need to be repeated per
+session — but `JAVA_HOME` as set above is only for that terminal session; set it again in any new
+terminal you build from, or set it permanently the same way: `setx JAVA_HOME "C:\Program Files\Eclipse Adoptium\jdk-21.0.12.101-hotspot"`.)
 
 The first run downloads Gradle + dependencies (can take a while). Output APK:
 
@@ -77,7 +80,7 @@ The first run downloads Gradle + dependencies (can take a while). Output APK:
 frontend/android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-### 3. Install it on your phone
+### Install it on your phone
 
 Copy `app-debug.apk` to your phone (Tailscale file share via Taildrop, a cloud drive, USB, email —
 anything) and open it there. Android will ask to allow installs from that source once; approve it,
