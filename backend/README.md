@@ -9,6 +9,9 @@ FastAPI backend for JobFlow AI, a personal job-search / application assistant.
 - Optional: Anthropic API (`claude-sonnet-5`) for AI-powered resume tailoring,
   cover letters, and job parsing upgrades — every one of these features has a
   fully-functional deterministic/offline fallback when no API key is set.
+- Optional: live job search — Himalayas (no key needed), Google Jobs via
+  SerpApi (`SERPAPI_API_KEY`), Upwork (OAuth2, `UPWORK_CLIENT_ID`/`_SECRET`).
+  See "Live job search" below.
 
 ## Setup
 
@@ -19,7 +22,8 @@ source .venv/bin/activate
 pip install -r requirements.txt
 
 cp .env.example .env
-# edit .env: set DATABASE_URL, JWT_SECRET, FRONTEND_ORIGIN, and (optionally) ANTHROPIC_API_KEY
+# edit .env: set DATABASE_URL, JWT_SECRET, FRONTEND_ORIGIN, and (optionally)
+# ANTHROPIC_API_KEY / SERPAPI_API_KEY / UPWORK_CLIENT_ID+SECRET
 ```
 
 ### Database
@@ -60,9 +64,39 @@ pytest
 
 Tests are fully offline (no live network calls, no live database) — they
 exercise `match_engine.py` (skill overlap, experience-years extraction,
-weighted scoring) and `job_importer.py` (JSON-LD parsing against a sample
+weighted scoring), `job_importer.py` (JSON-LD parsing against a sample
 `JobPosting` HTML fixture, and heuristic fallback parsing against plain HTML
-with no JSON-LD).
+with no JSON-LD), and the three search integrations (`google_jobs.py`,
+`himalayas.py`, `upwork.py` — normalization, salary/date parsing, OAuth URL
+building, and cache expiry, all with `httpx` mocked; no live calls to
+serpapi.com / himalayas.app / api.upwork.com are made by the suite).
+
+## Live job search
+
+`GET /jobs/search?provider=himalayas|google_jobs|upwork` and
+`POST /jobs/search/import` are documented in `../docs/API_CONTRACT.md`.
+
+- **Himalayas** needs no configuration.
+- **Google Jobs** (SerpApi) needs `SERPAPI_API_KEY` — get one at
+  [serpapi.com](https://serpapi.com). Without it, `provider=google_jobs`
+  returns a clean `503`.
+- **Upwork** needs a registered app at
+  [upwork.com/developer/apps](https://www.upwork.com/developer/apps) —
+  set `UPWORK_CLIENT_ID`/`UPWORK_CLIENT_SECRET`, and make sure the redirect
+  URI you register there matches `UPWORK_REDIRECT_URI` exactly. Each user
+  then connects their own account via `GET /integrations/upwork/authorize`
+  (an OAuth2 authorization-code flow — tokens are stored per-user in the
+  `oauth_connections` table and refreshed automatically). Without an app
+  configured, `GET /integrations/upwork/authorize` returns `503` and the
+  frontend hides the Upwork tab behind a setup notice instead.
+
+The exact GraphQL field names in `upwork.py`'s `marketplaceJobPostings`
+query follow Upwork's publicly documented schema at the time of writing;
+Upwork's schema is only fully browsable via GraphQL introspection from an
+approved developer account, so if it returns a "Cannot query field ..."
+error, adjust `_SEARCH_QUERY`/`_build_filter()` in that file against your
+account's live schema — nothing else in the OAuth/caching/persistence flow
+is affected by that.
 
 ## Project layout
 
@@ -76,15 +110,18 @@ app/
   models/                  SQLAlchemy models mirroring db/schema.sql
   schemas/                 Pydantic request/response models (API_CONTRACT.md)
   api/deps.py              get_current_user (JWT bearer auth)
-  api/v1/routers/          auth, profile, jobs, match, applications, resumes, cover_letters
+  api/v1/routers/          auth, profile, jobs, match, applications, resumes, cover_letters, integrations
   services/
     skills_taxonomy.py     built-in skills taxonomy + synonym normalization
     job_importer.py        URL -> structured Job (JSON-LD first, heuristic fallback)
     match_engine.py         hybrid weighted match score (technical/experience/semantic)
     resume_adapter.py       ATS-safe tailored resume (AI when configured, rule-based fallback)
     cover_letter_generator.py  personalized cover letter (AI when configured, template fallback)
+    google_jobs.py          Google Jobs search via SerpApi (server-side API key)
+    himalayas.py             Himalayas remote-jobs search (no key needed)
+    upwork.py                 Upwork OAuth2 + GraphQL job search (per-user token)
 alembic/                   migrations (0001 mirrors db/schema.sql)
-tests/                     pytest suite (match_engine, job_importer)
+tests/                     pytest suite (match_engine, job_importer, google_jobs, himalayas, upwork)
 ```
 
 ## Auth

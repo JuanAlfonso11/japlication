@@ -7,6 +7,9 @@ import type {
   CoverLetter,
   CoverLetterGeneratePayload,
   DecisionPayload,
+  ExternalJobImportPayload,
+  ExternalJobsSearchResponse,
+  ExternalProvider,
   Job,
   JobCreatePayload,
   JobImportPayload,
@@ -16,6 +19,8 @@ import type {
   RegisterPayload,
   ResumeGeneratePayload,
   ResumeVersion,
+  UpworkAuthorizeResponse,
+  UpworkStatus,
   User,
 } from "./types";
 
@@ -179,6 +184,28 @@ export const jobsApi = {
     request<ResumeVersion>(`/jobs/${id}/resume`, { method: "POST", body: payload ?? {} }),
   generateCoverLetter: (id: string, payload?: CoverLetterGeneratePayload) =>
     request<CoverLetter>(`/jobs/${id}/cover-letter`, { method: "POST", body: payload ?? {} }),
+  search: (params: {
+    provider: ExternalProvider;
+    q?: string;
+    location?: string;
+    country?: string;
+    worldwide?: boolean;
+    seniority?: string;
+    employment_type?: string;
+    sort?: string;
+    page?: number;
+    next_page_token?: string;
+  }) => request<ExternalJobsSearchResponse>("/jobs/search", { query: params }),
+  importExternal: (payload: ExternalJobImportPayload) =>
+    request<Job>("/jobs/search/import", { method: "POST", body: payload }),
+};
+
+// ---------- Integrations (Upwork OAuth) ----------
+
+export const integrationsApi = {
+  upworkStatus: () => request<UpworkStatus>("/integrations/upwork/status"),
+  upworkAuthorize: () => request<UpworkAuthorizeResponse>("/integrations/upwork/authorize"),
+  upworkDisconnect: () => request<void>("/integrations/upwork", { method: "DELETE" }),
 };
 
 // ---------- Applications ----------

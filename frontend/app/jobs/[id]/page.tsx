@@ -163,14 +163,14 @@ function JobDetailContent() {
           {match && <ScoreBadge score={match.overall_score} size="lg" />}
         </div>
 
-        {job.skills?.length > 0 && (
+        {job.skills_required?.length > 0 && (
           <div className="mt-4 flex flex-wrap gap-1.5">
-            {job.skills.map((s) => (
+            {job.skills_required.map((s) => (
               <span
-                key={s}
+                key={s.name}
                 className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600"
               >
-                {s}
+                {s.name}
               </span>
             ))}
           </div>

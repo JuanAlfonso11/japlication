@@ -105,6 +105,11 @@ export type ApplicationStatus =
   | "rejected"
   | "withdrawn";
 
+export interface SkillRequirement {
+  name: string;
+  importance: "required" | "nice_to_have" | string;
+}
+
 export interface Job {
   id: string;
   title: string;
@@ -113,7 +118,7 @@ export interface Job {
   description: string;
   requirements: string[];
   responsibilities?: string[];
-  skills: string[];
+  skills_required: SkillRequirement[];
   source_url?: string | null;
   created_at?: string;
   match?: MatchResult | null;
@@ -130,8 +135,63 @@ export interface JobCreatePayload {
   description: string;
   requirements: string[];
   responsibilities?: string[];
-  skills: string[];
+  skills_required: SkillRequirement[];
   source_url?: string | null;
+}
+
+// ---------- External job search (Google Jobs / Himalayas / Upwork) ----------
+
+export type ExternalProvider = "himalayas" | "google_jobs" | "upwork";
+
+export interface ApplyOption {
+  title: string;
+  link?: string | null;
+}
+
+export interface ExternalJobResult {
+  external_id: string;
+  source: ExternalProvider;
+  source_url?: string | null;
+  title: string;
+  company: string;
+  location?: string | null;
+  remote_type?: string | null;
+  employment_type?: string | null;
+  seniority?: string | null;
+  description: string;
+  requirements: string[];
+  responsibilities?: string[];
+  skills_required: SkillRequirement[];
+  salary_min?: number | null;
+  salary_max?: number | null;
+  salary_currency?: string | null;
+  posted_at?: string | null;
+  posted_at_text?: string | null;
+  via?: string | null;
+  apply_options?: ApplyOption[];
+  thumbnail?: string | null;
+}
+
+export interface ExternalJobsSearchResponse {
+  provider: ExternalProvider;
+  results: ExternalJobResult[];
+  next_page_token?: string | null;
+  page?: number | null;
+  has_more: boolean;
+}
+
+export interface ExternalJobImportPayload {
+  source: ExternalProvider;
+  external_id: string;
+}
+
+export interface UpworkStatus {
+  connected: boolean;
+  configured: boolean;
+}
+
+export interface UpworkAuthorizeResponse {
+  authorization_url: string;
 }
 
 export interface JobListResponse {

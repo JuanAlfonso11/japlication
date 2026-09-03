@@ -32,6 +32,37 @@ All bodies/responses are JSON. IDs are UUID strings. Timestamps are ISO-8601.
 - `GET /jobs/{id}` -> `Job` (includes cached `match` if present for the current user)
 - `DELETE /jobs/{id}`
 
+`Job.skills_required` is `[{name, importance: "required"|"nice_to_have"}]`.
+
+## Live job search (Google Jobs / Himalayas / Upwork)
+Search results are **not persisted** — pick one and call the import endpoint to add it to `jobs`.
+
+- `GET /jobs/search?provider=himalayas|google_jobs|upwork&q=&location=&country=&worldwide=&seniority=&employment_type=&sort=&page=&next_page_token=`
+  -> `{provider, results: ExternalJobResult[], next_page_token?, page?, has_more}`
+  - `provider` defaults to `himalayas` (free, no key). `google_jobs` requires the backend's `SERPAPI_API_KEY`
+    (else `503`). `upwork` requires the user to have connected their account (else `409`) — see below.
+  - `ExternalJobResult`: same shape as `Job` (minus id/timestamps) plus `external_id` and `source`.
+    ```json
+    {
+      "external_id": "hj-001", "source": "himalayas",
+      "source_url": "https://...", "title": "Senior React Engineer", "company": "Northbeam",
+      "location": "United States, Canada", "remote_type": "remote", "employment_type": "full_time",
+      "description": "...", "requirements": ["..."], "skills_required": [{"name": "React", "importance": "required"}],
+      "salary_min": 90000, "salary_max": 120000, "salary_currency": "USD", "posted_at": "2023-11-14T22:13:20Z"
+    }
+    ```
+- `POST /jobs/search/import` `{source, external_id}` -> `Job` (reads the normalized result from that
+  provider's short-lived search cache — re-run the search if it expired, `404`)
+
+## Integrations (Upwork OAuth2)
+Upwork needs per-user authorization (unlike Google Jobs' single server-side API key), so it's a separate
+connect flow:
+- `GET /integrations/upwork/status` -> `{connected: bool, configured: bool}`
+- `GET /integrations/upwork/authorize` -> `{authorization_url}` (frontend does `window.location.href = ...`)
+- `GET /integrations/upwork/callback?code=&state=` -> not called by the frontend directly; Upwork redirects
+  the browser here, which redirects again to `{FRONTEND_ORIGIN}/jobs/import?upwork=connected|error`
+- `DELETE /integrations/upwork` -> disconnects (204)
+
 ## Match Engine
 - `GET /jobs/{id}/match` -> computes (or returns fresh cached) `MatchResult`, recompute with `?refresh=true`
   ```json
