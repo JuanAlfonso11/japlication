@@ -31,14 +31,14 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 logger = logging.getLogger("jobflow.auth")
 
 _VERIFY_PURPOSE = "email_verify"
-_VERIFY_TOKEN_MINUTES = 60 * 24  # 24 hours
+_VERIFY_TOKEN_MINUTES = 10  # short-lived on purpose — request a resend if it expires
 
 
 def _send_verification_email(user: User) -> None:
     token = create_state_token(user.id, purpose=_VERIFY_PURPOSE, expires_minutes=_VERIFY_TOKEN_MINUTES)
     verification_url = f"{settings.FRONTEND_ORIGIN.rstrip('/')}/verify-email?token={token}"
     try:
-        email.send_verification_email(user.email, user.full_name, verification_url)
+        email.send_verification_email(user.email, user.full_name, verification_url, _VERIFY_TOKEN_MINUTES)
     except email.EmailError as exc:
         # Never fail registration/login over a flaky mail provider — the user
         # can always request another link via POST /auth/resend-verification.

@@ -2,6 +2,16 @@ from app.core.config import settings
 from app.services import email
 
 
+def test_format_expiry_minutes():
+    assert email._format_expiry(10) == "10 minutos"
+    assert email._format_expiry(1) == "1 minuto"
+
+
+def test_format_expiry_hours():
+    assert email._format_expiry(60) == "1 hora"
+    assert email._format_expiry(1440) == "24 horas"
+
+
 def test_is_configured_false_without_smtp_host(monkeypatch):
     monkeypatch.setattr(settings, "SMTP_HOST", None)
     assert email.is_configured() is False
@@ -23,7 +33,7 @@ def test_send_verification_email_builds_message_and_logs_when_unconfigured(monke
     import logging
 
     with caplog.at_level(logging.WARNING, logger="jobflow.email"):
-        email.send_verification_email("user@example.com", "Camila Reyes", "https://app/verify-email?token=abc")
+        email.send_verification_email("user@example.com", "Camila Reyes", "https://app/verify-email?token=abc", 10)
     assert any("user@example.com" in record.message for record in caplog.records)
 
 

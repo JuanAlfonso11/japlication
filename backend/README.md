@@ -94,7 +94,10 @@ seniority (native where the provider has it, inferred from title/description oth
 ## Auth & email verification
 
 `POST /auth/register` sends a verification email in the background (never blocks or fails registration
-over it) with a signed, 24h link to `GET /auth/verify-email?token=`. Configure `SMTP_HOST` (+
+over it) with a signed link to `GET /auth/verify-email?token=`, valid for `_VERIFY_TOKEN_MINUTES` (10
+minutes, deliberately short — `app/api/v1/routers/auth.py`). `POST /auth/resend-verification` mints a
+fresh one when it expires; the frontend surfaces that both from a persistent banner and directly on the
+"link expired" page. Configure `SMTP_HOST` (+
 `SMTP_PORT`/`SMTP_USER`/`SMTP_PASSWORD`/`SMTP_FROM_EMAIL`/`SMTP_USE_TLS`) to send real emails via any SMTP
 provider (Gmail app password, Mailtrap for local testing, SendGrid/Postmark/SES SMTP relay, ...); without
 it, `app/services/email.py` just logs the verification link instead, so registration/login/verification

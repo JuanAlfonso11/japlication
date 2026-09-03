@@ -57,13 +57,22 @@ def _send(to_email: str, subject: str, text_body: str, html_body: str) -> None:
         raise EmailError(f"Could not send email via SMTP: {exc}") from exc
 
 
-def send_verification_email(to_email: str, full_name: str, verification_url: str) -> None:
+def _format_expiry(expires_minutes: int) -> str:
+    if expires_minutes % 60 == 0 and expires_minutes >= 60:
+        hours = expires_minutes // 60
+        return f"{hours} hora" + ("s" if hours != 1 else "")
+    return f"{expires_minutes} minuto" + ("s" if expires_minutes != 1 else "")
+
+
+def send_verification_email(to_email: str, full_name: str, verification_url: str, expires_minutes: int) -> None:
     first_name = (full_name or "").split(" ")[0] or "there"
+    expiry_text = _format_expiry(expires_minutes)
     subject = "Confirma tu cuenta de JobFlow AI"
     text_body = (
         f"Hola {first_name},\n\n"
         "Gracias por registrarte en JobFlow AI. Confirma tu correo haciendo clic en este enlace "
-        f"(válido por 24 horas):\n\n{verification_url}\n\n"
+        f"(válido por {expiry_text} — si expira, puedes pedir que te enviemos uno nuevo desde la app):"
+        f"\n\n{verification_url}\n\n"
         "Si no creaste esta cuenta, puedes ignorar este mensaje.\n"
     )
     html_body = f"""
@@ -71,7 +80,8 @@ def send_verification_email(to_email: str, full_name: str, verification_url: str
       <h2>Confirma tu cuenta</h2>
       <p>Hola {first_name},</p>
       <p>Gracias por registrarte en JobFlow AI. Confirma tu correo con el siguiente botón
-         (el enlace es válido por 24 horas):</p>
+         (el enlace es válido por {expiry_text} — si expira, puedes pedir que te enviemos uno nuevo
+         desde la app):</p>
       <p>
         <a href="{verification_url}"
            style="display:inline-block;background:#2b5d63;color:#fff;padding:10px 20px;
