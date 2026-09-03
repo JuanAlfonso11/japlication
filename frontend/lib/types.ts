@@ -208,6 +208,7 @@ export const LOCATION_OPTIONS: string[] = [
   "Argentina",
   "Colombia",
   "Chile",
+  "Dominican Republic",
   "India",
   "Asia Pacific",
   "Australia",

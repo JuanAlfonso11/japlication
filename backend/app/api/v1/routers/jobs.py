@@ -65,6 +65,7 @@ _LOCATION_SLUGS = {
     "argentina": "argentina",
     "colombia": "colombia",
     "chile": "chile",
+    "dominican republic": "dominican-republic",
     "spain": "spain",
     "germany": "germany",
     "france": "france",
