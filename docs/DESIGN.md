@@ -4,71 +4,76 @@ Aplicación personal para automatizar y optimizar la búsqueda de empleo: búsqu
 
 ## 1. Arquitectura general (flujo de pantallas)
 
+El punto de entrada es la recomendación, no el buscador: **Home es el swipe** — lo primero que el usuario
+ve al abrir la app son vacantes ya rankeadas contra su CV. Buscar activamente nuevas vacantes es una acción
+deliberada, en **Discover**.
+
 ```
 Login/Registro
       │
       ▼
-  Dashboard (Home) ──────────────┬───────────────┬─────────────────┐
-      │                          │               │                 │
-      ▼                          ▼               ▼                 ▼
-Import de empleos          Swipe (matches)   Perfil (CV Maestro) Aplicaciones
-(URL o texto)                    │                                 (pipeline)
-      │                          ▼
-      │                    Detalle de empleo
-      │                    ├─ Match breakdown
-      │                    ├─ Generar CV adaptado
-      │                    └─ Generar cover letter
-      └──────────────────────────┘
+  Home = Swipe (recomendaciones por CV) ──┬───────────┬───────────┬─────────────────┐
+      │                                   │           │           │                 │
+      ▼                                   ▼           ▼           ▼                 ▼
+Detalle de empleo                    Discover   Agregar vacante  Perfil          Aplicaciones
+├─ Match breakdown                  (búsqueda   (URL o texto)  (CV Maestro)      (pipeline)
+├─ Generar CV adaptado               en vivo)        │
+└─ Generar cover letter                   │           │
+      ▲                                   └─────┬─────┘
+      └───────────────── ambas alimentan la cola de Home ─┘
 ```
 
 **Componentes principales**
 - `AuthProvider` — sesión/JWT, guard de rutas.
 - `ProfileEditor` — formulario estructurado del CV maestro (fuente de verdad factual).
-- `JobImporter` — captura de URL/texto, muestra el resultado normalizado.
-- `MatchEngine (backend)` — calcula compatibilidad perfil↔vacante.
-- `SwipeDeck` — cola de vacantes rankeadas por score, gestos de swipe.
+- `SwipeDeck` (Home) — cola de vacantes rankeadas por score, gestos de swipe; primera pantalla tras iniciar sesión.
+- `DiscoverSearch` — selector de proveedor + búsqueda en vivo, resultados que el usuario elige agregar a la cola.
+- `JobImporter` — captura de URL/texto para una vacante específica ya encontrada en otro lado.
+- `MatchEngine (backend)` — calcula compatibilidad perfil↔vacante; se dispara automáticamente al agregar una vacante por cualquier vía, para que aparezca lista en Home sin pasos extra.
 - `JobDetail` — descripción completa + acciones de generación (CV/cover letter).
 - `ApplicationsBoard` — pipeline de estados (guardado → aplicado → entrevista → oferta/rechazo).
 
 ## 2. Diseño de cada pantalla clave
 
-### 2.1 Búsqueda / Importación
-Tres formas de llevar una vacante a la app, bajo una misma pestaña "Importar":
-
-1. **Búsqueda en vivo** (`GET /jobs/search?provider=`) — un selector de proveedor consulta una API externa
-   en tiempo real y muestra resultados normalizados que aún **no** se guardan; el usuario elige cuáles agregar
-   a su cola:
-   - **Himalayas** (himalayas.app) — sin API key, funciona out-of-the-box; proveedor por defecto.
-   - **Google Jobs** (vía SerpApi) — requiere `SERPAPI_API_KEY` del backend; agrega los resultados agregados
-     de LinkedIn/Indeed/sitios corporativos que Google Jobs ya consolida, con enlaces de aplicación reales.
-   - **Upwork** — freelance/contratos; requiere que el usuario conecte su cuenta vía OAuth2 (botón "Conectar
-     Upwork" → consentimiento en upwork.com → vuelve a la app ya conectado).
-2. **URL directa** — pega el link de una vacante específica (LinkedIn, Indeed, carrera corporativa) →
-   `POST /jobs/import` la parsea (JSON-LD `JobPosting` con fallback heurístico).
-3. **Texto pegado** — para sitios sin scraping fiable, pegar la descripción directamente.
-
-En los tres casos el resultado normalizado se muestra de inmediato (título, empresa, ubicación, tipo de
-contrato, seniority, requisitos y skills detectadas) y, al guardarse, se calcula su match automáticamente
-para que aparezca listo en la cola de **Swipe** sin pasos adicionales.
-
-### 2.2 Perfil / CV Maestro
-- Editor por secciones: encabezado/resumen, habilidades (nombre, categoría, nivel, años), experiencia (empresa, cargo, fechas, bullets, skills usadas), educación, certificaciones, idiomas.
-- Este perfil es la **única fuente de verdad factual** — nunca se sobreescribe automáticamente; las adaptaciones por vacante se generan como *versiones derivadas* (`resume_versions`), preservando el original.
-- UX: secciones repetibles (agregar/quitar filas), guardado explícito con indicador de cambios sin guardar.
-
-### 2.3 Detalle de vacante + Match
-- Descripción completa, requisitos, responsabilidades.
-- **Match breakdown visual**: score global + desglose (técnico / experiencia / semántico), skills coincidentes (verde) vs. faltantes (ámbar), y "concerns" en lenguaje natural (p. ej. "Piden 5+ años de liderazgo; tu perfil registra 2").
-- Acciones: "Generar CV adaptado" y "Generar cover letter", cada una muestra el resultado editable con copiar/exportar.
-
-### 2.4 Swipe (interfaz de decisión)
-- Una tarjeta a la vez: título, empresa, ubicación, score de match, top 3 skills coincidentes/faltantes.
+### 2.1 Home (Swipe) — pantalla de entrada
+- Lo primero que ve el usuario tras iniciar sesión: una franja compacta de estadísticas (vacantes en cola, aplicadas, en entrevista, ofertas) seguida del mazo de swipe.
+- Una tarjeta a la vez: título, empresa, ubicación, score de match, top skills coincidentes/faltantes.
 - Swipe derecha (o botón ✓) = guardar/aplicar → pasa a `applications` con estado `saved`.
 - Swipe izquierda (o botón ✕) = descartar → estado `passed`, no vuelve a aparecer en la cola.
 - Cola ordenada por score descendente; soporta teclado (flechas) para uso rápido en desktop.
 - Diseñada mobile-first: es el flujo de mayor fricción y el que más se beneficia de un gesto rápido en el celular.
+- Estado vacío ("ya estás al día") enlaza directo a **Discover** para seguir alimentando la cola.
 
-### 2.5 Aplicaciones (pipeline)
+### 2.2 Discover — búsqueda en vivo
+Pantalla dedicada a buscar vacantes nuevas (a diferencia de Home, que solo recomienda lo ya cargado). Un
+selector de proveedor consulta una API externa en tiempo real y muestra resultados normalizados que aún
+**no** se guardan (`GET /jobs/search?provider=`); el usuario elige cuáles agregar con un botón "Add to
+queue" por resultado:
+- **Himalayas** (himalayas.app) — sin API key, funciona out-of-the-box; proveedor por defecto.
+- **Google Jobs** (vía SerpApi) — requiere `SERPAPI_API_KEY` del backend; agrega los resultados agregados
+  de LinkedIn/Indeed/sitios corporativos que Google Jobs ya consolida, con enlaces de aplicación reales.
+- **Upwork** — freelance/contratos; requiere que el usuario conecte su cuenta vía OAuth2 (botón "Conectar
+  Upwork" → consentimiento en upwork.com → vuelve a Discover ya conectado).
+
+Al agregar un resultado se normaliza, se persiste y se calcula su match automáticamente — reaparece listo
+en la cola de **Home** sin pasos adicionales.
+
+### 2.3 Agregar vacante (Import)
+Para cuando el usuario ya encontró una vacante específica en otro lado (no está "descubriendo", está
+"agregando algo puntual"): pega la URL (`POST /jobs/import`, JSON-LD `JobPosting` con fallback heurístico)
+o pega el texto de la descripción directamente. Mismo resultado normalizado + match automático que Discover.
+
+### 2.4 Perfil / CV Maestro
+- Editor por secciones: encabezado/resumen, habilidades (nombre, categoría, nivel, años), experiencia (empresa, cargo, fechas, bullets, skills usadas), educación, certificaciones, idiomas.
+- Este perfil es la **única fuente de verdad factual** — nunca se sobreescribe automáticamente; las adaptaciones por vacante se generan como *versiones derivadas* (`resume_versions`), preservando el original.
+- UX: secciones repetibles (agregar/quitar filas), guardado explícito con indicador de cambios sin guardar.
+
+### 2.5 Detalle de vacante + Match
+- Descripción completa, requisitos, responsabilidades.
+- **Match breakdown visual**: score global + desglose (técnico / experiencia / semántico), skills coincidentes (verde) vs. faltantes (ámbar), y "concerns" en lenguaje natural (p. ej. "Piden 5+ años de liderazgo; tu perfil registra 2").
+- Acciones: "Generar CV adaptado" y "Generar cover letter", cada una muestra el resultado editable con copiar/exportar.
+
+### 2.6 Aplicaciones (pipeline)
 - Filtros/columnas por estado: guardado, aplicado, entrevista, oferta, rechazado, retirado.
 - Cada tarjeta enlaza al detalle de la vacante, al CV usado y a la cover letter enviada; permite anotar seguimiento (notas, fecha de aplicación).
 
@@ -78,7 +83,7 @@ para que aparezca listo en la cola de **Swipe** sin pasos adicionales.
 Import de empleo → normalización (JSON estructurado) → tabla `jobs`
                                     │
                                     ▼
-Perfil (career_profiles) ───► Match Engine ───► job_matches (cache) ───► Swipe feed
+Perfil (career_profiles) ───► Match Engine ───► job_matches (cache) ───► Home (swipe feed)
                                     │
                         (usuario decide "derecha")
                                     ▼
@@ -111,9 +116,9 @@ La adaptación de CV y la cover letter **siempre parten del perfil maestro + los
 ## 5. Flujo de usuario end-to-end
 
 1. Usuario crea cuenta y completa su **CV Maestro** una sola vez.
-2. Busca directamente dentro de la app (Himalayas/Google Jobs/Upwork) o pega la URL/texto de una vacante que encontró en otro lado, en **Importar**.
+2. Busca directamente dentro de la app en **Discover** (Himalayas/Google Jobs/Upwork), o si ya encontró algo puntual en otro lado, pega la URL/texto en **Agregar vacante**.
 3. El sistema normaliza la vacante y calcula el **match** contra su perfil automáticamente al guardarla.
-4. La vacante aparece en la cola de **Swipe**; el usuario decide en segundos (derecha/izquierda).
+4. La vacante aparece en la cola de **Home**; el usuario decide en segundos (derecha/izquierda).
 5. Al aceptar (derecha), el sistema genera automáticamente un **CV adaptado** y una **cover letter** personalizada para esa vacante.
 6. El usuario revisa/edita ambos documentos, los descarga/copia, y aplica en el sitio original.
 7. Actualiza el estado en **Aplicaciones** conforme avanza (entrevista, oferta, rechazo), manteniendo todo el historial centralizado.

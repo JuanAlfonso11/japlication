@@ -6,7 +6,7 @@ import { useAuth } from "@/context/AuthContext";
 
 const NAV_ITEMS = [
   { href: "/", label: "Home", icon: HomeIcon },
-  { href: "/swipe", label: "Swipe", icon: SwipeIcon },
+  { href: "/discover", label: "Discover", icon: DiscoverIcon },
   { href: "/jobs/import", label: "Import", icon: ImportIcon },
   { href: "/applications", label: "Pipeline", icon: PipelineIcon },
   { href: "/profile", label: "Profile", icon: ProfileIcon },
@@ -131,11 +131,11 @@ function HomeIcon({ active }: { active: boolean }) {
   );
 }
 
-function SwipeIcon({ active }: { active: boolean }) {
+function DiscoverIcon({ active }: { active: boolean }) {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.2 : 1.8} strokeLinecap="round" strokeLinejoin="round">
-      <rect x="6" y="4" width="12" height="16" rx="2" />
-      <path d="M2 12h2M20 12h2" />
+      <circle cx="11" cy="11" r="7" />
+      <path d="m20 20-4.3-4.3" />
     </svg>
   );
 }

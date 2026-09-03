@@ -60,8 +60,9 @@ async def upwork_callback(
     there's no Authorization header on this request, so the user identity
     comes from the signed `state` value minted by /upwork/authorize rather
     than a bearer token. Always ends in a redirect back to the frontend's
-    import page with a `?upwork=connected|error` flag."""
-    frontend_url = settings.FRONTEND_ORIGIN.rstrip("/") + "/jobs/import"
+    Discover page (where the Upwork search UI lives) with a
+    `?upwork=connected|error` flag."""
+    frontend_url = settings.FRONTEND_ORIGIN.rstrip("/") + "/discover"
 
     if error or not code or not state:
         return RedirectResponse(f"{frontend_url}?upwork=error")

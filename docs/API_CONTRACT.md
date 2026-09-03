@@ -60,7 +60,7 @@ connect flow:
 - `GET /integrations/upwork/status` -> `{connected: bool, configured: bool}`
 - `GET /integrations/upwork/authorize` -> `{authorization_url}` (frontend does `window.location.href = ...`)
 - `GET /integrations/upwork/callback?code=&state=` -> not called by the frontend directly; Upwork redirects
-  the browser here, which redirects again to `{FRONTEND_ORIGIN}/jobs/import?upwork=connected|error`
+  the browser here, which redirects again to `{FRONTEND_ORIGIN}/discover?upwork=connected|error`
 - `DELETE /integrations/upwork` -> disconnects (204)
 
 ## Match Engine

@@ -7,10 +7,14 @@ FastAPI backend described in `../docs/API_CONTRACT.md`.
 ## Screens
 
 - `/login`, `/register` — auth
-- `/` — dashboard (pipeline counts, shortcuts to Swipe / Import)
+- `/` — **home**: the Tinder-style match queue (drag, buttons, or arrow
+  keys), recommended straight from the CV Maestro's match scores, plus a
+  compact stats strip. This is the landing screen after login.
+- `/discover` — live search across Himalayas / Google Jobs / Upwork; pick
+  results to add to the home queue (does not persist anything by itself)
+- `/jobs/import` — add one specific job you already found elsewhere, by URL
+  or pasted text
 - `/profile` — "CV Maestro" career profile editor
-- `/jobs/import` — import a job from a URL, or add one manually
-- `/swipe` — Tinder-style match queue (drag, buttons, or arrow keys)
 - `/jobs/[id]` — job detail, match breakdown, resume + cover letter generation
 - `/applications` — pipeline dashboard with status filters and inline editing
 
