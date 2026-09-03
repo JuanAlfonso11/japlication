@@ -20,18 +20,18 @@ class Settings(BaseSettings):
     # Optional AI features
     ANTHROPIC_API_KEY: Optional[str] = None
 
-    # Optional live job search (SerpApi's Google Jobs engine — https://serpapi.com/search?engine=google_jobs)
-    SERPAPI_API_KEY: Optional[str] = None
-    SERPAPI_DEFAULT_HL: str = "es"
-    SERPAPI_DEFAULT_GL: str = "us"
+    # Email (account verification). Without these set, the backend logs the
+    # verification link instead of sending a real email — the app stays
+    # fully usable in local dev without an SMTP account.
+    SMTP_HOST: Optional[str] = None
+    SMTP_PORT: int = 587
+    SMTP_USER: Optional[str] = None
+    SMTP_PASSWORD: Optional[str] = None
+    SMTP_FROM_EMAIL: str = "no-reply@jobflow.ai"
+    SMTP_USE_TLS: bool = True
 
-    # Optional live job search — Upwork GraphQL API (OAuth2 authorization-code
-    # flow; register an app at https://www.upwork.com/developer/apps to get
-    # these). Unset by default: the "Upwork" search provider stays hidden
-    # until configured.
-    UPWORK_CLIENT_ID: Optional[str] = None
-    UPWORK_CLIENT_SECRET: Optional[str] = None
-    UPWORK_REDIRECT_URI: str = "http://localhost:8000/api/v1/integrations/upwork/callback"
+    # CV upload (PDF -> CareerProfile draft)
+    MAX_CV_UPLOAD_MB: int = 8
 
     # CORS
     FRONTEND_ORIGIN: str = "http://localhost:3000"

@@ -15,6 +15,30 @@ import LanguagesSection from "@/components/profile/LanguagesSection";
 import { ApiError, profileApi } from "@/lib/api";
 import type { CareerProfile, CVEvaluation } from "@/lib/types";
 
+function mergeCvDraft(current: CareerProfile, draft: CareerProfile): CareerProfile {
+  const mergedContact = { ...current.contact_info };
+  (Object.keys(draft.contact_info) as (keyof typeof draft.contact_info)[]).forEach((key) => {
+    if (!mergedContact[key] && draft.contact_info[key]) {
+      mergedContact[key] = draft.contact_info[key];
+    }
+  });
+
+  const existingSkillNames = new Set(current.skills.map((s) => s.name.toLowerCase()));
+  const newSkills = draft.skills.filter((s) => !existingSkillNames.has(s.name.toLowerCase()));
+
+  return {
+    ...current,
+    headline: current.headline || draft.headline || "",
+    summary: current.summary || draft.summary || "",
+    contact_info: mergedContact,
+    skills: [...current.skills, ...newSkills],
+    experience: [...current.experience, ...draft.experience],
+    education: [...current.education, ...draft.education],
+    certifications: [...current.certifications, ...draft.certifications],
+    languages: [...current.languages, ...draft.languages],
+  };
+}
+
 const EMPTY_PROFILE: CareerProfile = {
   headline: "",
   summary: "",
@@ -45,6 +69,10 @@ function ProfileContent() {
   const [evaluation, setEvaluation] = useState<CVEvaluation | null>(null);
   const [evalLoading, setEvalLoading] = useState(false);
   const [evalError, setEvalError] = useState<string | null>(null);
+
+  const [uploadingCv, setUploadingCv] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadNotice, setUploadNotice] = useState<{ warnings: string[]; generatedBy: string } | null>(null);
 
   const loadEvaluation = useCallback(async () => {
     setEvalLoading(true);
@@ -113,6 +141,25 @@ function ProfileContent() {
     }
   }
 
+  async function handleCvFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-uploading the same file again later
+    if (!file) return;
+    setUploadingCv(true);
+    setUploadError(null);
+    setUploadNotice(null);
+    try {
+      const result = await profileApi.importCv(file);
+      setProfile((prev) => (prev ? mergeCvDraft(prev, result.profile) : prev));
+      setDirty(true);
+      setUploadNotice({ warnings: result.warnings, generatedBy: result.generated_by });
+    } catch (err) {
+      setUploadError(err instanceof ApiError ? err.message : "Could not read that PDF.");
+    } finally {
+      setUploadingCv(false);
+    }
+  }
+
   if (loading) return <Spinner label="Loading your profile…" />;
   if (loadError) return <ErrorNotice message={loadError} onRetry={load} />;
   if (!profile) return null;
@@ -150,6 +197,47 @@ function ProfileContent() {
       </div>
 
       {saveError && <ErrorNotice message={saveError} />}
+
+      <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-100">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold text-gray-900">Import from a PDF résumé</p>
+            <p className="text-xs text-gray-500">
+              We pre-fill the fields below from your PDF — nothing is added to your saved profile
+              until you review it and click Save.
+            </p>
+          </div>
+          <label className="shrink-0 cursor-pointer rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 aria-disabled:cursor-not-allowed aria-disabled:opacity-60">
+            {uploadingCv ? "Reading…" : "Upload PDF"}
+            <input
+              type="file"
+              accept="application/pdf"
+              className="hidden"
+              disabled={uploadingCv}
+              onChange={handleCvFileChange}
+            />
+          </label>
+        </div>
+        {uploadError && (
+          <div className="mt-2">
+            <ErrorNotice message={uploadError} />
+          </div>
+        )}
+        {uploadNotice && (
+          <div className="mt-3 rounded-lg bg-amber-50 p-3 text-xs text-amber-800 ring-1 ring-inset ring-amber-600/20">
+            <p className="font-semibold">
+              {uploadNotice.generatedBy === "ai"
+                ? "Parsed with AI — review the pre-filled fields below and click Save."
+                : "Parsed with basic text matching (no ANTHROPIC_API_KEY configured) — review carefully before saving."}
+            </p>
+            {uploadNotice.warnings.map((w, i) => (
+              <p key={i} className="mt-1">
+                {w}
+              </p>
+            ))}
+          </div>
+        )}
+      </div>
 
       <CVEvaluationCard evaluation={evaluation} loading={evalLoading} error={evalError} />
 

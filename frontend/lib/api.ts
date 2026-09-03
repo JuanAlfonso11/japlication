@@ -20,10 +20,10 @@ import type {
   LoginPayload,
   MatchResult,
   RegisterPayload,
+  CVUploadResult,
+  ResendVerificationResponse,
   ResumeGeneratePayload,
   ResumeVersion,
-  UpworkAuthorizeResponse,
-  UpworkStatus,
   User,
 } from "./types";
 
@@ -143,6 +143,40 @@ function safeJsonParse(text: string): unknown {
   }
 }
 
+/** Like `request`, but sends a multipart/form-data body (a File) instead of
+ * JSON — the browser sets its own Content-Type with the boundary, so we
+ * must not set one ourselves. */
+async function uploadFile<T>(path: string, fieldName: string, file: File): Promise<T> {
+  const headers: Record<string, string> = {};
+  const token = getToken();
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const formData = new FormData();
+  formData.append(fieldName, file);
+
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE_URL}${path}`, {
+      method: "POST",
+      headers,
+      body: formData,
+      cache: "no-store",
+    });
+  } catch {
+    throw new ApiError(0, "Could not reach the JobFlow AI server. Check your connection and try again.");
+  }
+
+  const text = await res.text();
+  const data = text ? safeJsonParse(text) : null;
+
+  if (!res.ok) {
+    const shape = (data ?? {}) as Partial<ApiErrorShape>;
+    throw new ApiError(res.status, shape.detail || `Request failed with status ${res.status}`, shape.code);
+  }
+
+  return data as T;
+}
+
 // ---------- Auth ----------
 
 export const authApi = {
@@ -151,6 +185,8 @@ export const authApi = {
   login: (payload: LoginPayload) =>
     request<AuthResponse>("/auth/login", { method: "POST", body: payload, auth: false }),
   me: () => request<User>("/auth/me"),
+  resendVerification: () =>
+    request<ResendVerificationResponse>("/auth/resend-verification", { method: "POST" }),
 };
 
 // ---------- Career Profile ----------
@@ -160,6 +196,7 @@ export const profileApi = {
   save: (payload: CareerProfile) =>
     request<CareerProfile>("/profile", { method: "PUT", body: payload }),
   evaluation: () => request<CVEvaluation>("/profile/evaluation"),
+  importCv: (file: File) => uploadFile<CVUploadResult>("/profile/import-cv", "file", file),
 };
 
 // ---------- Jobs ----------
@@ -200,7 +237,6 @@ export const jobsApi = {
     employment_type?: string;
     sort?: string;
     page?: number;
-    next_page_token?: string;
   }) => request<ExternalJobsSearchResponse>("/jobs/search", { query: params }),
   searchAggregate: (params: {
     q?: string;
@@ -210,14 +246,6 @@ export const jobsApi = {
   }) => request<AggregateSearchResponse>("/jobs/search/aggregate", { query: params }),
   importExternal: (payload: ExternalJobImportPayload) =>
     request<Job>("/jobs/search/import", { method: "POST", body: payload }),
-};
-
-// ---------- Integrations (Upwork OAuth) ----------
-
-export const integrationsApi = {
-  upworkStatus: () => request<UpworkStatus>("/integrations/upwork/status"),
-  upworkAuthorize: () => request<UpworkAuthorizeResponse>("/integrations/upwork/authorize"),
-  upworkDisconnect: () => request<void>("/integrations/upwork", { method: "DELETE" }),
 };
 
 // ---------- Applications ----------

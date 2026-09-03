@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
@@ -21,6 +22,8 @@ class User(BaseModel):
     id: UUID
     email: str
     full_name: str
+    email_verified: bool
+    email_verified_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
 
@@ -29,3 +32,8 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: User
+
+
+class ResendVerificationResponse(BaseModel):
+    sent: bool
+    detail: str

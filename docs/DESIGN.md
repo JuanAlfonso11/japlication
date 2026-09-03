@@ -46,19 +46,14 @@ Detalle de empleo                    Discover   Agregar vacante  Perfil         
 
 ### 2.2 Discover — búsqueda en vivo
 Pantalla dedicada a buscar vacantes nuevas (a diferencia de Home, que solo recomienda lo ya cargado).
-Muestra resultados normalizados que aún **no** se guardan; el usuario elige cuáles agregar con un botón
-"Add to queue" por resultado. Tres modos:
-
-- **"Todas las fuentes" (por defecto)** — dispara `GET /jobs/search/aggregate` en paralelo contra las
-  **6 APIs públicas sin ningún tipo de autenticación** (investigación completa en
-  `docs/PUBLIC_APIS_RESEARCH.md`): **Himalayas, Arbeitnow, Remotive, Jobicy, RemoteJobs.org y The Muse**.
-  Los resultados de todas se combinan en una sola lista (ordenada por fecha de publicación), cada tarjeta
-  muestra de qué fuente vino, y si alguna API falla no tumba a las demás — se reporta aparte y el resto de
-  resultados se sigue mostrando.
-- **Google Jobs** (vía SerpApi) — requiere `SERPAPI_API_KEY` del backend; agrega los resultados agregados
-  de LinkedIn/Indeed/sitios corporativos que Google Jobs ya consolida, con enlaces de aplicación reales.
-- **Upwork** — freelance/contratos; requiere que el usuario conecte su cuenta vía OAuth2 (botón "Conectar
-  Upwork" → consentimiento en upwork.com → vuelve a Discover ya conectado).
+Un único botón de búsqueda dispara `GET /jobs/search/aggregate` en paralelo contra las **6 APIs públicas
+sin ningún tipo de autenticación** (investigación completa en `docs/PUBLIC_APIS_RESEARCH.md`, incluyendo
+por qué Google Jobs y Upwork —ambas con credenciales— se quitaron deliberadamente, y por qué LinkedIn e
+Indeed ni siquiera son una opción real para un proyecto personal): **Himalayas, Arbeitnow, Remotive,
+Jobicy, RemoteJobs.org y The Muse**. Los resultados de todas se combinan en una sola lista (ordenada por
+fecha de publicación), cada tarjeta muestra de qué fuente vino, y si alguna API falla no tumba a las
+demás — se reporta aparte y el resto de resultados se sigue mostrando. El usuario elige cuáles agregar
+con un botón "Add to queue" por resultado; nada se persiste hasta que hace eso.
 
 **Filtros**: el campo de ubicación arranca precargado en **"Remote"** (el usuario puede cambiarlo o
 borrarlo), y un selector de **Nivel de experiencia** (Practicante, Junior, Nivel medio, Senior, Liderazgo)
@@ -79,6 +74,13 @@ o pega el texto de la descripción directamente. Mismo resultado normalizado + m
 - Editor por secciones: encabezado/resumen, habilidades (nombre, categoría, nivel, años), experiencia (empresa, cargo, fechas, bullets, skills usadas), educación, certificaciones, idiomas.
 - Este perfil es la **única fuente de verdad factual** — nunca se sobreescribe automáticamente; las adaptaciones por vacante se generan como *versiones derivadas* (`resume_versions`), preservando el original.
 - UX: secciones repetibles (agregar/quitar filas), guardado explícito con indicador de cambios sin guardar.
+- **Importar CV en PDF** (`POST /profile/import-cv`): botón arriba del editor para partir de un CV
+  existente en vez de teclear todo desde cero. Sube el PDF, el backend extrae el texto y lo estructura
+  (con Claude si hay `ANTHROPIC_API_KEY`; si no, con un heurístico que solo saca contacto y habilidades,
+  dejando experiencia/educación vacías antes que inventar una estructura que no puede confirmar) y
+  **precarga el formulario sin guardar nada todavía** — el usuario revisa, completa lo que falte y recién
+  ahí hace clic en Guardar. Mismo principio que el resto de la app: el perfil nunca se sobreescribe a
+  ciegas.
 - **Evaluador de CV** (`GET /profile/evaluation`): tarjeta fija arriba del editor, siempre visible, que responde
   "¿en qué está flaqueando mi CV?" — a diferencia del Match Engine (que compara contra *una* vacante), esto
   evalúa el perfil por sí solo: completitud (¿falta headline, resumen, skills, experiencia?), impacto de los
@@ -125,19 +127,19 @@ La adaptación de CV y la cover letter **siempre parten del perfil maestro + los
 
 ## 4. Consideraciones técnicas
 
-- **Importación de vacantes**: se prioriza el parseo de `JSON-LD` (`schema.org/JobPosting`), presente en la mayoría de portales serios (LinkedIn, Indeed, muchos ATS corporativos como Greenhouse/Lever/Workday); si no existe, fallback heurístico por regex/secciones de texto. Este mismo extractor heurístico se reutiliza para normalizar los resultados de búsqueda en vivo (Himalayas/Google Jobs/Upwork), así que un solo motor de parseo cubre las cuatro fuentes.
-- **Búsqueda en vivo**: tres proveedores externos detrás de un único endpoint (`GET /jobs/search?provider=`) — Himalayas (sin key), Google Jobs vía SerpApi (API key de servidor) y Upwork (OAuth2 por usuario, ver `oauth_connections`). Los resultados se cachean brevemente en memoria del proceso para que "agregar a mi cola" no dispare una segunda consulta pagada/limitada al proveedor.
+- **Importación de vacantes**: se prioriza el parseo de `JSON-LD` (`schema.org/JobPosting`), presente en la mayoría de portales serios; si no existe, fallback heurístico por regex/secciones de texto. Este mismo extractor heurístico se reutiliza para normalizar los resultados de búsqueda en vivo de las 6 fuentes, así que un solo motor de parseo las cubre a todas.
+- **Búsqueda en vivo**: 6 proveedores sin autenticación detrás de un único endpoint agregado (`GET /jobs/search/aggregate`, con `GET /jobs/search?provider=` disponible para consultar uno solo). Los resultados se cachean brevemente en memoria del proceso para que "agregar a mi cola" no dispare una segunda consulta al proveedor.
 - **Adaptación de CV y cover letters**: motor basado en reglas (offline, siempre funcional) con mejora opcional vía LLM (Claude, `ANTHROPIC_API_KEY`) cuando está configurado — el sistema debe degradar con gracia sin la clave.
 - **Evaluador de CV**: mismo enfoque — reglas explicables y deterministas (`backend/app/services/cv_evaluator.py`) que siempre funcionan sin configuración; el resumen en lenguaje natural usa Claude cuando hay `ANTHROPIC_API_KEY`, con una frase de respaldo determinista si no.
 - **Match Engine**: fórmula híbrida ponderada (ver detalle técnico en `README.md` raíz y `backend/app/services/match_engine.py`): 50% técnico (overlap de skills), 30% experiencia (años requeridos vs. acumulados relevantes), 20% semántico (similitud texto perfil↔vacante, con fallback TF‑IDF sin dependencia de API externa).
 - **Formato ATS-safe**: el CV generado usa estructura de texto plano/simple (secciones estándar, sin tablas/columnas/gráficos), compatible con parsers ATS.
 - **Móvil**: la interfaz web es responsive y se sirve como PWA instalable (manifest + iconos); no se requiere una app nativa separada para el MVP — swipe funciona igual de bien vía gestos táctiles en el navegador móvil.
-- **Seguridad**: contraseñas con bcrypt, JWT para sesiones, cada usuario solo accede a sus propios datos (perfil, vacantes importadas por él, aplicaciones).
+- **Seguridad**: contraseñas con bcrypt, JWT para sesiones, cada usuario solo accede a sus propios datos (perfil, vacantes importadas por él, aplicaciones). **Verificación de correo**: al registrarse se manda un email con un enlace firmado (JWT de un solo propósito, expira a las 24h) que el usuario confirma con un clic (`GET /auth/verify-email?token=`); el login no se bloquea mientras tanto (evita dejar a alguien fuera de su propia cuenta por un problema de entrega de correo), pero un aviso persistente en la app recuerda verificar y permite reenviar el correo. Sin `SMTP_HOST` configurado, el enlace queda en los logs del backend en vez de enviarse — el flujo se puede probar igual en desarrollo local sin cuenta de correo.
 
 ## 5. Flujo de usuario end-to-end
 
 1. Usuario crea cuenta y completa su **CV Maestro** una sola vez.
-2. Busca directamente dentro de la app en **Discover** (Himalayas/Google Jobs/Upwork), o si ya encontró algo puntual en otro lado, pega la URL/texto en **Agregar vacante**.
+2. Busca directamente dentro de la app en **Discover** (las 6 fuentes sin login a la vez), o si ya encontró algo puntual en otro lado, pega la URL/texto en **Agregar vacante** — o sube su CV en PDF en **Perfil** para no partir de cero.
 3. El sistema normaliza la vacante y calcula el **match** contra su perfil automáticamente al guardarla.
 4. La vacante aparece en la cola de **Home**; el usuario decide en segundos (derecha/izquierda).
 5. Al aceptar (derecha), el sistema genera automáticamente un **CV adaptado** y una **cover letter** personalizada para esa vacante.
@@ -145,7 +147,7 @@ La adaptación de CV y la cover letter **siempre parten del perfil maestro + los
 7. Actualiza el estado en **Aplicaciones** conforme avanza (entrevista, oferta, rechazo), manteniendo todo el historial centralizado.
 
 ## 6. Extensiones futuras (fuera del MVP)
-- Integración directa con LinkedIn/Indeed (ambos requieren acuerdos comerciales para acceso API, a diferencia de Himalayas/Google Jobs/Upwork ya integrados) para sumarlos como proveedores más en `GET /jobs/search`.
+- LinkedIn e Indeed quedan fuera del alcance de este proyecto: ninguna de las dos tiene una API pública para *buscar* vacantes hoy — ambas cerraron esa puerta hace años y solo queda infraestructura para que un ATS *publique* empleos en nombre de un empleador ya cliente, detrás de programas de partners empresariales (ver investigación completa en `docs/PUBLIC_APIS_RESEARCH.md`).
 - Exportación directa a PDF con plantillas ATS adicionales.
 - Notificaciones/recordatorios de seguimiento de aplicaciones.
 - App nativa (React Native) si la PWA resulta insuficiente en el uso real.

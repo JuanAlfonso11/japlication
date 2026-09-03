@@ -1,14 +1,16 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
+from app.core.config import settings
 from app.db.session import get_db
 from app.models.career_profile import CareerProfile
 from app.models.user import User
 from app.schemas.career_profile import CareerProfile as CareerProfileSchema
-from app.schemas.career_profile import CareerProfileUpsert
+from app.schemas.career_profile import CareerProfileUpsert, CVUploadResult
 from app.schemas.cv_evaluation import CVEvaluation
+from app.services import cv_upload
 from app.services.cv_evaluator import evaluate_cv
 
 router = APIRouter(prefix="/profile", tags=["profile"])
@@ -60,3 +62,25 @@ async def get_profile_evaluation(
     if profile is None:
         raise HTTPException(status_code=404, detail="Create your career profile before evaluating it.")
     return CVEvaluation.model_validate(evaluate_cv(profile))
+
+
+@router.post("/import-cv", response_model=CVUploadResult)
+async def import_cv(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+) -> CVUploadResult:
+    """Parse an uploaded PDF resume into a draft CareerProfile. Nothing is
+    persisted here — the frontend pre-fills the profile editor with the
+    result and the user still has to review it and hit Save."""
+    if file.content_type not in ("application/pdf", "application/x-pdf"):
+        raise HTTPException(status_code=422, detail="Please upload a PDF file.")
+
+    max_bytes = settings.MAX_CV_UPLOAD_MB * 1024 * 1024
+    contents = await file.read()
+    if len(contents) > max_bytes:
+        raise HTTPException(status_code=413, detail=f"PDF is too large (max {settings.MAX_CV_UPLOAD_MB} MB).")
+    if not contents:
+        raise HTTPException(status_code=422, detail="The uploaded file is empty.")
+
+    result = cv_upload.parse_cv(contents)
+    return CVUploadResult.model_validate(result)

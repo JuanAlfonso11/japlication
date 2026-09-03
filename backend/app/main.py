@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api.v1.routers import applications, auth, cover_letters, integrations, jobs, match, profile, resumes
+from app.api.v1.routers import applications, auth, cover_letters, jobs, match, profile, resumes
 from app.core.config import settings
 
 app = FastAPI(title=settings.PROJECT_NAME, version="1.0.0")
@@ -41,4 +41,3 @@ app.include_router(match.router, prefix=api_router_prefix)
 app.include_router(applications.router, prefix=api_router_prefix)
 app.include_router(resumes.router, prefix=api_router_prefix)
 app.include_router(cover_letters.router, prefix=api_router_prefix)
-app.include_router(integrations.router, prefix=api_router_prefix)

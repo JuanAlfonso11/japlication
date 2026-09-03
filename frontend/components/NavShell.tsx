@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import VerificationBanner from "@/components/VerificationBanner";
 
 const NAV_ITEMS = [
   { href: "/", label: "Home", icon: HomeIcon },
@@ -90,6 +91,7 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
       </header>
 
       <main className="mx-auto max-w-5xl px-4 pb-24 pt-4 md:px-6 md:pb-10 md:pt-6">
+        <VerificationBanner />
         {children}
       </main>
 

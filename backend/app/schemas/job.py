@@ -74,15 +74,16 @@ class ApplyOption(BaseModel):
     link: Optional[str] = None
 
 
-ExternalProvider = str  # "himalayas"|"arbeitnow"|"remotive"|"jobicy"|"remotejobs_org"|"themuse"|"google_jobs"|"upwork"
+ExternalProvider = str  # "himalayas"|"arbeitnow"|"remotive"|"jobicy"|"remotejobs_org"|"themuse"
 ExperienceLevel = str  # "internship" | "entry" | "mid" | "senior" | "lead" — see app/services/experience_level.py
 
 
 class ExternalJobResult(BaseModel):
-    """One normalized, not-yet-persisted search result from a live external
-    provider (Google Jobs via SerpApi, Himalayas, or Upwork). Shaped like
-    `Job` (minus id/timestamps) plus `external_id` + `source`, used together
-    to import it via `POST /jobs/search/import`."""
+    """One normalized, not-yet-persisted search result from a live,
+    no-auth external provider (Himalayas, Arbeitnow, Remotive, Jobicy,
+    RemoteJobs.org, or The Muse). Shaped like `Job` (minus id/timestamps)
+    plus `external_id` + `source`, used together to import it via
+    `POST /jobs/search/import`."""
 
     external_id: str
     source: ExternalProvider

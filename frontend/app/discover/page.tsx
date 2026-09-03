@@ -1,12 +1,11 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useState } from "react";
 import RouteGuard from "@/components/RouteGuard";
 import ErrorNotice from "@/components/ErrorNotice";
 import ImportedJobCard from "@/components/ImportedJobCard";
 import SkillTag from "@/components/SkillTag";
-import { ApiError, integrationsApi, jobsApi } from "@/lib/api";
+import { ApiError, jobsApi } from "@/lib/api";
 import { importAndMatch } from "@/lib/jobActions";
 import {
   EXPERIENCE_LEVEL_LABELS,
@@ -16,16 +15,7 @@ import {
   type ExternalJobResult,
   type ExternalProvider,
   type Job,
-  type UpworkStatus,
 } from "@/lib/types";
-
-type Mode = "aggregate" | "google_jobs" | "upwork";
-
-const MODES: { id: Mode; label: string; hint: string }[] = [
-  { id: "aggregate", label: "Todas las fuentes", hint: "6 APIs públicas, sin login — resultados combinados" },
-  { id: "google_jobs", label: "Google Jobs", hint: "Needs SERPAPI_API_KEY" },
-  { id: "upwork", label: "Upwork", hint: "Freelance — connect your account" },
-];
 
 const EXPERIENCE_LEVELS: ExperienceLevel[] = ["internship", "entry", "mid", "senior", "lead"];
 
@@ -145,79 +135,7 @@ function SourcesSummary({ sources }: { sources: AggregateSourceStatus[] }) {
   );
 }
 
-function UpworkConnectPanel({ status }: { status: UpworkStatus }) {
-  const [connecting, setConnecting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  if (!status.configured) {
-    return (
-      <p className="rounded-lg bg-gray-50 p-4 text-sm text-gray-500">
-        Upwork search isn&apos;t configured on this server yet. Register an app at{" "}
-        <a
-          className="text-brand-600 hover:underline"
-          href="https://www.upwork.com/developer/apps"
-          target="_blank"
-          rel="noreferrer"
-        >
-          upwork.com/developer/apps
-        </a>{" "}
-        and set <code className="rounded bg-gray-100 px-1 py-0.5">UPWORK_CLIENT_ID</code> /{" "}
-        <code className="rounded bg-gray-100 px-1 py-0.5">UPWORK_CLIENT_SECRET</code> in the backend&apos;s
-        .env.
-      </p>
-    );
-  }
-
-  async function handleConnect() {
-    setConnecting(true);
-    setError(null);
-    try {
-      const { authorization_url } = await integrationsApi.upworkAuthorize();
-      window.location.href = authorization_url;
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not start the Upwork connection.");
-      setConnecting(false);
-    }
-  }
-
-  return (
-    <div className="rounded-lg bg-gray-50 p-4">
-      {error && <ErrorNotice message={error} />}
-      <p className="mb-3 text-sm text-gray-600">
-        Connect your Upwork account to search live freelance postings.
-      </p>
-      <button
-        type="button"
-        onClick={handleConnect}
-        disabled={connecting}
-        className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
-      >
-        {connecting ? "Redirecting…" : "Connect Upwork"}
-      </button>
-    </div>
-  );
-}
-
-function UpworkCallbackBanner() {
-  const searchParams = useSearchParams();
-  const upworkParam = searchParams.get("upwork");
-  if (!upworkParam) return null;
-  if (upworkParam === "connected") {
-    return (
-      <div className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
-        Upwork connected — you can search live freelance postings now.
-      </div>
-    );
-  }
-  return (
-    <div className="rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-700 ring-1 ring-inset ring-rose-600/20">
-      Couldn&apos;t connect your Upwork account. Please try again.
-    </div>
-  );
-}
-
 function DiscoverContent() {
-  const [mode, setMode] = useState<Mode>("aggregate");
   const [q, setQ] = useState("");
   const [location, setLocation] = useState("Remote");
   const [experienceLevelFilter, setExperienceLevelFilter] = useState<ExperienceLevel | "">("");
@@ -225,50 +143,23 @@ function DiscoverContent() {
   const [sources, setSources] = useState<AggregateSourceStatus[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [hasMore, setHasMore] = useState(false);
-  const [nextPageToken, setNextPageToken] = useState<string | undefined>();
-  const [nextPage, setNextPage] = useState<number | undefined>();
-  const [upworkStatus, setUpworkStatus] = useState<UpworkStatus | null>(null);
   const [lastAdded, setLastAdded] = useState<Job | null>(null);
+  const [searched, setSearched] = useState(false);
 
-  const refreshUpworkStatus = useCallback(() => {
-    integrationsApi
-      .upworkStatus()
-      .then(setUpworkStatus)
-      .catch(() => setUpworkStatus({ connected: false, configured: false }));
-  }, []);
-
-  useEffect(() => {
-    if (mode === "upwork") refreshUpworkStatus();
-  }, [mode, refreshUpworkStatus]);
-
-  async function runSearch(reset: boolean) {
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
     setLoading(true);
     setError(null);
+    setLastAdded(null);
     try {
-      if (mode === "aggregate") {
-        const data = await jobsApi.searchAggregate({
-          q: q || undefined,
-          location: location || undefined,
-          experience_level: experienceLevelFilter || undefined,
-        });
-        setResults(data.results);
-        setSources(data.sources);
-        setHasMore(false);
-      } else {
-        const data = await jobsApi.search({
-          provider: mode,
-          q: q || undefined,
-          location: mode === "google_jobs" ? location || undefined : undefined,
-          next_page_token: reset ? undefined : nextPageToken,
-          page: reset ? undefined : nextPage,
-        });
-        setResults((prev) => (reset ? data.results : [...prev, ...data.results]));
-        setSources([]);
-        setHasMore(data.has_more);
-        setNextPageToken(data.next_page_token ?? undefined);
-        setNextPage(data.page ?? undefined);
-      }
+      const data = await jobsApi.searchAggregate({
+        q: q || undefined,
+        location: location || undefined,
+        experience_level: experienceLevelFilter || undefined,
+      });
+      setResults(data.results);
+      setSources(data.sources);
+      setSearched(true);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Search failed.");
     } finally {
@@ -276,137 +167,80 @@ function DiscoverContent() {
     }
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setResults([]);
-    setSources([]);
-    setLastAdded(null);
-    await runSearch(true);
-  }
-
   async function handleImport(result: ExternalJobResult) {
     const job = await jobsApi.importExternal({ source: result.source, external_id: result.external_id });
     setLastAdded(await importAndMatch(job));
   }
-
-  const showForm = mode !== "upwork" || upworkStatus?.connected;
 
   return (
     <div className="space-y-6 pb-4 animate-fade-in">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Discover jobs</h1>
         <p className="mt-1 text-sm text-gray-500">
-          &quot;Todas las fuentes&quot; busca a la vez en 6 APIs públicas sin login (Himalayas, Arbeitnow,
-          Remotive, Jobicy, RemoteJobs.org y The Muse) y combina los resultados. Google Jobs y Upwork son
-          opcionales y requieren credenciales. Anything you add shows up matched against your profile back
-          on Home.
+          Busca a la vez en 6 APIs públicas sin login (Himalayas, Arbeitnow, Remotive, Jobicy,
+          RemoteJobs.org y The Muse) y combina los resultados en una sola lista. Anything you add
+          shows up matched against your profile back on Home.
         </p>
       </div>
 
-      <Suspense fallback={null}>
-        <UpworkCallbackBanner />
-      </Suspense>
-
       <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-100">
         <div className="space-y-4">
-          <div className="flex flex-wrap gap-2">
-            {MODES.map((m) => (
-              <button
-                key={m.id}
-                type="button"
-                onClick={() => {
-                  setMode(m.id);
-                  setResults([]);
-                  setSources([]);
-                  setError(null);
-                }}
-                className={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${
-                  mode === m.id
-                    ? "border-brand-500 bg-brand-50 text-brand-700"
-                    : "border-gray-200 text-gray-600 hover:border-gray-300"
-                }`}
-              >
-                <span className="block font-semibold">{m.label}</span>
-                <span className="block text-xs text-gray-400">{m.hint}</span>
-              </button>
+          <form onSubmit={handleSubmit} className="flex flex-wrap gap-2">
+            <input
+              type="text"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Job title or keywords"
+              className="min-w-[200px] flex-1 rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+            />
+            <input
+              type="text"
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              placeholder="Location (default: Remote)"
+              className="min-w-[160px] flex-1 rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+            />
+            <select
+              value={experienceLevelFilter}
+              onChange={(e) => setExperienceLevelFilter(e.target.value as ExperienceLevel | "")}
+              className="min-w-[170px] rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+            >
+              <option value="">Cualquier nivel</option>
+              {EXPERIENCE_LEVELS.map((lvl) => (
+                <option key={lvl} value={lvl}>
+                  {EXPERIENCE_LEVEL_LABELS[lvl]}
+                </option>
+              ))}
+            </select>
+            <button
+              type="submit"
+              disabled={loading}
+              className="rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {loading ? "Searching…" : "Search"}
+            </button>
+          </form>
+
+          {error && <ErrorNotice message={error} />}
+
+          {sources.length > 0 && <SourcesSummary sources={sources} />}
+
+          <div className="space-y-3">
+            {results.map((r) => (
+              <ExternalResultCard key={`${r.source}:${r.external_id}`} result={r} onImport={handleImport} />
             ))}
           </div>
 
-          {mode === "upwork" && upworkStatus && !upworkStatus.connected && (
-            <UpworkConnectPanel status={upworkStatus} />
+          {!loading && searched && results.length === 0 && !error && (
+            <p className="py-6 text-center text-sm text-gray-400">
+              No encontramos resultados — prueba otra palabra clave o quita el filtro de ubicación.
+            </p>
           )}
 
-          {showForm && (
-            <>
-              <form onSubmit={handleSubmit} className="flex flex-wrap gap-2">
-                <input
-                  type="text"
-                  value={q}
-                  onChange={(e) => setQ(e.target.value)}
-                  placeholder={mode === "upwork" ? "Skills or title, e.g. Django, React" : "Job title or keywords"}
-                  className="min-w-[200px] flex-1 rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
-                />
-                {mode !== "upwork" && (
-                  <input
-                    type="text"
-                    value={location}
-                    onChange={(e) => setLocation(e.target.value)}
-                    placeholder="Location (default: Remote)"
-                    className="min-w-[160px] flex-1 rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
-                  />
-                )}
-                {mode === "aggregate" && (
-                  <select
-                    value={experienceLevelFilter}
-                    onChange={(e) => setExperienceLevelFilter(e.target.value as ExperienceLevel | "")}
-                    className="min-w-[170px] rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
-                  >
-                    <option value="">Cualquier nivel</option>
-                    {EXPERIENCE_LEVELS.map((lvl) => (
-                      <option key={lvl} value={lvl}>
-                        {EXPERIENCE_LEVEL_LABELS[lvl]}
-                      </option>
-                    ))}
-                  </select>
-                )}
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {loading ? "Searching…" : "Search"}
-                </button>
-              </form>
-
-              {error && <ErrorNotice message={error} />}
-
-              {mode === "aggregate" && sources.length > 0 && <SourcesSummary sources={sources} />}
-
-              <div className="space-y-3">
-                {results.map((r) => (
-                  <ExternalResultCard key={`${r.source}:${r.external_id}`} result={r} onImport={handleImport} />
-                ))}
-              </div>
-
-              {hasMore && results.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => runSearch(false)}
-                  disabled={loading}
-                  className="w-full rounded-lg border border-gray-200 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-60"
-                >
-                  {loading ? "Loading…" : "Load more"}
-                </button>
-              )}
-
-              {!loading && results.length === 0 && !error && (
-                <p className="py-6 text-center text-sm text-gray-400">
-                  {mode === "aggregate"
-                    ? "Busca algo para ver resultados combinados de las 6 fuentes sin login."
-                    : `Search ${MODES.find((m) => m.id === mode)?.label} to see live results here.`}
-                </p>
-              )}
-            </>
+          {!loading && !searched && (
+            <p className="py-6 text-center text-sm text-gray-400">
+              Busca algo para ver resultados combinados de las 6 fuentes sin login.
+            </p>
           )}
         </div>
       </div>

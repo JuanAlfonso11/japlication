@@ -7,11 +7,14 @@ FastAPI backend for JobFlow AI, a personal job-search / application assistant.
 - Python 3.11, FastAPI, SQLAlchemy 2.0 (async, asyncpg), Pydantic v2, Alembic
 - PostgreSQL (schema defined in `../db/schema.sql`, the source of truth)
 - Optional: Anthropic API (`claude-sonnet-5`) for AI-powered resume tailoring,
-  cover letters, and job parsing upgrades — every one of these features has a
-  fully-functional deterministic/offline fallback when no API key is set.
-- Optional: live job search — Himalayas (no key needed), Google Jobs via
-  SerpApi (`SERPAPI_API_KEY`), Upwork (OAuth2, `UPWORK_CLIENT_ID`/`_SECRET`).
-  See "Live job search" below.
+  cover letters, CV-PDF parsing, and job parsing upgrades — every one of
+  these features has a fully-functional deterministic/offline fallback when
+  no API key is set.
+- Optional: live job search — 6 providers, none of which need any key. See
+  "Live job search" below.
+- Email verification on signup via SMTP (`smtplib`) — falls back to logging
+  the verification link when `SMTP_HOST` isn't set, so local dev needs no
+  mail account. See "Auth & email verification" below.
 
 ## Setup
 
@@ -23,7 +26,7 @@ pip install -r requirements.txt
 
 cp .env.example .env
 # edit .env: set DATABASE_URL, JWT_SECRET, FRONTEND_ORIGIN, and (optionally)
-# ANTHROPIC_API_KEY / SERPAPI_API_KEY / UPWORK_CLIENT_ID+SECRET
+# ANTHROPIC_API_KEY / SMTP_* (see "Auth & email verification" below)
 ```
 
 ### Database
@@ -67,44 +70,46 @@ exercise `match_engine.py` (skill overlap, experience-years extraction,
 weighted scoring), `job_importer.py` (JSON-LD parsing against a sample
 `JobPosting` HTML fixture, and heuristic fallback parsing against plain HTML
 with no JSON-LD), `experience_level.py` (keyword inference + native-value
-mapping for Himalayas/The Muse/Jobicy), and all eight search integrations
-(`google_jobs.py`, `himalayas.py`, `upwork.py`, `arbeitnow.py`,
-`remotive.py`, `jobicy.py`, `remotejobs_org.py`, `themuse.py` —
-normalization, salary/date parsing, OAuth URL building, and cache expiry,
-all with `httpx` mocked; no live calls to any of those providers are made by
-the suite).
+mapping for Himalayas/The Muse/Jobicy), `cv_upload.py` (PDF text extraction
+errors, heuristic contact/skills parsing, AI-vs-heuristic selection),
+`email.py` (SMTP-configured vs. logged-link fallback), and all six search
+integrations (`himalayas.py`, `arbeitnow.py`, `remotive.py`, `jobicy.py`,
+`remotejobs_org.py`, `themuse.py` — normalization, salary/date parsing, and
+cache expiry, all with `httpx` mocked; no live calls to any of those
+providers are made by the suite).
 
 ## Live job search
 
-`GET /jobs/search/aggregate` (all 6 no-auth providers at once — what Discover uses by default),
+`GET /jobs/search/aggregate` (all 6 providers at once — what Discover uses),
 `GET /jobs/search?provider=` (single provider), and `POST /jobs/search/import` are documented in
-`../docs/API_CONTRACT.md`. The research behind each no-auth provider (endpoint, params, response shape,
-rate limits) is in `../docs/PUBLIC_APIS_RESEARCH.md`.
+`../docs/API_CONTRACT.md`. The research behind each provider (endpoint, params, response shape, rate
+limits) — plus why Google Jobs and Upwork were removed and why LinkedIn/Indeed were never options for a
+personal project — is in `../docs/PUBLIC_APIS_RESEARCH.md`.
 
-- **Himalayas, Arbeitnow, Remotive, Jobicy, RemoteJobs.org, The Muse** need no configuration — zero API
-  keys, zero OAuth, zero signup. `app/services/experience_level.py` normalizes each one's notion of
-  seniority (native where the provider has it, inferred from title/description otherwise) into one shared
-  `internship|entry|mid|senior|lead` taxonomy so the level filter works uniformly across all six.
-- **Google Jobs** (SerpApi) needs `SERPAPI_API_KEY` — get one at
-  [serpapi.com](https://serpapi.com). Without it, `provider=google_jobs`
-  returns a clean `503`.
-- **Upwork** needs a registered app at
-  [upwork.com/developer/apps](https://www.upwork.com/developer/apps) —
-  set `UPWORK_CLIENT_ID`/`UPWORK_CLIENT_SECRET`, and make sure the redirect
-  URI you register there matches `UPWORK_REDIRECT_URI` exactly. Each user
-  then connects their own account via `GET /integrations/upwork/authorize`
-  (an OAuth2 authorization-code flow — tokens are stored per-user in the
-  `oauth_connections` table and refreshed automatically). Without an app
-  configured, `GET /integrations/upwork/authorize` returns `503` and the
-  frontend hides the Upwork tab behind a setup notice instead.
+**Himalayas, Arbeitnow, Remotive, Jobicy, RemoteJobs.org, The Muse** need no configuration — zero API
+keys, zero OAuth, zero signup. `app/services/experience_level.py` normalizes each one's notion of
+seniority (native where the provider has it, inferred from title/description otherwise) into one shared
+`internship|entry|mid|senior|lead` taxonomy so the level filter works uniformly across all six.
 
-The exact GraphQL field names in `upwork.py`'s `marketplaceJobPostings`
-query follow Upwork's publicly documented schema at the time of writing;
-Upwork's schema is only fully browsable via GraphQL introspection from an
-approved developer account, so if it returns a "Cannot query field ..."
-error, adjust `_SEARCH_QUERY`/`_build_filter()` in that file against your
-account's live schema — nothing else in the OAuth/caching/persistence flow
-is affected by that.
+## Auth & email verification
+
+`POST /auth/register` sends a verification email in the background (never blocks or fails registration
+over it) with a signed, 24h link to `GET /auth/verify-email?token=`. Configure `SMTP_HOST` (+
+`SMTP_PORT`/`SMTP_USER`/`SMTP_PASSWORD`/`SMTP_FROM_EMAIL`/`SMTP_USE_TLS`) to send real emails via any SMTP
+provider (Gmail app password, Mailtrap for local testing, SendGrid/Postmark/SES SMTP relay, ...); without
+it, `app/services/email.py` just logs the verification link instead, so registration/login/verification
+can all be exercised locally with zero mail setup. Login is **not** blocked on verification — the frontend
+shows a persistent "confirm your email" banner with a resend button instead, so a flaky mail provider
+never locks someone out of their own account.
+
+## PDF CV upload
+
+`POST /profile/import-cv` (`app/services/cv_upload.py`) extracts text from an uploaded PDF (`pypdf`) and
+returns a draft `CareerProfileUpsert` — never persisted by itself; the frontend pre-fills the profile
+editor and the user still has to review it and hit Save. Claude does the actual extraction when
+`ANTHROPIC_API_KEY` is set (`generated_by: "ai"`); without it, a regex/skills-taxonomy heuristic reliably
+pulls contact info and a flat skills list but deliberately leaves `experience`/`education` empty rather
+than guess at a resume's layout (`generated_by: "heuristic"`, with `warnings` explaining why).
 
 ## Project layout
 
@@ -118,7 +123,7 @@ app/
   models/                  SQLAlchemy models mirroring db/schema.sql
   schemas/                 Pydantic request/response models (API_CONTRACT.md)
   api/deps.py              get_current_user (JWT bearer auth)
-  api/v1/routers/          auth, profile, jobs, match, applications, resumes, cover_letters, integrations
+  api/v1/routers/          auth, profile, jobs, match, applications, resumes, cover_letters
   services/
     skills_taxonomy.py     built-in skills taxonomy + synonym normalization
     job_importer.py        URL -> structured Job (JSON-LD first, heuristic fallback)
@@ -126,19 +131,18 @@ app/
     resume_adapter.py       ATS-safe tailored resume (AI when configured, rule-based fallback)
     cover_letter_generator.py  personalized cover letter (AI when configured, template fallback)
     cv_evaluator.py          CV quality check, independent of any job (AI summary when configured)
-    google_jobs.py          Google Jobs search via SerpApi (server-side API key)
-    upwork.py                 Upwork OAuth2 + GraphQL job search (per-user token)
+    cv_upload.py               PDF résumé -> draft CareerProfile (AI when configured, heuristic fallback)
+    email.py                    SMTP sender for account verification (logs the link when unconfigured)
     experience_level.py     shared internship/entry/mid/senior/lead taxonomy
-    himalayas.py             no-auth: Himalayas remote-jobs search
-    arbeitnow.py             no-auth: Arbeitnow job board
-    remotive.py               no-auth: Remotive remote-jobs search
-    jobicy.py                   no-auth: Jobicy remote-jobs search
-    remotejobs_org.py         no-auth: RemoteJobs.org search
-    themuse.py                 no-auth: The Muse (api_key optional)
+    himalayas.py             search: Himalayas remote-jobs
+    arbeitnow.py             search: Arbeitnow job board
+    remotive.py               search: Remotive remote-jobs
+    jobicy.py                   search: Jobicy remote-jobs
+    remotejobs_org.py         search: RemoteJobs.org
+    themuse.py                 search: The Muse (api_key optional)
 alembic/                   migrations (0001 mirrors db/schema.sql)
-tests/                     pytest suite (match_engine, job_importer, cv_evaluator, experience_level,
-                           google_jobs, himalayas, upwork, arbeitnow, remotive, jobicy,
-                           remotejobs_org, themuse)
+tests/                     pytest suite (match_engine, job_importer, cv_evaluator, cv_upload, email,
+                           experience_level, himalayas, arbeitnow, remotive, jobicy, remotejobs_org, themuse)
 ```
 
 ## CV Evaluator
@@ -152,7 +156,7 @@ context (not the raw profile) so it can't contradict them.
 
 ## Auth
 
-All routes except `POST /auth/register`, `POST /auth/login`, and `/health`
+All routes except `POST /auth/register`, `POST /auth/login`, `GET /auth/verify-email`, and `/health`
 require `Authorization: Bearer <jwt>`. Every resource (career profile, jobs
 you imported are shared/global, but matches/applications/resumes/cover
 letters) is scoped so a user only ever sees their own data.

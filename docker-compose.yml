@@ -29,10 +29,12 @@ services:
       JWT_EXPIRE_MINUTES: ${JWT_EXPIRE_MINUTES:-1440}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:3000}
-      SERPAPI_API_KEY: ${SERPAPI_API_KEY:-}
-      UPWORK_CLIENT_ID: ${UPWORK_CLIENT_ID:-}
-      UPWORK_CLIENT_SECRET: ${UPWORK_CLIENT_SECRET:-}
-      UPWORK_REDIRECT_URI: ${UPWORK_REDIRECT_URI:-http://localhost:8000/api/v1/integrations/upwork/callback}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-no-reply@jobflow.ai}
+      SMTP_USE_TLS: ${SMTP_USE_TLS:-true}
     ports:
       - "8000:8000"
 

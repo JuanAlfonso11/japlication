@@ -73,6 +73,16 @@ class CareerProfileUpsert(BaseModel):
     languages: list[Language] = Field(default_factory=list)
 
 
+class CVUploadResult(BaseModel):
+    """A draft profile parsed from an uploaded PDF — never persisted by
+    itself. The frontend pre-fills the profile editor with it; the user
+    still has to review and hit Save (PUT /profile) for it to take effect."""
+
+    profile: CareerProfileUpsert
+    generated_by: str  # "ai" | "heuristic"
+    warnings: list[str] = Field(default_factory=list)
+
+
 class CareerProfile(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

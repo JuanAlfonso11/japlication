@@ -14,7 +14,6 @@ from app.models.enums import ApplicationStatus, JobSource
 from app.models.job import Job
 from app.models.job_match import JobMatch
 from app.models.user import User
-from app.models.oauth_connection import OAuthConnection
 from app.schemas.job import Job as JobSchema
 from app.schemas.job import (
     AggregateSearchResponse,
@@ -30,29 +29,22 @@ from app.schemas.job_match import MatchResult
 from app.services import (
     arbeitnow,
     experience_level,
-    google_jobs,
     himalayas,
     jobicy,
     remotejobs_org,
     remotive,
     themuse,
-    upwork,
 )
 from app.services.job_importer import import_job_from_url
 
 router = APIRouter(tags=["jobs"])
 
 # Every JobSource enum value that comes from a live search provider (as
-# opposed to url_import/manual) maps to the service module that handles it.
-_SEARCH_PROVIDERS = {
-    "google_jobs", "himalayas", "upwork",
-    "arbeitnow", "remotive", "jobicy", "remotejobs_org", "themuse",
-}
-
-# The providers that require zero credentials of any kind — these are the
-# ones GET /jobs/search/aggregate fans out to. google_jobs (SerpApi key) and
-# upwork (per-user OAuth) stay opt-in, single-provider only.
-_NO_AUTH_PROVIDERS = ("himalayas", "arbeitnow", "remotive", "jobicy", "remotejobs_org", "themuse")
+# opposed to url_import/manual). All of these are free, no-auth APIs — see
+# docs/PUBLIC_APIS_RESEARCH.md for what was investigated and why Google
+# Jobs/Upwork/LinkedIn/Indeed aren't (and, for LinkedIn/Indeed, can't be)
+# part of this list.
+_SEARCH_PROVIDERS = {"himalayas", "arbeitnow", "remotive", "jobicy", "remotejobs_org", "themuse"}
 
 
 async def _attach_match(job: Job, user_id: UUID, db: AsyncSession) -> JobSchema:
@@ -193,45 +185,17 @@ async def list_jobs(
     return JobListResponse(items=items, total=total)
 
 
-async def _get_upwork_access_token(user_id: UUID, db: AsyncSession) -> str:
-    result = await db.execute(
-        select(OAuthConnection).where(OAuthConnection.user_id == user_id, OAuthConnection.provider == "upwork")
-    )
-    connection = result.scalar_one_or_none()
-    if connection is None:
-        raise HTTPException(
-            status_code=409,
-            detail="Conecta tu cuenta de Upwork primero (POST /integrations/upwork/authorize).",
-        )
-
-    now = datetime.now(timezone.utc)
-    if connection.expires_at is not None and connection.expires_at <= now and connection.refresh_token:
-        try:
-            refreshed = await upwork.refresh_access_token(connection.refresh_token)
-        except upwork.UpworkError as exc:
-            raise HTTPException(status_code=502, detail=f"Could not refresh Upwork token: {exc}") from exc
-        connection.access_token = refreshed["access_token"]
-        connection.refresh_token = refreshed.get("refresh_token") or connection.refresh_token
-        connection.expires_at = refreshed.get("expires_at")
-        await db.commit()
-
-    return connection.access_token
-
-
 @router.get("/jobs/search", response_model=ExternalJobsSearchResponse)
 async def search_jobs(
     provider: str = Query(
         "himalayas",
-        pattern="^(himalayas|google_jobs|upwork|arbeitnow|remotive|jobicy|remotejobs_org|themuse)$",
+        pattern="^(himalayas|arbeitnow|remotive|jobicy|remotejobs_org|themuse)$",
     ),
     q: Optional[str] = Query(None),
     location: Optional[str] = Query(None),
     experience_level_filter: Optional[str] = Query(
         None, alias="experience_level", pattern="^(internship|entry|mid|senior|lead)$"
     ),
-    hl: Optional[str] = Query(None),
-    gl: Optional[str] = Query(None),
-    next_page_token: Optional[str] = Query(None),
     country: Optional[str] = Query(None),
     worldwide: Optional[bool] = Query(None),
     seniority: Optional[str] = Query(None),
@@ -240,18 +204,12 @@ async def search_jobs(
     category: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
 ) -> ExternalJobsSearchResponse:
-    """Live-search one external provider. Nothing is persisted — pick a
+    """Live-search one no-auth provider. Nothing is persisted — pick a
     result and call POST /jobs/search/import to add it to `jobs`.
 
-    No-auth providers: himalayas (default), arbeitnow, remotive, jobicy,
-    remotejobs_org, themuse — see GET /jobs/search/aggregate to query all of
-    them in one call, which is what Discover uses by default.
-
-    - google_jobs: requires SERPAPI_API_KEY (backend .env).
-    - upwork: requires the user to connect their account first (see
-      /integrations/upwork/*); freelance/contract postings.
+    See GET /jobs/search/aggregate to query all six providers in one call,
+    which is what Discover uses by default.
     """
     if provider == "himalayas":
         try:
@@ -339,81 +297,25 @@ async def search_jobs(
             provider="remotejobs_org", results=results, page=page + 1 if data["has_more"] else None, has_more=data["has_more"]
         )
 
-    if provider == "themuse":
-        try:
-            data = await themuse.search_themuse_jobs(
-                q=q,
-                location=location or "Remote",
-                experience_level_filter=experience_level_filter,
-                category=category,
-                page=page - 1,
-            )
-        except themuse.TheMuseError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
-        results = [
-            ExternalJobResult(external_id=r["themuse_job_id"], **{k: v for k, v in r.items() if k != "themuse_job_id"})
-            for r in data["results"]
-            if r.get("themuse_job_id")
-        ]
-        return ExternalJobsSearchResponse(
-            provider="themuse", results=results, page=page + 1 if data["has_more"] else None, has_more=data["has_more"]
-        )
-
-    if provider == "google_jobs":
-        if not q:
-            raise HTTPException(status_code=422, detail="q is required for provider=google_jobs")
-        try:
-            data = await google_jobs.search_google_jobs(q=q, location=location, hl=hl, gl=gl, next_page_token=next_page_token)
-        except google_jobs.GoogleJobsError as exc:
-            detail = str(exc)
-            status_code = 503 if "SERPAPI_API_KEY is not configured" in detail else 502
-            raise HTTPException(status_code=status_code, detail=detail) from exc
-        results = [
-            ExternalJobResult(external_id=r["google_job_id"], **{k: v for k, v in r.items() if k != "google_job_id"})
-            for r in data["results"]
-            if r.get("google_job_id")
-        ]
-        return ExternalJobsSearchResponse(
-            provider="google_jobs",
-            results=results,
-            next_page_token=data["next_page_token"],
-            has_more=bool(data["next_page_token"]),
-        )
-
-    # provider == "upwork"
-    access_token = await _get_upwork_access_token(current_user.id, db)
-    skills = [s.strip() for s in (q or "").split(",") if s.strip()] if q and "," in q else None
+    # provider == "themuse"
     try:
-        data = await upwork.search_upwork_jobs(access_token, q=None if skills else q, skills=skills)
-    except PermissionError:
-        # Access token rejected outright (not just past our tracked expiry) — refresh once and retry.
-        result = await db.execute(
-            select(OAuthConnection).where(OAuthConnection.user_id == current_user.id, OAuthConnection.provider == "upwork")
+        data = await themuse.search_themuse_jobs(
+            q=q,
+            location=location or "Remote",
+            experience_level_filter=experience_level_filter,
+            category=category,
+            page=page - 1,
         )
-        connection = result.scalar_one_or_none()
-        if connection is None or not connection.refresh_token:
-            raise HTTPException(status_code=409, detail="Tu conexión con Upwork expiró — reconéctala.") from None
-        try:
-            refreshed = await upwork.refresh_access_token(connection.refresh_token)
-        except upwork.UpworkError as exc:
-            raise HTTPException(status_code=502, detail=f"Could not refresh Upwork token: {exc}") from exc
-        connection.access_token = refreshed["access_token"]
-        connection.refresh_token = refreshed.get("refresh_token") or connection.refresh_token
-        connection.expires_at = refreshed.get("expires_at")
-        await db.commit()
-        try:
-            data = await upwork.search_upwork_jobs(connection.access_token, q=None if skills else q, skills=skills)
-        except (PermissionError, upwork.UpworkError) as exc:
-            raise HTTPException(status_code=502, detail=f"Upwork search failed: {exc}") from exc
-    except upwork.UpworkError as exc:
+    except themuse.TheMuseError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-
     results = [
-        ExternalJobResult(external_id=r["upwork_job_id"], **{k: v for k, v in r.items() if k != "upwork_job_id"})
+        ExternalJobResult(external_id=r["themuse_job_id"], **{k: v for k, v in r.items() if k != "themuse_job_id"})
         for r in data["results"]
-        if r.get("upwork_job_id")
+        if r.get("themuse_job_id")
     ]
-    return ExternalJobsSearchResponse(provider="upwork", results=results, has_more=data["has_more"])
+    return ExternalJobsSearchResponse(
+        provider="themuse", results=results, page=page + 1 if data["has_more"] else None, has_more=data["has_more"]
+    )
 
 
 def _is_remote_location(location: Optional[str]) -> bool:
@@ -501,13 +403,13 @@ async def search_jobs_aggregate(
     """Fans out to every no-auth job-search provider at once
     (Himalayas, Arbeitnow, Remotive, Jobicy, RemoteJobs.org, The Muse) and
     merges the results into one list, newest first — this is what the
-    Discover tab's default "search all sources" action calls. A provider
-    that errors doesn't take the others down with it: its failure shows up
+    Discover tab's "search all sources" action calls. A provider that
+    errors doesn't take the others down with it: its failure shows up
     in `sources` instead of the result list."""
     outcomes = await asyncio.gather(
         *[
             _run_no_auth_provider(p, q, location, experience_level_filter, category)
-            for p in _NO_AUTH_PROVIDERS
+            for p in _SEARCH_PROVIDERS
         ]
     )
 
@@ -534,9 +436,7 @@ async def import_external_job(
         raise HTTPException(status_code=422, detail=f"Unknown source '{payload.source}'.")
 
     cache_lookup = {
-        "google_jobs": google_jobs.get_cached_result,
         "himalayas": himalayas.get_cached_result,
-        "upwork": upwork.get_cached_result,
         "arbeitnow": arbeitnow.get_cached_result,
         "remotive": remotive.get_cached_result,
         "jobicy": jobicy.get_cached_result,

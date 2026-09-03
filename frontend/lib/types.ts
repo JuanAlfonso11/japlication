@@ -10,7 +10,14 @@ export interface User {
   id: string;
   email: string;
   full_name: string;
+  email_verified: boolean;
+  email_verified_at?: string | null;
   created_at?: string;
+}
+
+export interface ResendVerificationResponse {
+  sent: boolean;
+  detail: string;
 }
 
 export interface AuthResponse {
@@ -93,6 +100,12 @@ export interface CareerProfile {
   updated_at?: string;
 }
 
+export interface CVUploadResult {
+  profile: CareerProfile;
+  generated_by: "ai" | "heuristic";
+  warnings: string[];
+}
+
 // ---------- Jobs ----------
 
 export type ApplicationStatus =
@@ -139,7 +152,7 @@ export interface JobCreatePayload {
   source_url?: string | null;
 }
 
-// ---------- External job search (no-auth aggregate + Google Jobs / Upwork) ----------
+// ---------- External job search (6 free, no-auth APIs — GET /jobs/search/aggregate) ----------
 
 export type ExternalProvider =
   | "himalayas"
@@ -147,20 +160,7 @@ export type ExternalProvider =
   | "remotive"
   | "jobicy"
   | "remotejobs_org"
-  | "themuse"
-  | "google_jobs"
-  | "upwork";
-
-/** The providers GET /jobs/search/aggregate fans out to — no API key, no
- * OAuth, no signup required for any of them. */
-export const NO_AUTH_PROVIDERS: ExternalProvider[] = [
-  "himalayas",
-  "arbeitnow",
-  "remotive",
-  "jobicy",
-  "remotejobs_org",
-  "themuse",
-];
+  | "themuse";
 
 export const PROVIDER_LABELS: Record<ExternalProvider, string> = {
   himalayas: "Himalayas",
@@ -169,8 +169,6 @@ export const PROVIDER_LABELS: Record<ExternalProvider, string> = {
   jobicy: "Jobicy",
   remotejobs_org: "RemoteJobs.org",
   themuse: "The Muse",
-  google_jobs: "Google Jobs",
-  upwork: "Upwork",
 };
 
 export type ExperienceLevel = "internship" | "entry" | "mid" | "senior" | "lead";
@@ -234,15 +232,6 @@ export interface AggregateSourceStatus {
 export interface AggregateSearchResponse {
   results: ExternalJobResult[];
   sources: AggregateSourceStatus[];
-}
-
-export interface UpworkStatus {
-  connected: boolean;
-  configured: boolean;
-}
-
-export interface UpworkAuthorizeResponse {
-  authorization_url: string;
 }
 
 export interface JobListResponse {

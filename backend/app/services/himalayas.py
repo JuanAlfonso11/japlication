@@ -2,12 +2,10 @@
 (https://himalayas.app/docs/remote-jobs-api — browse: GET /jobs/api, search:
 GET /jobs/api/search).
 
-Unlike Google Jobs (SerpApi, metered, requires SERPAPI_API_KEY) or Upwork
-(OAuth2, requires the user to connect their account), this source needs no
-configuration and works for every user out of the box — it's the default
-search provider. Results are normalized into the same Job-like shape used by
-the other providers and cached briefly so `POST /jobs/search/import` doesn't
-need a second request.
+Needs no configuration and works for every user out of the box — it's the
+default search provider. Results are normalized into the same Job-like shape
+used by the other providers and cached briefly so `POST /jobs/search/import`
+doesn't need a second request.
 """
 
 from __future__ import annotations

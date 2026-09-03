@@ -5,7 +5,6 @@ from app.models.job_match import JobMatch
 from app.models.application import Application
 from app.models.resume_version import ResumeVersion
 from app.models.cover_letter import CoverLetter
-from app.models.oauth_connection import OAuthConnection
 
 __all__ = [
     "User",
@@ -15,5 +14,4 @@ __all__ = [
     "Application",
     "ResumeVersion",
     "CoverLetter",
-    "OAuthConnection",
 ]

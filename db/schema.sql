@@ -10,12 +10,14 @@ CREATE EXTENSION IF NOT EXISTS citext;
 -- users
 -- =========================================================
 CREATE TABLE users (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    email           CITEXT UNIQUE NOT NULL,
-    hashed_password TEXT NOT NULL,
-    full_name       TEXT NOT NULL,
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email               CITEXT UNIQUE NOT NULL,
+    hashed_password     TEXT NOT NULL,
+    full_name           TEXT NOT NULL,
+    email_verified      BOOLEAN NOT NULL DEFAULT false,
+    email_verified_at   TIMESTAMPTZ,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- =========================================================
@@ -46,10 +48,13 @@ CREATE INDEX idx_career_profiles_search ON career_profiles USING gin (search_vec
 -- =========================================================
 -- jobs  (normalized job postings, imported from a URL or search)
 -- =========================================================
+-- Every value here is a source that needs zero credentials to query — see
+-- docs/PUBLIC_APIS_RESEARCH.md for what was investigated (including why
+-- Google Jobs/Upwork were removed, and why LinkedIn/Indeed aren't — and
+-- likely can't be — options for a personal project at all).
 CREATE TYPE job_source AS ENUM (
-    'url_import', 'google_jobs', 'himalayas', 'upwork',
-    'arbeitnow', 'remotive', 'jobicy', 'remotejobs_org', 'themuse',
-    'linkedin', 'indeed', 'manual'
+    'url_import', 'himalayas', 'arbeitnow', 'remotive', 'jobicy', 'remotejobs_org', 'themuse',
+    'manual'
 );
 
 CREATE TABLE jobs (
@@ -177,25 +182,6 @@ ALTER TABLE applications
         FOREIGN KEY (cover_letter_id) REFERENCES cover_letters(id) ON DELETE SET NULL;
 
 -- =========================================================
--- oauth_connections  (per-user OAuth2 tokens for external job sources
--- that require user authorization, e.g. Upwork — as opposed to Google
--- Jobs/SerpApi, which use one shared server-side API key)
--- =========================================================
-CREATE TABLE oauth_connections (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    provider        TEXT NOT NULL,               -- 'upwork', ...
-    access_token    TEXT NOT NULL,
-    refresh_token   TEXT,
-    token_type      TEXT NOT NULL DEFAULT 'Bearer',
-    expires_at      TIMESTAMPTZ,
-    scope           TEXT,
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-    UNIQUE (user_id, provider)
-);
-
--- =========================================================
 -- updated_at triggers
 -- =========================================================
 CREATE OR REPLACE FUNCTION set_updated_at() RETURNS TRIGGER AS $$
@@ -212,6 +198,4 @@ CREATE TRIGGER trg_career_profiles_updated_at BEFORE UPDATE ON career_profiles
 CREATE TRIGGER trg_jobs_updated_at BEFORE UPDATE ON jobs
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 CREATE TRIGGER trg_applications_updated_at BEFORE UPDATE ON applications
-    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-CREATE TRIGGER trg_oauth_connections_updated_at BEFORE UPDATE ON oauth_connections
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();

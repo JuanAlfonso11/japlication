@@ -1,6 +1,6 @@
 # JobFlow AI
 
-Plataforma personal de búsqueda y postulación a empleo: perfil de carrera (CV maestro), búsqueda en vivo (Himalayas, Google Jobs, Upwork) + importación de vacantes desde URL, motor de coincidencia (match engine) híbrido, adaptación de CV, generación de cover letters, y una interfaz de decisión estilo Tinder.
+Plataforma personal de búsqueda y postulación a empleo: perfil de carrera (CV maestro, con importación desde PDF), búsqueda en vivo agregada contra 6 APIs públicas sin autenticación + importación de vacantes desde URL, motor de coincidencia (match engine) híbrido, evaluador de CV, adaptación de CV, generación de cover letters, verificación de cuenta por correo, y una interfaz de decisión estilo Tinder.
 
 Uso personal — ver el diseño conceptual completo en [`docs/DESIGN.md`](docs/DESIGN.md) y el contrato de API en [`docs/API_CONTRACT.md`](docs/API_CONTRACT.md).
 
@@ -25,10 +25,12 @@ japlication/
 
 ```bash
 cp .env.example .env
-# (opcional) agrega tu ANTHROPIC_API_KEY en .env para adaptación de CV / cover letters con IA real;
-# sin ella, el sistema usa generadores basados en reglas y sigue siendo 100% funcional.
-# (opcional) agrega SERPAPI_API_KEY y/o UPWORK_CLIENT_ID/SECRET para habilitar esos dos
-# proveedores de búsqueda en vivo; Himalayas no necesita ninguna clave y funciona siempre.
+# (opcional) agrega tu ANTHROPIC_API_KEY en .env para adaptación de CV / cover letters / evaluador de
+# CV / importación de PDF con IA real; sin ella, el sistema usa generadores basados en reglas y sigue
+# siendo 100% funcional.
+# (opcional) agrega SMTP_HOST (+ SMTP_USER/PASSWORD/...) para que el correo de verificación de cuenta
+# se envíe de verdad; sin SMTP configurado, el link queda en los logs del backend y el flujo se puede
+# probar igual en local.
 
 docker compose up --build
 ```
@@ -77,22 +79,24 @@ npm run dev
 2. **Job Import** — `backend/app/services/job_importer.py`: normaliza una vacante (URL o texto) a JSON estructurado, priorizando JSON-LD (`schema.org/JobPosting`) con fallback heurístico. El mismo extractor alimenta la búsqueda en vivo.
 3. **Match Engine** — `backend/app/services/match_engine.py`: score híbrido ponderado (50% técnico / 30% experiencia / 20% semántico), con skills coincidentes, faltantes y "concerns" en lenguaje natural.
 
-## Búsqueda en vivo (opcional)
+## Búsqueda en vivo
 
-`GET /jobs/search?provider=` unifica tres fuentes externas — elige una desde la pestaña "Search" de Importar:
+`GET /jobs/search/aggregate` combina en una sola búsqueda **6 APIs públicas que no requieren ningún tipo
+de autenticación** (sin API key, sin OAuth, sin registro) — investigación completa, incluyendo por qué
+Google Jobs y Upwork se removieron y por qué LinkedIn/Indeed no son una opción real para un proyecto
+personal, en [`docs/PUBLIC_APIS_RESEARCH.md`](docs/PUBLIC_APIS_RESEARCH.md):
 
-| Proveedor | Servicio | Necesita | Servicio backend |
-|---|---|---|---|
-| `himalayas` (default) | [himalayas.app](https://himalayas.app) | nada — funciona out-of-the-box | `backend/app/services/himalayas.py` |
-| `google_jobs` | [SerpApi](https://serpapi.com/search?engine=google_jobs) | `SERPAPI_API_KEY` | `backend/app/services/google_jobs.py` |
-| `upwork` | [Upwork GraphQL](https://api.upwork.com/graphql) | el usuario conecta su cuenta (OAuth2) | `backend/app/services/upwork.py` |
-
-Para Upwork: registra una app en [upwork.com/developer/apps](https://www.upwork.com/developer/apps), configura
-`UPWORK_CLIENT_ID`/`UPWORK_CLIENT_SECRET` y asegúrate de que el redirect URI registrado ahí coincida
-exactamente con `UPWORK_REDIRECT_URI`. Sin esa configuración, la pestaña de Upwork simplemente queda oculta
-detrás de un aviso — el resto de la app funciona igual.
+| Proveedor | Servicio | Servicio backend |
+|---|---|---|
+| Himalayas (default) | [himalayas.app](https://himalayas.app) | `backend/app/services/himalayas.py` |
+| Arbeitnow | [arbeitnow.com](https://www.arbeitnow.com/api/job-board-api) | `backend/app/services/arbeitnow.py` |
+| Remotive | [remotive.com](https://remotive.com/api/remote-jobs) | `backend/app/services/remotive.py` |
+| Jobicy | [jobicy.com](https://jobicy.com/api/v2/remote-jobs) | `backend/app/services/jobicy.py` |
+| RemoteJobs.org | [remotejobs.org](https://remotejobs.org/api-access) | `backend/app/services/remotejobs_org.py` |
+| The Muse | [themuse.com](https://www.themuse.com/developers/api/v2) | `backend/app/services/themuse.py` |
 
 ## Notas de seguridad y veracidad
 
-- La adaptación de CV y las cover letters se generan **solo a partir del perfil maestro del usuario** — reformulan/enfatizan lenguaje existente, nunca inventan experiencia o habilidades no declaradas.
+- La adaptación de CV, las cover letters y la importación de CV en PDF se generan **solo a partir de lo que ya existe** (el perfil maestro, o el propio PDF) — reformulan/enfatizan lenguaje existente, nunca inventan experiencia o habilidades no declaradas.
 - Autenticación con JWT + contraseñas hasheadas (bcrypt); cada usuario solo ve sus propios datos.
+- **Verificación de correo**: al registrarse se envía un enlace de confirmación (válido 24h) que el usuario debe confirmar con un clic; el login no se bloquea mientras tanto, pero un aviso en la app recuerda verificar y permite reenviar el correo.

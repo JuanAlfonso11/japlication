@@ -16,10 +16,12 @@ no existe documentación oficial, contra el comportamiento real del endpoint) en
 | 6 | The Muse | Opcional (funciona sin ella) | Sí (nueva) |
 | — | RemoteOK | Ninguna en teoría | **No** — ver nota |
 
-Excluidas de raíz por requerir API key/OAuth (no forman parte de esta investigación, solo se listan para
-dejar constancia de por qué no aparecen): Adzuna, Reed.co.uk, USAJobs, Jooble, Findwork.dev, Careerjet
-(requiere `affid` registrado), Google Jobs vía SerpApi, LinkedIn, Indeed (API de publisher deprecada). Estas
-ya estaban correctamente excluidas o marcadas como opcionales-con-key en la app (Google Jobs, Upwork).
+Excluidas de raíz por requerir API key/OAuth/partnership: Adzuna, Reed.co.uk, USAJobs, Jooble,
+Findwork.dev, Careerjet (requiere `affid` registrado), Google Jobs (vía SerpApi), Upwork, LinkedIn e Indeed.
+**Google Jobs y Upwork ya estuvieron integrados como opciones separadas ("con credenciales") en una versión
+anterior de la app, pero se quitaron por decisión explícita** — la app hoy solo trabaja con las 6 fuentes
+sin autenticación de esta tabla. LinkedIn e Indeed se investigan a fondo en la sección siguiente porque el
+resultado no es un simple "pide key": ninguna de las dos ofrece siquiera una API de búsqueda.
 
 **Nota sobre RemoteOK**: expone `https://remoteok.com/api` sin exigir key, pero su CDN (Cloudflare)
 bloquea agresivamente peticiones sin un `User-Agent` de navegador real y no tiene documentación oficial
@@ -134,14 +136,70 @@ verificarla en producción.
 
 ---
 
+## Investigación adicional: ¿cómo se consigue acceso a las APIs de Indeed y LinkedIn?
+
+Respuesta corta: **no es un trámite de "pedir una API key"** — ninguna de las dos ofrece hoy una API para
+*buscar/leer* vacantes públicamente. Ambas cerraron esa puerta hace años y lo que queda es infraestructura
+para que un ATS *publique* empleos en nombre de un empleador ya cliente suyo. Verificado contra la
+documentación oficial vigente (Microsoft Learn para LinkedIn, docs.indeed.com para Indeed) en 2026-09.
+
+### LinkedIn — Job Posting API (Talent Solutions)
+
+- **Qué hace realmente**: permite a un ATS o "job distributor" ya aprobado **publicar/sincronizar** vacantes
+  hacia LinkedIn en nombre de sus clientes (empleadores). No expone búsqueda ni lectura del catálogo de
+  LinkedIn — nunca existió una API pública de búsqueda de empleos en LinkedIn más allá del scraping.
+- **Aviso oficial en la documentación (2026)**: *"We are currently not accepting new partnerships for
+  LinkedIn's Job Posting API"* — está cerrada a nuevos partners salvo a través de Apply Connect.
+- **Quién puede aplicar**: solo **empresas incorporadas** (no desarrolladores individuales ni proyectos
+  personales), a través del [formulario de solicitud de partner](https://business.linkedin.com/talent-solutions/ats-partners/partner-application),
+  con revisión de un contacto de Business Development de LinkedIn.
+- **Requisitos**: firmar un API Agreement con restricciones de uso de datos, cumplir criterios de volumen
+  de usuarios y demostrar valor agregado para los miembros de LinkedIn; luego OAuth 2.0 client-credentials
+  para las llamadas.
+- **Tiempos y tasa de aprobación** (según fuentes de la industria, no oficiales de LinkedIn): proceso de
+  3–6 meses, tasa de aprobación menor al 10%.
+- **Conclusión**: inviable para un proyecto personal. La única superficie self-serve de LinkedIn para
+  desarrolladores individuales es "Sign In with LinkedIn" (autenticación/perfil básico) — no incluye datos
+  de empleos.
+
+### Indeed — Job Sync API / Partner APIs
+
+- **Qué hace realmente**: el mismo patrón que LinkedIn. `Job Sync API` es una API GraphQL para que un ATS
+  **publique** vacantes de sus clientes en Indeed. Existen además `Indeed Apply` (recibe postulaciones),
+  `Disposition Sync API` (reporta el estado de un candidato de vuelta a Indeed) y `Sponsored Jobs API`
+  (gestión de campañas pagas) — las cuatro son de publicación/gestión, ninguna de búsqueda.
+- **La antigua Publisher API** (la que sí permitía *leer* resultados de búsqueda) **fue deprecada en 2023**
+  y no admite nuevos registros — quienes ya la tenían quedaron con acceso heredado, nadie nuevo puede
+  solicitarla.
+- **Quién puede aplicar**: solo partners de tipo ATS/plataforma de contratación ya establecidos, vía
+  [partners.indeed.com](https://partners.indeed.com) (Partner Console) y contacto directo con el equipo de
+  partnerships de Indeed — no hay un formulario de autoservicio ni una API key que se pueda generar sin
+  esa aprobación previa.
+- **Conclusión**: igual de inviable para un proyecto personal — y a diferencia de LinkedIn, aquí ni
+  siquiera hay una vía teórica de "búsqueda" en su catálogo oficial, esté abierta o cerrada.
+
+### Qué opciones reales existen si en algún momento se quiere contenido de Indeed/LinkedIn
+
+1. **Vía agregadores que sí licencian ese contenido** (esto es justo lo que hacía la integración de
+   Google Jobs que se quitó de esta app): Google Jobs consolida listados originados en LinkedIn, Indeed y
+   miles de sitios corporativos y los redistribuye a través de SerpApi con un API key de pago. Es la única
+   vía **legítima y documentada** para tocar indirectamente ese contenido sin ser un partner de LinkedIn/Indeed.
+2. **Scraping o "normalized JSON APIs" de terceros** (Apify, Bright Data, RapidAPI, HasData, etc.): existen
+   y funcionan técnicamente, pero **violan los Términos de Servicio** tanto de LinkedIn como de Indeed —
+   ambas compañías han tomado acciones legales activas contra scraping no autorizado (LinkedIn en particular
+   litiga esto de forma agresiva). No se recomienda ni se integra nada de esta categoría en esta app.
+3. **Convertirse en cliente/partner real**: para LinkedIn, ser cliente de LinkedIn Recruiter y pasar por
+   Recruiter System Connect; para Indeed, integrarse como ATS reconocido. Ninguna de las dos rutas aplica a
+   un proyecto personal — están pensadas para empresas de software de reclutamiento establecidas.
+
+---
+
 ## Cómo se integran (resumen técnico — detalle completo en `backend/README.md`)
 
-- Un nuevo endpoint **`GET /jobs/search/aggregate`** dispara las 6 fuentes sin auth **en paralelo**
+- El endpoint **`GET /jobs/search/aggregate`** dispara las 6 fuentes sin auth **en paralelo**
   (`asyncio.gather`) y devuelve un solo listado combinado — así es como Discover muestra "todos los
   resultados de todas las APIs integradas" en una sola búsqueda, sin que el usuario tenga que elegir
   proveedor uno por uno. Un proveedor que falla no tumba a los demás: se reporta por separado.
-- Google Jobs (SerpApi) y Upwork **siguen aparte** como pestañas opcionales — quedan fuera de esta
-  investigación a propósito porque sí requieren credenciales, pero no se tocó su funcionalidad existente.
 - **Nivel de experiencia**: taxonomía interna `internship | entry | mid | senior | lead`
   (`backend/app/services/experience_level.py`). Himalayas y The Muse lo mandan como parámetro nativo al
   proveedor; Jobicy lo trae en la respuesta (`jobLevel`) y se normaliza; Arbeitnow/Remotive/RemoteJobs.org

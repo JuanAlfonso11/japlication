@@ -7,18 +7,27 @@ FastAPI backend described in `../docs/API_CONTRACT.md`.
 ## Screens
 
 - `/login`, `/register` — auth
+- `/verify-email` — lands here after the user clicks the confirmation link
+  from their email (`?status=success|invalid`); public, no login required
 - `/` — **home**: the Tinder-style match queue (drag, buttons, or arrow
   keys), recommended straight from the CV Maestro's match scores, plus a
   compact stats strip. This is the landing screen after login.
-- `/discover` — live search across Himalayas / Google Jobs / Upwork; pick
-  results to add to the home queue (does not persist anything by itself)
+- `/discover` — one search box that queries all 6 no-auth job APIs at once
+  (`GET /jobs/search/aggregate`) with a location (default "Remote") and
+  experience-level filter; pick results to add to the home queue (does not
+  persist anything by itself)
 - `/jobs/import` — add one specific job you already found elsewhere, by URL
   or pasted text
-- `/profile` — "CV Maestro" career profile editor, with a CV health check
-  card (completeness/impact/skills/ATS-safety score + prioritized fixes)
-  that recomputes on every save
+- `/profile` — "CV Maestro" career profile editor: upload a PDF résumé to
+  pre-fill it (nothing saved until you review and hit Save), plus a CV
+  health check card (completeness/impact/skills/ATS-safety score +
+  prioritized fixes) that recomputes on every save
 - `/jobs/[id]` — job detail, match breakdown, resume + cover letter generation
 - `/applications` — pipeline dashboard with status filters and inline editing
+
+A persistent banner (in `NavShell`) prompts an unverified account to confirm
+its email, with a one-click resend, until `GET /auth/me` reports
+`email_verified: true`.
 
 ## Getting started
 

@@ -5,9 +5,20 @@ Auth: `Authorization: Bearer <jwt>` (except `/auth/register`, `/auth/login`)
 All bodies/responses are JSON. IDs are UUID strings. Timestamps are ISO-8601.
 
 ## Auth
-- `POST /auth/register` `{email, password, full_name}` -> `{access_token, token_type, user}`
+- `POST /auth/register` `{email, password, full_name}` -> `{access_token, token_type, user}` (201).
+  Also sends a verification email in the background (see below) — registration succeeds and returns a
+  usable token even if that email fails to send; the user can always request another one.
 - `POST /auth/login` `{email, password}` -> `{access_token, token_type, user}`
-- `GET /auth/me` -> `User`
+- `GET /auth/me` -> `User` (includes `email_verified`, `email_verified_at`)
+- `POST /auth/resend-verification` (auth required) -> `{sent: bool, detail: string}` — no-ops with
+  `sent: false` if already verified.
+- `GET /auth/verify-email?token=` -> not called by the frontend directly; this is the link in the
+  verification email. No Authorization header (identity comes from the signed `token`) — always ends in a
+  redirect to `{FRONTEND_ORIGIN}/verify-email?status=success|invalid`.
+
+**Email delivery**: `app/services/email.py` sends via SMTP (`SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/
+`SMTP_PASSWORD`/`SMTP_FROM_EMAIL`/`SMTP_USE_TLS`). Without `SMTP_HOST` configured, nothing is actually
+sent — the backend logs the verification link instead, so local dev needs no mail account at all.
 
 ## Career Profile (CV Maestro)
 - `GET /profile` -> `CareerProfile` (404 if not created yet)
@@ -24,6 +35,18 @@ All bodies/responses are JSON. IDs are UUID strings. Timestamps are ISO-8601.
     "languages": [{"name": "English", "level": "C1"}]
   }
   ```
+- `POST /profile/import-cv` — `multipart/form-data`, field `file` (a PDF, max `MAX_CV_UPLOAD_MB`, default
+  8MB) -> `CVUploadResult`:
+  ```json
+  {"profile": { /* same shape as CareerProfileUpsert above, only fields found in the PDF are filled */ },
+   "generated_by": "ai" | "heuristic",
+   "warnings": ["..."]}
+  ```
+  **Nothing is persisted by this call** — the frontend pre-fills the profile editor with the draft and the
+  user still has to review it and call `PUT /profile` themselves. `generated_by: "ai"` (Claude parses the
+  extracted PDF text) when `ANTHROPIC_API_KEY` is set; otherwise `"heuristic"` (regex/skills-taxonomy based —
+  reliably extracts contact info and a flat skills list, but deliberately leaves `experience`/`education`
+  empty rather than guess at structure it can't parse safely — `warnings` explains this to the user).
 
 ## Jobs
 - `POST /jobs/import` `{url}` -> `Job` (fetches URL, parses to structured JSON, persists; idempotent on `source_url`)
@@ -59,23 +82,22 @@ All bodies/responses are JSON. IDs are UUID strings. Timestamps are ISO-8601.
 ## Live job search
 Search results are **not persisted** — pick one and call the import endpoint to add it to `jobs`.
 
-Eight providers total. Six require **zero credentials** (no API key, no OAuth, no signup) — see
-`docs/PUBLIC_APIS_RESEARCH.md` for the full research behind each one: `himalayas`, `arbeitnow`, `remotive`,
-`jobicy`, `remotejobs_org`, `themuse`. Two remain opt-in because they genuinely need credentials:
-`google_jobs` (`SERPAPI_API_KEY`) and `upwork` (per-user OAuth2 connect).
+Six providers, all requiring **zero credentials** (no API key, no OAuth, no signup) — see
+`docs/PUBLIC_APIS_RESEARCH.md` for the full research behind each one, including why Google Jobs and Upwork
+(both credential-gated) were deliberately removed, and why LinkedIn/Indeed aren't — and likely can't be —
+options for a personal project at all: `himalayas`, `arbeitnow`, `remotive`, `jobicy`, `remotejobs_org`,
+`themuse`.
 
 - `GET /jobs/search/aggregate?q=&location=Remote&experience_level=&category=`
   -> `{results: ExternalJobResult[], sources: [{provider, count, error?}]}`
-  — fans out to **all six no-auth providers in parallel** and merges the results, newest first. This is
-  what Discover's default "Todas las fuentes" search calls. A provider that errors doesn't drop the others'
-  results; its failure shows up in `sources` instead. `location` defaults to `"Remote"` when omitted.
-  `experience_level` is one of `internship|entry|mid|senior|lead` (see below).
-- `GET /jobs/search?provider=himalayas|arbeitnow|remotive|jobicy|remotejobs_org|themuse|google_jobs|upwork&q=&location=&experience_level=&category=&country=&worldwide=&seniority=&employment_type=&sort=&page=&next_page_token=`
-  -> `{provider, results: ExternalJobResult[], next_page_token?, page?, has_more}` — single-provider search,
-  used directly for `google_jobs`/`upwork` (which the aggregate endpoint intentionally excludes) and
-  available for any individual no-auth source too.
-  - `provider` defaults to `himalayas`. `google_jobs` requires the backend's `SERPAPI_API_KEY` (else `503`).
-    `upwork` requires the user to have connected their account (else `409`) — see below.
+  — fans out to **all six providers in parallel** and merges the results, newest first. This is what
+  Discover's search calls. A provider that errors doesn't drop the others' results; its failure shows up in
+  `sources` instead. `location` defaults to `"Remote"` when omitted. `experience_level` is one of
+  `internship|entry|mid|senior|lead` (see below).
+- `GET /jobs/search?provider=himalayas|arbeitnow|remotive|jobicy|remotejobs_org|themuse&q=&location=&experience_level=&category=&country=&worldwide=&seniority=&employment_type=&sort=&page=`
+  -> `{provider, results: ExternalJobResult[], page?, has_more}` — single-provider search, for querying just
+  one source directly instead of all six.
+  - `provider` defaults to `himalayas`.
   - `ExternalJobResult`: same shape as `Job` (minus id/timestamps) plus `external_id` and `source`.
     `seniority` holds the normalized experience level (`internship|entry|mid|senior|lead`) whenever it could
     be determined — natively from the provider (Himalayas, The Muse, Jobicy) or inferred from the title/
@@ -92,15 +114,6 @@ Eight providers total. Six require **zero credentials** (no API key, no OAuth, n
     ```
 - `POST /jobs/search/import` `{source, external_id}` -> `Job` (reads the normalized result from that
   provider's short-lived search cache — re-run the search if it expired, `404`)
-
-## Integrations (Upwork OAuth2)
-Upwork needs per-user authorization (unlike Google Jobs' single server-side API key), so it's a separate
-connect flow:
-- `GET /integrations/upwork/status` -> `{connected: bool, configured: bool}`
-- `GET /integrations/upwork/authorize` -> `{authorization_url}` (frontend does `window.location.href = ...`)
-- `GET /integrations/upwork/callback?code=&state=` -> not called by the frontend directly; Upwork redirects
-  the browser here, which redirects again to `{FRONTEND_ORIGIN}/discover?upwork=connected|error`
-- `DELETE /integrations/upwork` -> disconnects (204)
 
 ## Match Engine
 - `GET /jobs/{id}/match` -> computes (or returns fresh cached) `MatchResult`, recompute with `?refresh=true`

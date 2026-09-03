@@ -35,10 +35,11 @@ def decode_access_token(token: str) -> Optional[str]:
 
 
 def create_state_token(subject: str | UUID, purpose: str, expires_minutes: int = 10) -> str:
-    """A short-lived, purpose-scoped JWT used as the `state` parameter in a
-    third-party OAuth2 flow (e.g. Upwork) — ties the callback back to the
-    user who started it and prevents it being confused with a normal
-    session token or reused for a different flow."""
+    """A short-lived, purpose-scoped JWT used for a signed link a user
+    clicks from outside the app (e.g. the email-verification link) — ties
+    the callback back to the user it was minted for and prevents it being
+    confused with a normal session token or reused for a different
+    purpose."""
     expire = datetime.now(timezone.utc) + timedelta(minutes=expires_minutes)
     to_encode = {"sub": str(subject), "purpose": purpose, "exp": expire}
     return jwt.encode(to_encode, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
