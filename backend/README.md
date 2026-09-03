@@ -117,12 +117,22 @@ app/
     match_engine.py         hybrid weighted match score (technical/experience/semantic)
     resume_adapter.py       ATS-safe tailored resume (AI when configured, rule-based fallback)
     cover_letter_generator.py  personalized cover letter (AI when configured, template fallback)
+    cv_evaluator.py          CV quality check, independent of any job (AI summary when configured)
     google_jobs.py          Google Jobs search via SerpApi (server-side API key)
     himalayas.py             Himalayas remote-jobs search (no key needed)
     upwork.py                 Upwork OAuth2 + GraphQL job search (per-user token)
 alembic/                   migrations (0001 mirrors db/schema.sql)
-tests/                     pytest suite (match_engine, job_importer, google_jobs, himalayas, upwork)
+tests/                     pytest suite (match_engine, job_importer, cv_evaluator, google_jobs, himalayas, upwork)
 ```
+
+## CV Evaluator
+
+`GET /profile/evaluation` scores the user's career profile on its own merits — completeness, quantified/
+strong-language impact of experience bullets, skills coverage, and ATS-safety — separate from the Match
+Engine, which scores a profile *against one job*. Fully rule-based and offline by default
+(`app/services/cv_evaluator.py`); when `ANTHROPIC_API_KEY` is set, the one-paragraph `summary` field is
+written by Claude instead of a templated fallback sentence, using the already-computed scores/issues as
+context (not the raw profile) so it can't contradict them.
 
 ## Auth
 

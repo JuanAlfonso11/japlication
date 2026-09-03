@@ -14,7 +14,9 @@ FastAPI backend described in `../docs/API_CONTRACT.md`.
   results to add to the home queue (does not persist anything by itself)
 - `/jobs/import` — add one specific job you already found elsewhere, by URL
   or pasted text
-- `/profile` — "CV Maestro" career profile editor
+- `/profile` — "CV Maestro" career profile editor, with a CV health check
+  card (completeness/impact/skills/ATS-safety score + prioritized fixes)
+  that recomputes on every save
 - `/jobs/[id]` — job detail, match breakdown, resume + cover letter generation
 - `/applications` — pipeline dashboard with status filters and inline editing
 

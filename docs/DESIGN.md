@@ -67,6 +67,14 @@ o pega el texto de la descripción directamente. Mismo resultado normalizado + m
 - Editor por secciones: encabezado/resumen, habilidades (nombre, categoría, nivel, años), experiencia (empresa, cargo, fechas, bullets, skills usadas), educación, certificaciones, idiomas.
 - Este perfil es la **única fuente de verdad factual** — nunca se sobreescribe automáticamente; las adaptaciones por vacante se generan como *versiones derivadas* (`resume_versions`), preservando el original.
 - UX: secciones repetibles (agregar/quitar filas), guardado explícito con indicador de cambios sin guardar.
+- **Evaluador de CV** (`GET /profile/evaluation`): tarjeta fija arriba del editor, siempre visible, que responde
+  "¿en qué está flaqueando mi CV?" — a diferencia del Match Engine (que compara contra *una* vacante), esto
+  evalúa el perfil por sí solo: completitud (¿falta headline, resumen, skills, experiencia?), impacto de los
+  logros (¿cuántos bullets tienen métricas vs. frases pasivas tipo "responsable de"?), cobertura de skills
+  (¿usaste una skill en tu experiencia que no está en tu lista?), y señales de ATS-safety (emojis, bullets
+  demasiado largos, fechas con formato raro). Devuelve un score 0-100 por categoría, una lista priorizada de
+  "qué arreglar primero", fortalezas, y un resumen en una o dos frases — se recalcula automáticamente cada vez
+  que el usuario guarda cambios en su perfil.
 
 ### 2.5 Detalle de vacante + Match
 - Descripción completa, requisitos, responsabilidades.
@@ -108,6 +116,7 @@ La adaptación de CV y la cover letter **siempre parten del perfil maestro + los
 - **Importación de vacantes**: se prioriza el parseo de `JSON-LD` (`schema.org/JobPosting`), presente en la mayoría de portales serios (LinkedIn, Indeed, muchos ATS corporativos como Greenhouse/Lever/Workday); si no existe, fallback heurístico por regex/secciones de texto. Este mismo extractor heurístico se reutiliza para normalizar los resultados de búsqueda en vivo (Himalayas/Google Jobs/Upwork), así que un solo motor de parseo cubre las cuatro fuentes.
 - **Búsqueda en vivo**: tres proveedores externos detrás de un único endpoint (`GET /jobs/search?provider=`) — Himalayas (sin key), Google Jobs vía SerpApi (API key de servidor) y Upwork (OAuth2 por usuario, ver `oauth_connections`). Los resultados se cachean brevemente en memoria del proceso para que "agregar a mi cola" no dispare una segunda consulta pagada/limitada al proveedor.
 - **Adaptación de CV y cover letters**: motor basado en reglas (offline, siempre funcional) con mejora opcional vía LLM (Claude, `ANTHROPIC_API_KEY`) cuando está configurado — el sistema debe degradar con gracia sin la clave.
+- **Evaluador de CV**: mismo enfoque — reglas explicables y deterministas (`backend/app/services/cv_evaluator.py`) que siempre funcionan sin configuración; el resumen en lenguaje natural usa Claude cuando hay `ANTHROPIC_API_KEY`, con una frase de respaldo determinista si no.
 - **Match Engine**: fórmula híbrida ponderada (ver detalle técnico en `README.md` raíz y `backend/app/services/match_engine.py`): 50% técnico (overlap de skills), 30% experiencia (años requeridos vs. acumulados relevantes), 20% semántico (similitud texto perfil↔vacante, con fallback TF‑IDF sin dependencia de API externa).
 - **Formato ATS-safe**: el CV generado usa estructura de texto plano/simple (secciones estándar, sin tablas/columnas/gráficos), compatible con parsers ATS.
 - **Móvil**: la interfaz web es responsive y se sirve como PWA instalable (manifest + iconos); no se requiere una app nativa separada para el MVP — swipe funciona igual de bien vía gestos táctiles en el navegador móvil.

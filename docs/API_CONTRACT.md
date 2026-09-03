@@ -34,6 +34,28 @@ All bodies/responses are JSON. IDs are UUID strings. Timestamps are ISO-8601.
 
 `Job.skills_required` is `[{name, importance: "required"|"nice_to_have"}]`.
 
+## CV Evaluator (profile quality, independent of any job)
+- `GET /profile/evaluation` -> `CVEvaluation` (404 if no profile yet). Rule-based, always available offline;
+  scores the CV Maestro on its own merits — not against a specific job (that's the Match Engine below).
+  ```json
+  {
+    "overall_score": 78.5,
+    "band": "Sólido",
+    "categories": {
+      "completeness": {"score": 90, "issues": [{"severity": "info", "category": "completeness", "message": "..."}]},
+      "impact": {"score": 65, "issues": [...]},
+      "skills_breadth": {"score": 85, "issues": [...]},
+      "ats_safety": {"score": 100, "issues": []}
+    },
+    "top_issues": [{"severity": "warning", "category": "impact", "message": "Solo 2 de 8 logros incluyen números o métricas..."}],
+    "strengths": ["Buena parte de tus logros incluyen métricas concretas..."],
+    "summary": "One or two sentence coach-style summary.",
+    "summary_generated_by": "manual"
+  }
+  ```
+  `summary` is AI-written (`summary_generated_by: "ai"`) when `ANTHROPIC_API_KEY` is configured, else a
+  deterministic fallback sentence built from the top issue.
+
 ## Live job search (Google Jobs / Himalayas / Upwork)
 Search results are **not persisted** — pick one and call the import endpoint to add it to `jobs`.
 

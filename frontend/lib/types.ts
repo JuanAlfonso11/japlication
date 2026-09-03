@@ -199,6 +199,36 @@ export interface JobListResponse {
   total: number;
 }
 
+// ---------- CV Evaluator (profile quality, independent of any job) ----------
+
+export type IssueSeverity = "error" | "warning" | "info";
+
+export interface CVIssue {
+  severity: IssueSeverity;
+  category: "completeness" | "impact" | "skills_breadth" | "ats_safety" | string;
+  message: string;
+}
+
+export interface CVCategoryScore {
+  score: number;
+  issues: CVIssue[];
+}
+
+export interface CVEvaluation {
+  overall_score: number;
+  band: string;
+  categories: {
+    completeness: CVCategoryScore;
+    impact: CVCategoryScore;
+    skills_breadth: CVCategoryScore;
+    ats_safety: CVCategoryScore;
+  };
+  top_issues: CVIssue[];
+  strengths: string[];
+  summary: string;
+  summary_generated_by: "ai" | "manual";
+}
+
 // ---------- Match Engine ----------
 
 export interface MatchResult {

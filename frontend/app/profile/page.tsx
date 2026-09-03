@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import RouteGuard from "@/components/RouteGuard";
 import Spinner from "@/components/Spinner";
 import ErrorNotice from "@/components/ErrorNotice";
+import CVEvaluationCard from "@/components/CVEvaluationCard";
 import { FormField, inputClass, textareaClass } from "@/components/profile/FormField";
 import SectionCard from "@/components/profile/SectionCard";
 import SkillsSection from "@/components/profile/SkillsSection";
@@ -12,7 +13,7 @@ import EducationSection from "@/components/profile/EducationSection";
 import CertificationsSection from "@/components/profile/CertificationsSection";
 import LanguagesSection from "@/components/profile/LanguagesSection";
 import { ApiError, profileApi } from "@/lib/api";
-import type { CareerProfile } from "@/lib/types";
+import type { CareerProfile, CVEvaluation } from "@/lib/types";
 
 const EMPTY_PROFILE: CareerProfile = {
   headline: "",
@@ -41,12 +42,36 @@ function ProfileContent() {
   const [dirty, setDirty] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
 
+  const [evaluation, setEvaluation] = useState<CVEvaluation | null>(null);
+  const [evalLoading, setEvalLoading] = useState(false);
+  const [evalError, setEvalError] = useState<string | null>(null);
+
+  const loadEvaluation = useCallback(async () => {
+    setEvalLoading(true);
+    setEvalError(null);
+    try {
+      const data = await profileApi.evaluation();
+      setEvaluation(data);
+    } catch (err) {
+      // A profile that doesn't exist yet (404) just has nothing to evaluate —
+      // not an error worth surfacing before the user has saved anything.
+      if (err instanceof ApiError && err.status === 404) {
+        setEvaluation(null);
+      } else {
+        setEvalError(err instanceof ApiError ? err.message : "Could not evaluate your CV.");
+      }
+    } finally {
+      setEvalLoading(false);
+    }
+  }, []);
+
   const load = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
     try {
       const data = await profileApi.get();
       setProfile(data);
+      loadEvaluation();
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) {
         setProfile(EMPTY_PROFILE);
@@ -58,11 +83,12 @@ function ProfileContent() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [loadEvaluation]);
 
   useEffect(() => {
     load();
-  }, [load]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function patch(update: Partial<CareerProfile>) {
     setProfile((prev) => (prev ? { ...prev, ...update } : prev));
@@ -79,6 +105,7 @@ function ProfileContent() {
       setProfile(saved);
       setDirty(false);
       setLastSavedAt(new Date());
+      loadEvaluation();
     } catch (err) {
       setSaveError(err instanceof ApiError ? err.message : "Failed to save your profile.");
     } finally {
@@ -123,6 +150,8 @@ function ProfileContent() {
       </div>
 
       {saveError && <ErrorNotice message={saveError} />}
+
+      <CVEvaluationCard evaluation={evaluation} loading={evalLoading} error={evalError} />
 
       <SectionCard title="Overview" description="How recruiters see you at a glance.">
         <FormField label="Headline">

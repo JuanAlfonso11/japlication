@@ -5,6 +5,7 @@ import type {
   AuthResponse,
   CareerProfile,
   CoverLetter,
+  CVEvaluation,
   CoverLetterGeneratePayload,
   DecisionPayload,
   ExternalJobImportPayload,
@@ -156,6 +157,7 @@ export const profileApi = {
   get: () => request<CareerProfile>("/profile"),
   save: (payload: CareerProfile) =>
     request<CareerProfile>("/profile", { method: "PUT", body: payload }),
+  evaluation: () => request<CVEvaluation>("/profile/evaluation"),
 };
 
 // ---------- Jobs ----------
