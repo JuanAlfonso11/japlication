@@ -99,6 +99,7 @@ async def search_jobicy_jobs(
     q: Optional[str] = None,
     location: Optional[str] = None,
     experience_level_filter: Optional[str] = None,
+    remote_type_filter: Optional[str] = None,
     industry: Optional[str] = None,
     count: int = 50,
 ) -> dict[str, Any]:
@@ -128,6 +129,8 @@ async def search_jobicy_jobs(
     results = []
     for raw in data.get("jobs", []) or []:
         normalized = _normalize(raw)
+        if remote_type_filter and normalized["remote_type"] and normalized["remote_type"] != remote_type_filter:
+            continue
         if not experience_level.matches(normalized["seniority"], experience_level_filter):
             continue
         if normalized["jobicy_job_id"]:

@@ -102,6 +102,7 @@ async def search_themuse_jobs(
     q: Optional[str] = None,
     location: Optional[str] = None,
     experience_level_filter: Optional[str] = None,
+    remote_type_filter: Optional[str] = None,
     category: Optional[str] = None,
     page: int = 0,
 ) -> dict[str, Any]:
@@ -137,6 +138,8 @@ async def search_themuse_jobs(
             haystack = f"{normalized['title']} {normalized['description']}".lower()
             if q.lower() not in haystack:
                 continue
+        if remote_type_filter and normalized["remote_type"] and normalized["remote_type"] != remote_type_filter:
+            continue
 
         if normalized["themuse_job_id"]:
             _search_cache[normalized["themuse_job_id"]] = {"cached_at": now, "job": normalized}

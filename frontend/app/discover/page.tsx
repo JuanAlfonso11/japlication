@@ -9,15 +9,20 @@ import { ApiError, jobsApi } from "@/lib/api";
 import { importAndMatch } from "@/lib/jobActions";
 import {
   EXPERIENCE_LEVEL_LABELS,
+  JOB_TITLE_GROUPS,
+  LOCATION_OPTIONS,
   PROVIDER_LABELS,
+  REMOTE_TYPE_LABELS,
   type AggregateSourceStatus,
   type ExperienceLevel,
   type ExternalJobResult,
   type ExternalProvider,
   type Job,
+  type RemoteType,
 } from "@/lib/types";
 
 const EXPERIENCE_LEVELS: ExperienceLevel[] = ["internship", "entry", "mid", "senior", "lead"];
+const REMOTE_TYPES: RemoteType[] = ["remote", "hybrid", "onsite"];
 
 function SourceBadge({ source }: { source: ExternalProvider }) {
   return (
@@ -137,7 +142,8 @@ function SourcesSummary({ sources }: { sources: AggregateSourceStatus[] }) {
 
 function DiscoverContent() {
   const [q, setQ] = useState("");
-  const [location, setLocation] = useState("Remote");
+  const [location, setLocation] = useState("");
+  const [remoteType, setRemoteType] = useState<RemoteType | "">("remote");
   const [experienceLevelFilter, setExperienceLevelFilter] = useState<ExperienceLevel | "">("");
   const [results, setResults] = useState<ExternalJobResult[]>([]);
   const [sources, setSources] = useState<AggregateSourceStatus[]>([]);
@@ -155,6 +161,7 @@ function DiscoverContent() {
       const data = await jobsApi.searchAggregate({
         q: q || undefined,
         location: location || undefined,
+        remote_type: remoteType || undefined,
         experience_level: experienceLevelFilter || undefined,
       });
       setResults(data.results);
@@ -186,20 +193,46 @@ function DiscoverContent() {
       <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-100">
         <div className="space-y-4">
           <form onSubmit={handleSubmit} className="flex flex-wrap gap-2">
-            <input
-              type="text"
+            <select
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Job title or keywords"
               className="min-w-[200px] flex-1 rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
-            />
-            <input
-              type="text"
+            >
+              <option value="">Cualquier puesto</option>
+              {JOB_TITLE_GROUPS.map((group) => (
+                <optgroup key={group.label} label={group.label}>
+                  {group.options.map((title) => (
+                    <option key={title} value={title}>
+                      {title}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+            <select
               value={location}
               onChange={(e) => setLocation(e.target.value)}
-              placeholder="Location (default: Remote)"
-              className="min-w-[160px] flex-1 rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
-            />
+              className="min-w-[160px] rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+            >
+              <option value="">Cualquier ubicación</option>
+              {LOCATION_OPTIONS.map((loc) => (
+                <option key={loc} value={loc}>
+                  {loc}
+                </option>
+              ))}
+            </select>
+            <select
+              value={remoteType}
+              onChange={(e) => setRemoteType(e.target.value as RemoteType | "")}
+              className="min-w-[150px] rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+            >
+              <option value="">Cualquier modalidad</option>
+              {REMOTE_TYPES.map((rt) => (
+                <option key={rt} value={rt}>
+                  {REMOTE_TYPE_LABELS[rt]}
+                </option>
+              ))}
+            </select>
             <select
               value={experienceLevelFilter}
               onChange={(e) => setExperienceLevelFilter(e.target.value as ExperienceLevel | "")}

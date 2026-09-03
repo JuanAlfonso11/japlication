@@ -10,6 +10,7 @@ import type {
   CoverLetterGeneratePayload,
   DecisionPayload,
   ExperienceLevel,
+  RemoteType,
   ExternalJobImportPayload,
   ExternalJobsSearchResponse,
   ExternalProvider,
@@ -230,6 +231,7 @@ export const jobsApi = {
     q?: string;
     location?: string;
     experience_level?: ExperienceLevel;
+    remote_type?: RemoteType;
     category?: string;
     country?: string;
     worldwide?: boolean;
@@ -242,6 +244,7 @@ export const jobsApi = {
     q?: string;
     location?: string;
     experience_level?: ExperienceLevel;
+    remote_type?: RemoteType;
     category?: string;
   }) => request<AggregateSearchResponse>("/jobs/search/aggregate", { query: params }),
   importExternal: (payload: ExternalJobImportPayload) =>

@@ -86,6 +86,7 @@ async def search_arbeitnow_jobs(
     q: Optional[str] = None,
     location: Optional[str] = None,
     experience_level_filter: Optional[str] = None,
+    remote_type_filter: Optional[str] = None,
     page: int = 1,
 ) -> dict[str, Any]:
     try:
@@ -111,12 +112,11 @@ async def search_arbeitnow_jobs(
             if q.lower() not in haystack:
                 continue
         loc = (location or "").strip().lower()
-        if loc in ("remote", "remoto"):
-            if normalized["remote_type"] != "remote":
-                continue
-        elif loc:
+        if loc and loc not in ("worldwide", "remote", "remoto"):
             if not normalized["location"] or loc not in normalized["location"].lower():
                 continue
+        if remote_type_filter and normalized["remote_type"] and normalized["remote_type"] != remote_type_filter:
+            continue
         if not experience_level.matches(normalized["seniority"], experience_level_filter):
             continue
 

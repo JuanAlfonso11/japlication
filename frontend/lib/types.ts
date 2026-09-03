@@ -181,6 +181,101 @@ export const EXPERIENCE_LEVEL_LABELS: Record<ExperienceLevel, string> = {
   lead: "Liderazgo / Management",
 };
 
+export type RemoteType = "remote" | "hybrid" | "onsite";
+
+export const REMOTE_TYPE_LABELS: Record<RemoteType, string> = {
+  remote: "Remoto",
+  hybrid: "Híbrido",
+  onsite: "Presencial",
+};
+
+// Human-readable location names — mirrors backend `_LOCATION_SLUGS` in
+// app/api/v1/routers/jobs.py. Providers that don't recognize a mapped slug
+// just skip that filter rather than erroring, so this list can be broader
+// than what each individual provider natively understands.
+export const LOCATION_OPTIONS: string[] = [
+  "United States",
+  "Canada",
+  "United Kingdom",
+  "Europe",
+  "Germany",
+  "France",
+  "Spain",
+  "Latin America",
+  "Mexico",
+  "Brazil",
+  "Argentina",
+  "Colombia",
+  "Chile",
+  "India",
+  "Asia Pacific",
+  "Australia",
+];
+
+// Job-title dropdown for Discover's search — engineering disciplines plus
+// other common job types. Grouped for the <optgroup> UI.
+export const JOB_TITLE_GROUPS: { label: string; options: string[] }[] = [
+  {
+    label: "Ingeniería de software",
+    options: [
+      "Software Engineer",
+      "Frontend Engineer",
+      "Backend Engineer",
+      "Full Stack Engineer",
+      "Mobile Engineer (iOS/Android)",
+      "Embedded Software Engineer",
+      "Game Developer",
+      "QA / Test Engineer",
+      "Site Reliability Engineer",
+    ],
+  },
+  {
+    label: "Infraestructura y datos",
+    options: [
+      "DevOps Engineer",
+      "Cloud Engineer",
+      "Platform Engineer",
+      "Data Engineer",
+      "Data Scientist",
+      "Machine Learning Engineer",
+      "AI Engineer",
+      "Database Administrator",
+      "Security Engineer",
+    ],
+  },
+  {
+    label: "Otras ingenierías",
+    options: [
+      "Electrical Engineer",
+      "Mechanical Engineer",
+      "Civil Engineer",
+      "Industrial Engineer",
+      "Chemical Engineer",
+      "Systems Engineer",
+      "Network Engineer",
+      "Hardware Engineer",
+      "Biomedical Engineer",
+    ],
+  },
+  {
+    label: "Producto y diseño",
+    options: ["Product Manager", "Product Designer", "UX Designer", "UI Designer", "UX Researcher"],
+  },
+  {
+    label: "Otros roles",
+    options: [
+      "Project Manager",
+      "Technical Writer",
+      "Customer Support",
+      "Sales",
+      "Marketing",
+      "Recruiter / HR",
+      "Finance / Accounting",
+      "Operations",
+    ],
+  },
+];
+
 export interface ApplyOption {
   title: string;
   link?: string | null;

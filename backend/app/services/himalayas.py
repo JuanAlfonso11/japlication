@@ -131,6 +131,7 @@ async def search_himalayas_jobs(
     company: Optional[str] = None,
     timezone_filter: Optional[str] = None,
     sort: Optional[str] = None,
+    remote_type_filter: Optional[str] = None,
     page: int = 1,
 ) -> dict[str, Any]:
     params: dict[str, Any] = {"page": page}
@@ -171,6 +172,8 @@ async def search_himalayas_jobs(
     results = []
     for raw in data.get("jobs", []) or []:
         normalized = _normalize(raw)
+        if remote_type_filter and normalized["remote_type"] and normalized["remote_type"] != remote_type_filter:
+            continue
         if normalized["himalayas_job_id"]:
             _search_cache[normalized["himalayas_job_id"]] = {"cached_at": now, "job": normalized}
         results.append(normalized)

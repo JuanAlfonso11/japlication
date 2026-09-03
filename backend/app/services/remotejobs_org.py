@@ -88,6 +88,7 @@ async def search_remotejobs_org_jobs(
     q: Optional[str] = None,
     location: Optional[str] = None,
     experience_level_filter: Optional[str] = None,
+    remote_type_filter: Optional[str] = None,
     category: Optional[str] = None,
     job_type: Optional[str] = None,
     limit: int = 50,
@@ -121,9 +122,11 @@ async def search_remotejobs_org_jobs(
         normalized = _normalize(raw)
 
         loc = (location or "").strip().lower()
-        if loc and loc not in ("remote", "remoto"):
+        if loc and loc not in ("worldwide", "remote", "remoto"):
             if loc not in (normalized["location"] or "").lower():
                 continue
+        if remote_type_filter and normalized["remote_type"] and normalized["remote_type"] != remote_type_filter:
+            continue
         if not experience_level.matches(normalized["seniority"], experience_level_filter):
             continue
 

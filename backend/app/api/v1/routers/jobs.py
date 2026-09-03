@@ -46,6 +46,57 @@ router = APIRouter(tags=["jobs"])
 # part of this list.
 _SEARCH_PROVIDERS = {"himalayas", "arbeitnow", "remotive", "jobicy", "remotejobs_org", "themuse"}
 
+# Best-effort mapping from the human-readable location names Discover's
+# dropdown sends to the geo slugs Himalayas' `country` and Jobicy's `geo`
+# params expect. Providers that don't recognize a slug just don't filter by
+# it rather than erroring, so an unmapped location still degrades gracefully
+# to the substring match the other four providers use.
+_LOCATION_SLUGS = {
+    "united states": "usa",
+    "canada": "canada",
+    "united kingdom": "uk",
+    "europe": "europe",
+    "latin america": "latin-america",
+    "mexico": "mexico",
+    "brazil": "brazil",
+    "argentina": "argentina",
+    "colombia": "colombia",
+    "chile": "chile",
+    "spain": "spain",
+    "germany": "germany",
+    "france": "france",
+    "india": "india",
+    "asia pacific": "apac",
+    "australia": "australia",
+}
+
+
+def _location_slug(location: Optional[str]) -> Optional[str]:
+    if not location:
+        return None
+    return _LOCATION_SLUGS.get(location.strip().lower(), location.strip().lower())
+
+
+def _himalayas_worldwide(location: Optional[str], remote_type_filter: Optional[str]) -> bool:
+    """Himalayas is a 100%-remote job board, so `worldwide` (roles open to
+    candidates anywhere) is what we want whenever the user isn't narrowing
+    to a specific country and isn't asking for onsite/hybrid (which
+    Himalayas simply doesn't have — see remote_type_filter's own
+    post-filter for how that case naturally yields zero results)."""
+    return not location and remote_type_filter in (None, "remote")
+
+
+def _themuse_location(location: Optional[str], remote_type_filter: Optional[str]) -> Optional[str]:
+    """The Muse has no separate remote/onsite field — "Remote" is itself a
+    location value there — so when the user wants remote work and hasn't
+    picked a specific place, ask The Muse for "Remote" directly instead of
+    leaving location unset (which would return everywhere, onsite included)."""
+    if location:
+        return location
+    if remote_type_filter in (None, "remote"):
+        return "Remote"
+    return None
+
 
 async def _attach_match(job: Job, user_id: UUID, db: AsyncSession) -> JobSchema:
     schema = JobSchema.model_validate(job)
@@ -196,6 +247,7 @@ async def search_jobs(
     experience_level_filter: Optional[str] = Query(
         None, alias="experience_level", pattern="^(internship|entry|mid|senior|lead)$"
     ),
+    remote_type_filter: Optional[str] = Query(None, alias="remote_type", pattern="^(remote|hybrid|onsite)$"),
     country: Optional[str] = Query(None),
     worldwide: Optional[bool] = Query(None),
     seniority: Optional[str] = Query(None),
@@ -215,11 +267,12 @@ async def search_jobs(
         try:
             data = await himalayas.search_himalayas_jobs(
                 q=q,
-                country=country,
-                worldwide=worldwide,
+                country=country or _location_slug(location),
+                worldwide=worldwide if worldwide is not None else _himalayas_worldwide(location, remote_type_filter),
                 seniority=seniority or (experience_level.to_himalayas(experience_level_filter) if experience_level_filter else None),
                 employment_type=employment_type,
                 sort=sort,
+                remote_type_filter=remote_type_filter,
                 page=page,
             )
         except himalayas.HimalayasError as exc:
@@ -236,7 +289,8 @@ async def search_jobs(
     if provider == "arbeitnow":
         try:
             data = await arbeitnow.search_arbeitnow_jobs(
-                q=q, location=location, experience_level_filter=experience_level_filter, page=page
+                q=q, location=location, experience_level_filter=experience_level_filter,
+                remote_type_filter=remote_type_filter, page=page,
             )
         except arbeitnow.ArbeitnowError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -252,7 +306,8 @@ async def search_jobs(
     if provider == "remotive":
         try:
             data = await remotive.search_remotive_jobs(
-                q=q, location=location, experience_level_filter=experience_level_filter, category=category
+                q=q, location=location, experience_level_filter=experience_level_filter,
+                remote_type_filter=remote_type_filter, category=category,
             )
         except remotive.RemotiveError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -266,7 +321,8 @@ async def search_jobs(
     if provider == "jobicy":
         try:
             data = await jobicy.search_jobicy_jobs(
-                q=q, location=location, experience_level_filter=experience_level_filter, industry=category
+                q=q, location=_location_slug(location), experience_level_filter=experience_level_filter,
+                remote_type_filter=remote_type_filter, industry=category,
             )
         except jobicy.JobicyError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -281,7 +337,8 @@ async def search_jobs(
         offset = (page - 1) * 50
         try:
             data = await remotejobs_org.search_remotejobs_org_jobs(
-                q=q, location=location, experience_level_filter=experience_level_filter, category=category, offset=offset
+                q=q, location=location, experience_level_filter=experience_level_filter,
+                remote_type_filter=remote_type_filter, category=category, offset=offset,
             )
         except remotejobs_org.RemoteJobsOrgError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -301,8 +358,9 @@ async def search_jobs(
     try:
         data = await themuse.search_themuse_jobs(
             q=q,
-            location=location or "Remote",
+            location=_themuse_location(location, remote_type_filter),
             experience_level_filter=experience_level_filter,
+            remote_type_filter=remote_type_filter,
             category=category,
             page=page - 1,
         )
@@ -318,15 +376,12 @@ async def search_jobs(
     )
 
 
-def _is_remote_location(location: Optional[str]) -> bool:
-    return (location or "").strip().lower() in ("", "remote", "remoto")
-
-
 async def _run_no_auth_provider(
     provider: str,
     q: Optional[str],
     location: Optional[str],
     experience_level_filter: Optional[str],
+    remote_type_filter: Optional[str],
     category: Optional[str],
 ) -> tuple[str, list[ExternalJobResult], Optional[str]]:
     """Runs one no-auth provider search and normalizes both its results and
@@ -336,36 +391,41 @@ async def _run_no_auth_provider(
         if provider == "himalayas":
             data = await himalayas.search_himalayas_jobs(
                 q=q,
-                country=None if _is_remote_location(location) else location,
-                worldwide=True if _is_remote_location(location) else None,
+                country=_location_slug(location),
+                worldwide=_himalayas_worldwide(location, remote_type_filter),
                 seniority=experience_level.to_himalayas(experience_level_filter) if experience_level_filter else None,
+                remote_type_filter=remote_type_filter,
             )
             id_key = "himalayas_job_id"
         elif provider == "arbeitnow":
             data = await arbeitnow.search_arbeitnow_jobs(
-                q=q, location=location, experience_level_filter=experience_level_filter
+                q=q, location=location, experience_level_filter=experience_level_filter,
+                remote_type_filter=remote_type_filter,
             )
             id_key = "arbeitnow_job_id"
         elif provider == "remotive":
             data = await remotive.search_remotive_jobs(
-                q=q, location=None if _is_remote_location(location) else location,
-                experience_level_filter=experience_level_filter, category=category,
+                q=q, location=location, experience_level_filter=experience_level_filter,
+                remote_type_filter=remote_type_filter, category=category,
             )
             id_key = "remotive_job_id"
         elif provider == "jobicy":
             data = await jobicy.search_jobicy_jobs(
-                q=q, location=location, experience_level_filter=experience_level_filter, industry=category
+                q=q, location=_location_slug(location), experience_level_filter=experience_level_filter,
+                remote_type_filter=remote_type_filter, industry=category,
             )
             id_key = "jobicy_job_id"
         elif provider == "remotejobs_org":
             data = await remotejobs_org.search_remotejobs_org_jobs(
-                q=q, location=None if _is_remote_location(location) else location,
-                experience_level_filter=experience_level_filter, category=category,
+                q=q, location=location, experience_level_filter=experience_level_filter,
+                remote_type_filter=remote_type_filter, category=category,
             )
             id_key = "remotejobs_org_job_id"
         elif provider == "themuse":
             data = await themuse.search_themuse_jobs(
-                q=q, location=location or "Remote", experience_level_filter=experience_level_filter, category=category
+                q=q, location=_themuse_location(location, remote_type_filter),
+                experience_level_filter=experience_level_filter, remote_type_filter=remote_type_filter,
+                category=category,
             )
             id_key = "themuse_job_id"
         else:
@@ -393,9 +453,12 @@ def _aggregate_sort_key(result: ExternalJobResult) -> datetime:
 @router.get("/jobs/search/aggregate", response_model=AggregateSearchResponse)
 async def search_jobs_aggregate(
     q: Optional[str] = Query(None),
-    location: Optional[str] = Query("Remote"),
+    location: Optional[str] = Query(None),
     experience_level_filter: Optional[str] = Query(
         None, alias="experience_level", pattern="^(internship|entry|mid|senior|lead)$"
+    ),
+    remote_type_filter: Optional[str] = Query(
+        "remote", alias="remote_type", pattern="^(remote|hybrid|onsite)$"
     ),
     category: Optional[str] = Query(None),
     current_user: User = Depends(get_current_user),
@@ -405,10 +468,13 @@ async def search_jobs_aggregate(
     merges the results into one list, newest first — this is what the
     Discover tab's "search all sources" action calls. A provider that
     errors doesn't take the others down with it: its failure shows up
-    in `sources` instead of the result list."""
+    in `sources` instead of the result list. `location` is purely geographic
+    (e.g. "Mexico"); `remote_type` (remote/hybrid/onsite) is independent and
+    defaults to "remote" to preserve the historical default of showing only
+    remote-friendly postings when no filters are set."""
     outcomes = await asyncio.gather(
         *[
-            _run_no_auth_provider(p, q, location, experience_level_filter, category)
+            _run_no_auth_provider(p, q, location, experience_level_filter, remote_type_filter, category)
             for p in _SEARCH_PROVIDERS
         ]
     )

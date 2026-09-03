@@ -88,16 +88,20 @@ Six providers, all requiring **zero credentials** (no API key, no OAuth, no sign
 options for a personal project at all: `himalayas`, `arbeitnow`, `remotive`, `jobicy`, `remotejobs_org`,
 `themuse`.
 
-- `GET /jobs/search/aggregate?q=&location=Remote&experience_level=&category=`
+- `GET /jobs/search/aggregate?q=&location=&remote_type=remote&experience_level=&category=`
   -> `{results: ExternalJobResult[], sources: [{provider, count, error?}]}`
   — fans out to **all six providers in parallel** and merges the results, newest first. This is what
   Discover's search calls. A provider that errors doesn't drop the others' results; its failure shows up in
-  `sources` instead. `location` defaults to `"Remote"` when omitted. `experience_level` is one of
+  `sources` instead. `location` and `remote_type` are independent filters: `location` is purely geographic
+  (e.g. `"Mexico"`, `"Europe"` — unset means any location) while `remote_type` is one of
+  `remote|hybrid|onsite` and defaults to `remote` when omitted, preserving the historical default of
+  showing remote-friendly postings first. `experience_level` is one of
   `internship|entry|mid|senior|lead` (see below).
-- `GET /jobs/search?provider=himalayas|arbeitnow|remotive|jobicy|remotejobs_org|themuse&q=&location=&experience_level=&category=&country=&worldwide=&seniority=&employment_type=&sort=&page=`
+- `GET /jobs/search?provider=himalayas|arbeitnow|remotive|jobicy|remotejobs_org|themuse&q=&location=&experience_level=&remote_type=&category=&country=&worldwide=&seniority=&employment_type=&sort=&page=`
   -> `{provider, results: ExternalJobResult[], page?, has_more}` — single-provider search, for querying just
   one source directly instead of all six.
-  - `provider` defaults to `himalayas`.
+  - `provider` defaults to `himalayas`. `remote_type` (`remote|hybrid|onsite`) is optional here — unset means
+    no filtering by work mode.
   - `ExternalJobResult`: same shape as `Job` (minus id/timestamps) plus `external_id` and `source`.
     `seniority` holds the normalized experience level (`internship|entry|mid|senior|lead`) whenever it could
     be determined — natively from the provider (Himalayas, The Muse, Jobicy) or inferred from the title/

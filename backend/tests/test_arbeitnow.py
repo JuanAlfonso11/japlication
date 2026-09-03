@@ -35,7 +35,7 @@ def test_normalize_traineeship_maps_to_internship():
     assert normalized["seniority"] == "internship"
 
 
-def test_search_filters_by_remote_location_and_populates_cache(monkeypatch):
+def test_search_filters_by_remote_type_and_populates_cache(monkeypatch):
     class FakeResponse:
         status_code = 200
 
@@ -58,12 +58,18 @@ def test_search_filters_by_remote_location_and_populates_cache(monkeypatch):
     monkeypatch.setattr(arbeitnow.httpx, "AsyncClient", FakeAsyncClient)
     arbeitnow._search_cache.clear()
 
-    data = asyncio.run(arbeitnow.search_arbeitnow_jobs(location="Remote"))
+    data = asyncio.run(arbeitnow.search_arbeitnow_jobs(remote_type_filter="remote"))
     assert len(data["results"]) == 1
     assert arbeitnow.get_cached_result("backend-engineer-acme") is not None
 
-    # An onsite-only job should be dropped when filtering for "Remote".
-    onsite = dict(SAMPLE_RAW, slug="onsite-role", remote=False, location="Munich, Germany")
+    # An onsite-only job should be dropped when filtering for remote_type="remote".
+    onsite = dict(
+        SAMPLE_RAW,
+        slug="onsite-role",
+        remote=False,
+        location="Munich, Germany",
+        description="<p>This is an on-site role based in our Munich office, 3+ years Python required.</p>",
+    )
 
     class FakeResponseOnsite(FakeResponse):
         def json(self):
@@ -74,7 +80,7 @@ def test_search_filters_by_remote_location_and_populates_cache(monkeypatch):
             return FakeResponseOnsite()
 
     monkeypatch.setattr(arbeitnow.httpx, "AsyncClient", FakeAsyncClientOnsite)
-    data = asyncio.run(arbeitnow.search_arbeitnow_jobs(location="Remote"))
+    data = asyncio.run(arbeitnow.search_arbeitnow_jobs(remote_type_filter="remote"))
     assert data["results"] == []
 
 
