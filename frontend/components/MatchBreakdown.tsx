@@ -6,11 +6,11 @@ function ScoreBar({ label, value }: { label: string; value: number }) {
     pct >= 75 ? "bg-emerald-500" : pct >= 50 ? "bg-amber-500" : "bg-rose-500";
   return (
     <div>
-      <div className="mb-1 flex items-center justify-between text-xs text-gray-600">
+      <div className="mb-1 flex items-center justify-between text-xs text-gray-600 dark:text-gray-400">
         <span>{label}</span>
-        <span className="font-medium text-gray-800">{Math.round(pct)}%</span>
+        <span className="font-medium text-gray-800 dark:text-gray-200">{Math.round(pct)}%</span>
       </div>
-      <div className="h-2 w-full overflow-hidden rounded-full bg-gray-100">
+      <div className="h-2 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800">
         <div className={`h-full rounded-full ${barColor}`} style={{ width: `${pct}%` }} />
       </div>
     </div>
@@ -28,14 +28,14 @@ export default function MatchBreakdown({ match }: { match: MatchResult }) {
 
       {match.matched_skills.length > 0 && (
         <div>
-          <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-gray-500">
+          <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
             Matched skills
           </p>
           <div className="flex flex-wrap gap-1.5">
             {match.matched_skills.map((s) => (
               <span
                 key={s}
-                className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20"
+                className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20 dark:bg-emerald-900/30 dark:text-emerald-300 dark:ring-emerald-400/30"
               >
                 {s}
               </span>
@@ -46,14 +46,14 @@ export default function MatchBreakdown({ match }: { match: MatchResult }) {
 
       {match.missing_skills.length > 0 && (
         <div>
-          <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-gray-500">
+          <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
             Missing skills
           </p>
           <div className="flex flex-wrap gap-1.5">
             {match.missing_skills.map((s) => (
               <span
                 key={s}
-                className="rounded-full bg-rose-50 px-2.5 py-1 text-xs font-medium text-rose-700 ring-1 ring-inset ring-rose-600/20"
+                className="rounded-full bg-rose-50 px-2.5 py-1 text-xs font-medium text-rose-700 ring-1 ring-inset ring-rose-600/20 dark:bg-rose-900/30 dark:text-rose-300 dark:ring-rose-400/30"
               >
                 {s}
               </span>
@@ -64,10 +64,10 @@ export default function MatchBreakdown({ match }: { match: MatchResult }) {
 
       {match.concerns.length > 0 && (
         <div>
-          <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-gray-500">
+          <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
             Concerns
           </p>
-          <ul className="list-inside list-disc space-y-0.5 text-sm text-gray-600">
+          <ul className="list-inside list-disc space-y-0.5 text-sm text-gray-600 dark:text-gray-400">
             {match.concerns.map((c, i) => (
               <li key={i}>{c}</li>
             ))}

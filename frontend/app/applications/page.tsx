@@ -73,15 +73,15 @@ function ApplicationRow({
   const job = application.job;
 
   return (
-    <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-100">
+    <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-100 dark:bg-gray-900 dark:ring-gray-800">
       <div className="flex items-start justify-between gap-3">
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
           className="flex-1 text-left"
         >
-          <p className="font-semibold text-gray-900">{job?.title ?? "Untitled job"}</p>
-          <p className="text-sm text-gray-500">
+          <p className="font-semibold text-gray-900 dark:text-gray-100">{job?.title ?? "Untitled job"}</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
             {job?.company}
             {job?.location ? ` · ${job.location}` : ""}
           </p>
@@ -93,10 +93,10 @@ function ApplicationRow({
       </div>
 
       {expanded && (
-        <div className="mt-4 space-y-3 border-t border-gray-100 pt-4">
+        <div className="mt-4 space-y-3 border-t border-gray-100 pt-4 dark:border-gray-800">
           {error && <ErrorNotice message={error} />}
           <div className="flex flex-wrap items-center gap-2">
-            <label className="text-xs font-medium text-gray-600" htmlFor={`status-${application.id}`}>
+            <label className="text-xs font-medium text-gray-600 dark:text-gray-400" htmlFor={`status-${application.id}`}>
               Status
             </label>
             <select
@@ -104,7 +104,7 @@ function ApplicationRow({
               value={application.status}
               disabled={saving}
               onChange={(e) => updateStatus(e.target.value as ApplicationStatus)}
-              className="rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+              className="rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm text-gray-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:focus:ring-brand-900/40"
             >
               {EDITABLE_STATUSES.map((s) => (
                 <option key={s} value={s}>
@@ -115,7 +115,7 @@ function ApplicationRow({
             {job && (
               <Link
                 href={`/jobs/${job.id}`}
-                className="ml-auto text-xs font-semibold text-brand-600 hover:text-brand-700"
+                className="ml-auto text-xs font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
               >
                 View job →
               </Link>
@@ -123,7 +123,7 @@ function ApplicationRow({
           </div>
 
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-600" htmlFor={`notes-${application.id}`}>
+            <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" htmlFor={`notes-${application.id}`}>
               Notes
             </label>
             <textarea
@@ -134,9 +134,9 @@ function ApplicationRow({
                 if (notes !== (application.notes ?? "")) saveNotes();
               }}
               placeholder="Interview prep notes, contacts, follow-ups…"
-              className="min-h-[70px] w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+              className="min-h-[70px] w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:focus:ring-brand-900/40"
             />
-            <p className="mt-1 text-[11px] text-gray-400">
+            <p className="mt-1 text-[11px] text-gray-400 dark:text-gray-500">
               {saving ? "Saving…" : "Notes save automatically when you click away."}
             </p>
           </div>
@@ -181,8 +181,8 @@ function ApplicationsContent() {
   return (
     <div className="space-y-5 pb-4 animate-fade-in">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Applications</h1>
-        <p className="mt-1 text-sm text-gray-500">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Applications</h1>
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
           Track every job through your pipeline, from saved to offer.
         </p>
       </div>
@@ -195,7 +195,7 @@ function ApplicationsContent() {
             className={`shrink-0 rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
               filter === f.value
                 ? "bg-brand-600 text-white"
-                : "bg-white text-gray-600 ring-1 ring-gray-200 hover:bg-gray-50"
+                : "bg-white text-gray-600 ring-1 ring-gray-200 hover:bg-gray-50 dark:bg-gray-900 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-gray-800"
             }`}
           >
             {f.label}
@@ -207,7 +207,7 @@ function ApplicationsContent() {
       {!loading && error && <ErrorNotice message={error} onRetry={() => load(filter)} />}
 
       {!loading && !error && applications && applications.length === 0 && (
-        <div className="rounded-2xl border border-dashed border-gray-300 p-8 text-center text-sm text-gray-500">
+        <div className="rounded-2xl border border-dashed border-gray-300 p-8 text-center text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">
           No applications in this view yet.
         </div>
       )}

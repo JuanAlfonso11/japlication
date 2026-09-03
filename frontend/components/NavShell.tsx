@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import VerificationBanner from "@/components/VerificationBanner";
+import ThemeToggle from "@/components/ThemeToggle";
 
 const NAV_ITEMS = [
   { href: "/", label: "Home", icon: HomeIcon },
@@ -21,7 +22,7 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
   const isAuthScreen = pathname === "/login" || pathname === "/register";
 
   if (isAuthScreen || !token) {
-    return <div className="min-h-dvh bg-gray-50">{children}</div>;
+    return <div className="min-h-dvh bg-gray-50 dark:bg-gray-950">{children}</div>;
   }
 
   function handleLogout() {
@@ -30,11 +31,11 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-dvh bg-gray-50">
+    <div className="min-h-dvh bg-gray-50 dark:bg-gray-950">
       {/* Top nav (desktop) */}
-      <header className="sticky top-0 z-40 hidden border-b border-gray-200 bg-white/90 backdrop-blur md:block">
+      <header className="sticky top-0 z-40 hidden border-b border-gray-200 bg-white/90 backdrop-blur md:block dark:border-gray-800 dark:bg-gray-900/90">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-3">
-          <Link href="/" className="flex items-center gap-2 font-semibold text-gray-900">
+          <Link href="/" className="flex items-center gap-2 font-semibold text-gray-900 dark:text-gray-100">
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600 text-white">
               JF
             </span>
@@ -50,8 +51,8 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
                   href={item.href}
                   className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                     active
-                      ? "bg-brand-50 text-brand-700"
-                      : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                      ? "bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-300"
+                      : "text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-100"
                   }`}
                 >
                   {item.label}
@@ -61,11 +62,12 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
           </nav>
           <div className="flex items-center gap-3">
             {user && (
-              <span className="hidden text-sm text-gray-500 lg:inline">{user.full_name}</span>
+              <span className="hidden text-sm text-gray-500 lg:inline dark:text-gray-400">{user.full_name}</span>
             )}
+            <ThemeToggle />
             <button
               onClick={handleLogout}
-              className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-100"
+              className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
             >
               Log out
             </button>
@@ -74,20 +76,23 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
       </header>
 
       {/* Mobile top bar */}
-      <header className="sticky top-0 z-40 flex items-center justify-between border-b border-gray-200 bg-white/90 px-4 py-3 backdrop-blur md:hidden">
-        <Link href="/" className="flex items-center gap-2 font-semibold text-gray-900">
+      <header className="sticky top-0 z-40 flex items-center justify-between border-b border-gray-200 bg-white/90 px-4 py-3 backdrop-blur md:hidden dark:border-gray-800 dark:bg-gray-900/90">
+        <Link href="/" className="flex items-center gap-2 font-semibold text-gray-900 dark:text-gray-100">
           <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-600 text-xs text-white">
             JF
           </span>
           JobFlow AI
         </Link>
-        <button
-          onClick={handleLogout}
-          aria-label="Log out"
-          className="rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-600"
-        >
-          Log out
-        </button>
+        <div className="flex items-center gap-2">
+          <ThemeToggle compact />
+          <button
+            onClick={handleLogout}
+            aria-label="Log out"
+            className="rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:border-gray-700 dark:text-gray-300"
+          >
+            Log out
+          </button>
+        </div>
       </header>
 
       <main className="mx-auto max-w-5xl px-4 pb-24 pt-4 md:px-6 md:pb-10 md:pt-6">
@@ -97,7 +102,7 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
 
       {/* Bottom tab bar (mobile) */}
       <nav
-        className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white/95 backdrop-blur md:hidden"
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white/95 backdrop-blur md:hidden dark:border-gray-800 dark:bg-gray-900/95"
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
         <div className="grid grid-cols-5">
@@ -110,7 +115,7 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
                 key={item.href}
                 href={item.href}
                 className={`flex min-h-[56px] flex-col items-center justify-center gap-0.5 text-[11px] font-medium ${
-                  active ? "text-brand-600" : "text-gray-500"
+                  active ? "text-brand-600 dark:text-brand-400" : "text-gray-500 dark:text-gray-400"
                 }`}
               >
                 <Icon active={active} />

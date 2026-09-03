@@ -7,10 +7,10 @@ export default function ScoreBadge({
 }) {
   const color =
     score >= 75
-      ? "bg-emerald-100 text-emerald-700 ring-emerald-600/20"
+      ? "bg-emerald-100 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-900/30 dark:text-emerald-300 dark:ring-emerald-400/30"
       : score >= 50
-      ? "bg-amber-100 text-amber-700 ring-amber-600/20"
-      : "bg-rose-100 text-rose-700 ring-rose-600/20";
+      ? "bg-amber-100 text-amber-700 ring-amber-600/20 dark:bg-amber-900/30 dark:text-amber-300 dark:ring-amber-400/30"
+      : "bg-rose-100 text-rose-700 ring-rose-600/20 dark:bg-rose-900/30 dark:text-rose-300 dark:ring-rose-400/30";
 
   const sizeClasses =
     size === "lg"

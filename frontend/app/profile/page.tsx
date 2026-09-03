@@ -194,8 +194,8 @@ function ProfileContent() {
     <form onSubmit={handleSave} className="space-y-6 pb-4 animate-fade-in">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">CV Maestro</h1>
-          <p className="mt-1 text-sm text-gray-500">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">CV Maestro</h1>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
             Keep your career profile up to date — it powers matching, tailored resumes, and
             cover letters.
           </p>
@@ -203,7 +203,7 @@ function ProfileContent() {
         <div className="flex items-center gap-3">
           <span
             className={`text-xs font-medium ${
-              dirty ? "text-amber-600" : "text-emerald-600"
+              dirty ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"
             }`}
           >
             {dirty
@@ -225,21 +225,21 @@ function ProfileContent() {
       {saveError && <ErrorNotice message={saveError} />}
 
       {autoSearching && (
-        <div className="rounded-lg bg-brand-50 p-3 text-xs font-medium text-brand-700 ring-1 ring-inset ring-brand-600/20">
+        <div className="rounded-lg bg-brand-50 p-3 text-xs font-medium text-brand-700 ring-1 ring-inset ring-brand-600/20 dark:bg-brand-900/20 dark:text-brand-300 dark:ring-brand-400/30">
           Buscando vacantes que hagan match con tu nuevo perfil…
         </div>
       )}
       {!autoSearching && autoSearchNotice && (
-        <div className="rounded-lg bg-emerald-50 p-3 text-xs font-medium text-emerald-800 ring-1 ring-inset ring-emerald-600/20">
+        <div className="rounded-lg bg-emerald-50 p-3 text-xs font-medium text-emerald-800 ring-1 ring-inset ring-emerald-600/20 dark:bg-emerald-900/20 dark:text-emerald-300 dark:ring-emerald-400/30">
           {autoSearchNotice}
         </div>
       )}
 
-      <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-100">
+      <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-100 dark:bg-gray-900 dark:ring-gray-800">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-sm font-semibold text-gray-900">Import from a PDF résumé</p>
-            <p className="text-xs text-gray-500">
+            <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">Import from a PDF résumé</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
               We pre-fill the fields below from your PDF — nothing is added to your saved profile
               until you review it and click Save.
             </p>
@@ -261,7 +261,7 @@ function ProfileContent() {
           </div>
         )}
         {uploadNotice && (
-          <div className="mt-3 rounded-lg bg-amber-50 p-3 text-xs text-amber-800 ring-1 ring-inset ring-amber-600/20">
+          <div className="mt-3 rounded-lg bg-amber-50 p-3 text-xs text-amber-800 ring-1 ring-inset ring-amber-600/20 dark:bg-amber-900/20 dark:text-amber-300 dark:ring-amber-400/30">
             <p className="font-semibold">
               {uploadNotice.generatedBy === "ai"
                 ? "Parsed with AI — review the pre-filled fields below and click Save."

@@ -26,10 +26,10 @@ export default function VerificationBanner() {
   }
 
   return (
-    <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800 ring-1 ring-inset ring-amber-600/20">
+    <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800 ring-1 ring-inset ring-amber-600/20 dark:bg-amber-900/20 dark:text-amber-300 dark:ring-amber-400/30">
       <span>
         Confirma tu correo (<strong>{user.email}</strong>) para verificar tu cuenta.
-        {message && <span className="ml-2 text-amber-700">{message}</span>}
+        {message && <span className="ml-2 text-amber-700 dark:text-amber-400">{message}</span>}
       </span>
       <div className="flex items-center gap-3">
         <button
@@ -44,7 +44,7 @@ export default function VerificationBanner() {
           type="button"
           onClick={() => setDismissed(true)}
           aria-label="Cerrar"
-          className="text-amber-500 hover:text-amber-700"
+          className="text-amber-500 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300"
         >
           ✕
         </button>

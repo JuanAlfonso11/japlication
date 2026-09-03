@@ -39,12 +39,14 @@ function ScopeSlider({
     : null;
 
   return (
-    <div className="w-full max-w-md rounded-xl border border-gray-100 bg-white p-3 shadow-sm">
+    <div className="w-full max-w-md rounded-xl border border-gray-100 bg-white p-3 shadow-sm dark:border-gray-800 dark:bg-gray-900">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-semibold text-gray-700">
+        <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
           📍 Alcance: {SCOPE_LEVELS[scopeIndex].label}
         </span>
-        {geoStatus === "locating" && <span className="text-[11px] text-gray-400">Ubicando…</span>}
+        {geoStatus === "locating" && (
+          <span className="text-[11px] text-gray-400 dark:text-gray-500">Ubicando…</span>
+        )}
       </div>
       <input
         type="range"
@@ -55,7 +57,7 @@ function ScopeSlider({
         onChange={(e) => onChange(Number(e.target.value))}
         className="mt-2 w-full accent-brand-600"
       />
-      <div className="mt-1 flex justify-between text-[9px] leading-tight text-gray-400">
+      <div className="mt-1 flex justify-between text-[9px] leading-tight text-gray-400 dark:text-gray-500">
         {SCOPE_LEVELS.map((lvl) => (
           <span key={lvl.scope} className="w-12 text-center first:text-left last:text-right">
             {lvl.label}
@@ -63,12 +65,12 @@ function ScopeSlider({
         ))}
       </div>
       {geoStatus === "denied" && geoError && (
-        <p className="mt-1.5 text-[11px] text-rose-500">
+        <p className="mt-1.5 text-[11px] text-rose-500 dark:text-rose-400">
           {geoError} Activa el permiso de ubicación en tu navegador o elige &quot;Cualquier lugar&quot;.
         </p>
       )}
       {locationText && (
-        <p className="mt-1.5 text-[11px] text-gray-400">Tu ubicación: {locationText}</p>
+        <p className="mt-1.5 text-[11px] text-gray-400 dark:text-gray-500">Tu ubicación: {locationText}</p>
       )}
     </div>
   );
@@ -82,17 +84,17 @@ function StatsStrip({ applications, queueCount }: { applications: Application[];
 
   return (
     <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-      <div className="rounded-xl border border-gray-100 bg-white px-3 py-2.5 text-center shadow-sm">
-        <p className="text-xl font-bold text-gray-900">{queueCount}</p>
-        <p className="text-[11px] font-medium text-gray-500">in queue</p>
+      <div className="rounded-xl border border-gray-100 bg-white px-3 py-2.5 text-center shadow-sm dark:border-gray-800 dark:bg-gray-900">
+        <p className="text-xl font-bold text-gray-900 dark:text-gray-100">{queueCount}</p>
+        <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400">in queue</p>
       </div>
       {PIPELINE_STATUSES.map((status) => (
         <Link
           key={status}
           href={`/applications?status=${status}`}
-          className="rounded-xl border border-gray-100 bg-white px-3 py-2.5 text-center shadow-sm transition-colors hover:bg-gray-50"
+          className="rounded-xl border border-gray-100 bg-white px-3 py-2.5 text-center shadow-sm transition-colors hover:bg-gray-50 dark:border-gray-800 dark:bg-gray-900 dark:hover:bg-gray-800"
         >
-          <p className="text-xl font-bold text-gray-900">{counts[status]}</p>
+          <p className="text-xl font-bold text-gray-900 dark:text-gray-100">{counts[status]}</p>
           <div className="mt-0.5 flex justify-center">
             <StatusBadge status={status} />
           </div>
@@ -175,6 +177,12 @@ function HomeContent() {
   const current = filteredQueue && filteredQueue.length > 0 ? filteredQueue[0] : null;
   const next = filteredQueue && filteredQueue.length > 1 ? filteredQueue[1] : null;
 
+  // Set only by the ✓/✕ buttons and arrow keys, to trigger the same
+  // fly-off exit animation a drag gesture produces. The drag gesture
+  // triggers its own exit internally and calls `decide` directly once the
+  // animation finishes, so this stays null in that path.
+  const [pendingDecision, setPendingDecision] = useState<"left" | "right" | null>(null);
+
   const decide = useCallback(
     async (decision: "left" | "right") => {
       if (!current || pending) return;
@@ -190,19 +198,28 @@ function HomeContent() {
         );
       } finally {
         setPending(false);
+        setPendingDecision(null);
       }
     },
     [current, pending]
   );
 
+  const requestDecision = useCallback(
+    (decision: "left" | "right") => {
+      if (!current || pending || pendingDecision) return;
+      setPendingDecision(decision);
+    },
+    [current, pending, pendingDecision]
+  );
+
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
-      if (e.key === "ArrowRight") decide("right");
-      if (e.key === "ArrowLeft") decide("left");
+      if (e.key === "ArrowRight") requestDecision("right");
+      if (e.key === "ArrowLeft") requestDecision("left");
     }
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [decide]);
+  }, [requestDecision]);
 
   if (loading) return <Spinner label="Finding your best matches…" />;
   if (loadError) return <ErrorNotice message={loadError} onRetry={load} />;
@@ -212,10 +229,10 @@ function HomeContent() {
   return (
     <div className="flex flex-col items-center gap-5 pb-4 animate-fade-in">
       <div className="w-full max-w-md">
-        <h1 className="text-2xl font-bold text-gray-900">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
           Hi{user?.full_name ? `, ${user.full_name.split(" ")[0]}` : ""} 👋
         </h1>
-        <p className="mt-1 text-sm text-gray-500">
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
           Matches ranked against your CV. Swipe right to save, left to pass.
         </p>
       </div>
@@ -238,10 +255,10 @@ function HomeContent() {
 
       <div className="relative h-[520px] w-full max-w-md">
         {!current && hiddenByScope && (
-          <div className="flex h-full flex-col items-center justify-center gap-3 rounded-3xl border-2 border-dashed border-gray-300 p-8 text-center">
+          <div className="flex h-full flex-col items-center justify-center gap-3 rounded-3xl border-2 border-dashed border-gray-300 p-8 text-center dark:border-gray-700">
             <span className="text-4xl">📍</span>
-            <p className="text-lg font-semibold text-gray-800">Nada en este alcance</p>
-            <p className="text-sm text-gray-500">
+            <p className="text-lg font-semibold text-gray-800 dark:text-gray-200">Nada en este alcance</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
               Hay recomendaciones esperando, pero ninguna coincide con &quot;
               {SCOPE_LEVELS[scopeIndex].label}&quot;. Prueba un alcance más amplio.
             </p>
@@ -256,10 +273,10 @@ function HomeContent() {
         )}
 
         {!current && !hiddenByScope && (
-          <div className="flex h-full flex-col items-center justify-center gap-3 rounded-3xl border-2 border-dashed border-gray-300 p-8 text-center">
+          <div className="flex h-full flex-col items-center justify-center gap-3 rounded-3xl border-2 border-dashed border-gray-300 p-8 text-center dark:border-gray-700">
             <span className="text-4xl">🎉</span>
-            <p className="text-lg font-semibold text-gray-800">You&apos;re all caught up</p>
-            <p className="text-sm text-gray-500">
+            <p className="text-lg font-semibold text-gray-800 dark:text-gray-200">You&apos;re all caught up</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
               No new recommendations right now. Discover more jobs to keep going.
             </p>
             <Link
@@ -272,24 +289,32 @@ function HomeContent() {
         )}
 
         {next && <SwipeCard key={next.id} job={next} onDecide={() => {}} isTop={false} />}
-        {current && <SwipeCard key={current.id} job={current} onDecide={decide} isTop={true} />}
+        {current && (
+          <SwipeCard
+            key={current.id}
+            job={current}
+            onDecide={decide}
+            isTop={true}
+            triggerExit={pendingDecision}
+          />
+        )}
       </div>
 
       {current && (
         <div className="flex items-center gap-6">
           <button
             type="button"
-            onClick={() => decide("left")}
-            disabled={pending}
+            onClick={() => requestDecision("left")}
+            disabled={pending || !!pendingDecision}
             aria-label="Pass"
-            className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-rose-500 shadow-md ring-1 ring-gray-200 transition-transform hover:scale-105 active:scale-95 disabled:opacity-50"
+            className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-rose-500 shadow-md ring-1 ring-gray-200 transition-transform hover:scale-105 active:scale-95 disabled:opacity-50 dark:bg-gray-900 dark:ring-gray-700"
           >
             <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
           </button>
           <button
             type="button"
-            onClick={() => decide("right")}
-            disabled={pending}
+            onClick={() => requestDecision("right")}
+            disabled={pending || !!pendingDecision}
             aria-label="Save"
             className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500 text-white shadow-lg transition-transform hover:scale-105 active:scale-95 disabled:opacity-50"
           >
@@ -299,7 +324,7 @@ function HomeContent() {
       )}
 
       {filteredQueue && current && (
-        <p className="text-xs text-gray-400">{filteredQueue.length} left in your queue</p>
+        <p className="text-xs text-gray-400 dark:text-gray-500">{filteredQueue.length} left in your queue</p>
       )}
     </div>
   );

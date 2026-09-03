@@ -34,23 +34,23 @@ function VerifyEmailContent() {
   }
 
   return (
-    <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-gray-50 px-4 text-center">
+    <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-gray-50 px-4 text-center dark:bg-gray-950">
       <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-600 text-2xl font-bold text-white">
         JF
       </div>
 
       {status === "success" ? (
         <>
-          <h1 className="text-xl font-bold text-gray-900">Cuenta verificada</h1>
-          <p className="max-w-sm text-sm text-gray-500">
+          <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">Cuenta verificada</h1>
+          <p className="max-w-sm text-sm text-gray-500 dark:text-gray-400">
             Tu correo{user?.email ? ` (${user.email})` : ""} quedó confirmado. Ya puedes usar JobFlow AI
             sin restricciones.
           </p>
         </>
       ) : (
         <>
-          <h1 className="text-xl font-bold text-gray-900">No pudimos verificar tu cuenta</h1>
-          <p className="max-w-sm text-sm text-gray-500">
+          <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">No pudimos verificar tu cuenta</h1>
+          <p className="max-w-sm text-sm text-gray-500 dark:text-gray-400">
             El enlace no es válido o ya expiró (los enlaces de verificación duran solo 10 minutos, para
             mayor control). {token ? "Pide uno nuevo aquí abajo." : "Inicia sesión y pide uno nuevo."}
           </p>
@@ -67,13 +67,13 @@ function VerifyEmailContent() {
           >
             {resending ? "Enviando…" : "Reenviar correo de verificación"}
           </button>
-          {resendMessage && <p className="text-xs text-gray-500">{resendMessage}</p>}
+          {resendMessage && <p className="text-xs text-gray-500 dark:text-gray-400">{resendMessage}</p>}
         </div>
       )}
 
       <Link
         href={token ? "/" : "/login"}
-        className="mt-1 text-sm font-semibold text-brand-600 hover:text-brand-700"
+        className="mt-1 text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
       >
         {token ? "Ir a Home" : "Iniciar sesión"}
       </Link>

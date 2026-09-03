@@ -52,7 +52,7 @@ function CopyButton({ text }: { text: string }) {
     <button
       type="button"
       onClick={handleCopy}
-      className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50"
+      className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
     >
       {copied ? "Copied!" : "Copy to clipboard"}
     </button>
@@ -141,11 +141,11 @@ function JobDetailContent() {
 
   return (
     <div className="space-y-6 pb-4 animate-fade-in">
-      <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-100">
+      <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-100 dark:bg-gray-900 dark:ring-gray-800">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">{job.title}</h1>
-            <p className="text-sm text-gray-600">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{job.title}</h1>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
               {job.company}
               {job.location ? ` · ${job.location}` : ""}
             </p>
@@ -168,7 +168,7 @@ function JobDetailContent() {
             {job.skills_required.map((s) => (
               <span
                 key={s.name}
-                className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600"
+                className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-300"
               >
                 {s.name}
               </span>
@@ -178,23 +178,23 @@ function JobDetailContent() {
       </div>
 
       {match && (
-        <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-100">
-          <h2 className="mb-3 font-semibold text-gray-900">Match breakdown</h2>
+        <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-100 dark:bg-gray-900 dark:ring-gray-800">
+          <h2 className="mb-3 font-semibold text-gray-900 dark:text-gray-100">Match breakdown</h2>
           <MatchBreakdown match={match} />
         </div>
       )}
 
-      <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-100">
-        <h2 className="mb-2 font-semibold text-gray-900">Description</h2>
-        <p className="whitespace-pre-line text-sm leading-relaxed text-gray-700">
+      <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-100 dark:bg-gray-900 dark:ring-gray-800">
+        <h2 className="mb-2 font-semibold text-gray-900 dark:text-gray-100">Description</h2>
+        <p className="whitespace-pre-line text-sm leading-relaxed text-gray-700 dark:text-gray-300">
           {job.description}
         </p>
       </div>
 
       {job.requirements?.length > 0 && (
-        <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-100">
-          <h2 className="mb-2 font-semibold text-gray-900">Requirements</h2>
-          <ul className="list-inside list-disc space-y-1 text-sm text-gray-700">
+        <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-100 dark:bg-gray-900 dark:ring-gray-800">
+          <h2 className="mb-2 font-semibold text-gray-900 dark:text-gray-100">Requirements</h2>
+          <ul className="list-inside list-disc space-y-1 text-sm text-gray-700 dark:text-gray-300">
             {job.requirements.map((r, i) => (
               <li key={i}>{r}</li>
             ))}
@@ -203,9 +203,9 @@ function JobDetailContent() {
       )}
 
       {job.responsibilities && job.responsibilities.length > 0 && (
-        <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-100">
-          <h2 className="mb-2 font-semibold text-gray-900">Responsibilities</h2>
-          <ul className="list-inside list-disc space-y-1 text-sm text-gray-700">
+        <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-100 dark:bg-gray-900 dark:ring-gray-800">
+          <h2 className="mb-2 font-semibold text-gray-900 dark:text-gray-100">Responsibilities</h2>
+          <ul className="list-inside list-disc space-y-1 text-sm text-gray-700 dark:text-gray-300">
             {job.responsibilities.map((r, i) => (
               <li key={i}>{r}</li>
             ))}
@@ -213,9 +213,9 @@ function JobDetailContent() {
         </div>
       )}
 
-      <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-100">
+      <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-100 dark:bg-gray-900 dark:ring-gray-800">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="font-semibold text-gray-900">Tailored resume</h2>
+          <h2 className="font-semibold text-gray-900 dark:text-gray-100">Tailored resume</h2>
           <button
             type="button"
             onClick={handleGenerateResume}
@@ -227,12 +227,12 @@ function JobDetailContent() {
         </div>
         {resumeError && <ErrorNotice message={resumeError} />}
         {resume && (
-          <div className="mt-2 space-y-3 rounded-xl border border-gray-100 bg-gray-50 p-4">
+          <div className="mt-2 space-y-3 rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-gray-800 dark:bg-gray-800/50">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="font-semibold text-gray-900">{resume.title}</p>
+                <p className="font-semibold text-gray-900 dark:text-gray-100">{resume.title}</p>
                 {resume.content.summary && (
-                  <p className="mt-1 text-sm text-gray-600">{resume.content.summary}</p>
+                  <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">{resume.content.summary}</p>
                 )}
               </div>
               <CopyButton text={resumeToPlainText(resume)} />
@@ -240,7 +240,7 @@ function JobDetailContent() {
 
             {resume.content.skills.length > 0 && (
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                   Skills
                 </p>
                 <div className="mt-1 flex flex-wrap gap-1.5">
@@ -253,10 +253,10 @@ function JobDetailContent() {
 
             {resume.content.experience.map((entry, i) => (
               <div key={i}>
-                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                   {entry.title} — {entry.company}
                 </p>
-                <ul className="mt-1 list-inside list-disc space-y-0.5 text-sm text-gray-700">
+                <ul className="mt-1 list-inside list-disc space-y-0.5 text-sm text-gray-700 dark:text-gray-300">
                   {entry.bullets.map((line, j) => (
                     <li key={j}>{line}</li>
                   ))}
@@ -265,11 +265,11 @@ function JobDetailContent() {
             ))}
 
             {resume.change_log.length > 0 && (
-              <div className="border-t border-gray-200 pt-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+              <div className="border-t border-gray-200 pt-2 dark:border-gray-700">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                   What changed
                 </p>
-                <ul className="mt-1 list-inside list-disc space-y-0.5 text-xs text-gray-500">
+                <ul className="mt-1 list-inside list-disc space-y-0.5 text-xs text-gray-500 dark:text-gray-400">
                   {resume.change_log.map((line, i) => (
                     <li key={i}>{line}</li>
                   ))}
@@ -280,9 +280,9 @@ function JobDetailContent() {
         )}
       </div>
 
-      <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-100">
+      <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-100 dark:bg-gray-900 dark:ring-gray-800">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="font-semibold text-gray-900">Cover letter</h2>
+          <h2 className="font-semibold text-gray-900 dark:text-gray-100">Cover letter</h2>
           <button
             type="button"
             onClick={handleGenerateCoverLetter}
@@ -294,11 +294,11 @@ function JobDetailContent() {
         </div>
         {coverError && <ErrorNotice message={coverError} />}
         {coverLetter && (
-          <div className="mt-2 space-y-3 rounded-xl border border-gray-100 bg-gray-50 p-4">
+          <div className="mt-2 space-y-3 rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-gray-800 dark:bg-gray-800/50">
             <div className="flex justify-end">
               <CopyButton text={coverLetter.content} />
             </div>
-            <p className="whitespace-pre-line text-sm leading-relaxed text-gray-700">
+            <p className="whitespace-pre-line text-sm leading-relaxed text-gray-700 dark:text-gray-300">
               {coverLetter.content}
             </p>
           </div>
