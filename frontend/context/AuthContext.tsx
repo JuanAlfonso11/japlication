@@ -9,7 +9,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { authApi, getToken, setToken } from "@/lib/api";
+import { ApiError, authApi, getToken, setToken } from "@/lib/api";
 import type { LoginPayload, RegisterPayload, User } from "@/lib/types";
 
 interface AuthContextValue {
@@ -39,11 +39,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     authApi
       .me()
       .then((u) => setUser(u))
-      .catch(() => {
-        // Token invalid/expired — clear it and force re-login.
-        setToken(null);
-        setTokenState(null);
-        setUser(null);
+      .catch((err) => {
+        // Only a real 401 means the token itself is invalid/expired — log
+        // out in that case. Anything else (network error, backend/Tailscale
+        // briefly unreachable, 5xx, ...) must NOT clear a still-valid saved
+        // session; that was the actual cause of "the app forgets me" —
+        // keep the token, RouteGuard only checks its presence, and the next
+        // visibilitychange/manual retry will pick user data back up.
+        if (err instanceof ApiError && err.status === 401) {
+          setToken(null);
+          setTokenState(null);
+          setUser(null);
+        }
       })
       .finally(() => setIsLoading(false));
   }, []);
