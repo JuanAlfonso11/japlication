@@ -4,6 +4,15 @@ Same graceful-degradation pattern as every other optional external service
 in this app (SMTP, Claude, ...): without FIREBASE_CREDENTIALS_PATH set, this
 silently no-ops instead of raising, so the app stays fully usable without a
 Firebase project configured.
+
+Verified end-to-end on a real device: FCM reports a successful send (this
+function returns True) even when nothing visibly appears on the phone —
+Android only auto-displays a "notification"-type message like this one in
+the system tray when the app is backgrounded/killed. With the app in the
+foreground, Capacitor just delivers it silently to JS (a
+'pushNotificationReceived' listener, not currently wired up) instead. Not a
+bug — if a foreground toast/banner is ever wanted too, that's what that
+listener + @capacitor/local-notifications would be for.
 """
 
 from __future__ import annotations
