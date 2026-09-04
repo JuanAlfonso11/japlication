@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import RouteGuard from "@/components/RouteGuard";
 import Spinner from "@/components/Spinner";
 import ErrorNotice from "@/components/ErrorNotice";
+import PullToRefresh from "@/components/PullToRefresh";
 import { STATUS_LABELS } from "@/components/StatusBadge";
 import SwipeCard from "@/components/SwipeCard";
 import { useAuth } from "@/context/AuthContext";
@@ -190,6 +191,31 @@ function HomeContent() {
     load();
   }, [load]);
 
+  const [pullNotice, setPullNotice] = useState<string | null>(null);
+
+  const handlePullRefresh = useCallback(async () => {
+    setPullNotice(null);
+    try {
+      const result = await jobsApi.autoImport();
+      await load();
+      setPullNotice(
+        result.imported > 0
+          ? `${result.imported} vacante${result.imported === 1 ? "" : "s"} nueva${
+              result.imported === 1 ? "" : "s"
+            } agregada${result.imported === 1 ? "" : "s"} a tu cola.`
+          : "No hay vacantes nuevas por ahora — prueba de nuevo en un rato."
+      );
+    } catch (err) {
+      setPullNotice(err instanceof ApiError ? err.message : "No se pudo buscar más vacantes.");
+    }
+  }, [load]);
+
+  useEffect(() => {
+    if (!pullNotice) return;
+    const timer = setTimeout(() => setPullNotice(null), 5000);
+    return () => clearTimeout(timer);
+  }, [pullNotice]);
+
   const scope = SCOPE_LEVELS[scopeIndex].scope;
   const filteredQueue = useMemo(
     () => (queue ? queue.filter((job) => jobMatchesScope(job, scope, userLocation)) : null),
@@ -248,7 +274,8 @@ function HomeContent() {
   const hiddenByScope = (queue?.length ?? 0) > 0 && (filteredQueue?.length ?? 0) === 0;
 
   return (
-    <div className="flex flex-col items-center gap-3 pb-4 animate-fade-in">
+    <PullToRefresh onRefresh={handlePullRefresh} ignoreSelector=".swipe-drag-surface">
+      <div className="flex flex-col items-center gap-3 pb-4 animate-fade-in">
       <div className="w-full max-w-md">
         <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">
           Hi{user?.full_name ? `, ${user.full_name.split(" ")[0]}` : ""} 👋
@@ -265,6 +292,12 @@ function HomeContent() {
         />
         {applications && <StatsRow applications={applications} queueCount={filteredQueue?.length ?? 0} />}
       </div>
+
+      {pullNotice && (
+        <div className="w-full max-w-md">
+          <p className="text-center text-xs text-gray-400 dark:text-gray-500">{pullNotice}</p>
+        </div>
+      )}
 
       {actionError && (
         <div className="w-full max-w-md">
@@ -351,7 +384,8 @@ function HomeContent() {
       {filteredQueue && current && (
         <p className="text-xs text-gray-400 dark:text-gray-500">{filteredQueue.length} left in your queue</p>
       )}
-    </div>
+      </div>
+    </PullToRefresh>
   );
 }
 

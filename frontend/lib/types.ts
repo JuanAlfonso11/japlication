@@ -107,6 +107,12 @@ export interface CVUploadResult {
   warnings: string[];
 }
 
+export interface ProfileImprovementResult {
+  profile: CareerProfile;
+  change_log: string[];
+  generated_by: "ai" | "manual";
+}
+
 // ---------- Jobs ----------
 
 export type ApplicationStatus =

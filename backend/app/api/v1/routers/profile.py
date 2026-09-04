@@ -8,10 +8,11 @@ from app.db.session import get_db
 from app.models.career_profile import CareerProfile
 from app.models.user import User
 from app.schemas.career_profile import CareerProfile as CareerProfileSchema
-from app.schemas.career_profile import CareerProfileUpsert, CVUploadResult
+from app.schemas.career_profile import CareerProfileUpsert, CVUploadResult, ProfileImprovementResult
 from app.schemas.cv_evaluation import CVEvaluation
 from app.services import cv_upload
 from app.services.cv_evaluator import evaluate_cv
+from app.services.profile_improver import improve_profile
 
 router = APIRouter(prefix="/profile", tags=["profile"])
 
@@ -48,6 +49,25 @@ async def upsert_profile(
     await db.commit()
     await db.refresh(profile)
     return CareerProfileSchema.model_validate(profile)
+
+
+@router.post("/improve", response_model=ProfileImprovementResult)
+async def improve_profile_endpoint(
+    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+) -> ProfileImprovementResult:
+    """Rewrites the base profile's headline/summary/experience-bullet
+    wording for clarity and impact — same facts, better writing. This is
+    the "agente" for the main CV; tailoring for a specific job stays a
+    separate action (POST /jobs/{job_id}/resume). Nothing is persisted
+    here — the frontend shows the proposal and the user still has to hit
+    Save (PUT /profile) to keep it, same as CV upload."""
+    result = await db.execute(select(CareerProfile).where(CareerProfile.user_id == current_user.id))
+    profile = result.scalar_one_or_none()
+    if profile is None:
+        raise HTTPException(status_code=404, detail="Create your career profile before improving it.")
+
+    improved = improve_profile(profile)
+    return ProfileImprovementResult.model_validate(improved)
 
 
 @router.get("/evaluation", response_model=CVEvaluation)

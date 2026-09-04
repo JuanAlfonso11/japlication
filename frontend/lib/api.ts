@@ -24,6 +24,7 @@ import type {
   RegisterPayload,
   CVUploadResult,
   ResendVerificationResponse,
+  ProfileImprovementResult,
   ResumeGeneratePayload,
   ResumeVersion,
   ReusableResumeSuggestion,
@@ -326,6 +327,7 @@ export const profileApi = {
     request<CareerProfile>("/profile", { method: "PUT", body: payload }),
   evaluation: () => request<CVEvaluation>("/profile/evaluation"),
   importCv: (file: File) => uploadFile<CVUploadResult>("/profile/import-cv", "file", file),
+  improve: () => request<ProfileImprovementResult>("/profile/improve", { method: "POST" }),
 };
 
 // ---------- Jobs ----------

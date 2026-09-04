@@ -83,6 +83,18 @@ class CVUploadResult(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class ProfileImprovementResult(BaseModel):
+    """A rewritten headline/summary/experience-bullets proposal for the
+    BASE profile — same never-persisted-until-Save rule as CVUploadResult.
+    Per-job tailoring (a different, narrower rewrite for one specific
+    posting) stays resume_adapter.py's job; this is for the profile that
+    every one of those starts from."""
+
+    profile: CareerProfileUpsert
+    change_log: list[str] = Field(default_factory=list)
+    generated_by: str  # "ai" | "manual"
+
+
 class CareerProfile(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

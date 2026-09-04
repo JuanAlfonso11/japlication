@@ -79,6 +79,10 @@ function ProfileContent() {
   const [autoSearching, setAutoSearching] = useState(false);
   const [autoSearchNotice, setAutoSearchNotice] = useState<string | null>(null);
 
+  const [improving, setImproving] = useState(false);
+  const [improveError, setImproveError] = useState<string | null>(null);
+  const [improveNotice, setImproveNotice] = useState<{ changeLog: string[]; generatedBy: string } | null>(null);
+
   const loadEvaluation = useCallback(async () => {
     setEvalLoading(true);
     setEvalError(null);
@@ -188,6 +192,25 @@ function ProfileContent() {
     }
   }
 
+  async function handleImproveProfile() {
+    setImproving(true);
+    setImproveError(null);
+    setImproveNotice(null);
+    try {
+      const result = await profileApi.improve();
+      patch({
+        headline: result.profile.headline,
+        summary: result.profile.summary,
+        experience: result.profile.experience,
+      });
+      setImproveNotice({ changeLog: result.change_log, generatedBy: result.generated_by });
+    } catch (err) {
+      setImproveError(err instanceof ApiError ? err.message : "No se pudo mejorar el CV.");
+    } finally {
+      setImproving(false);
+    }
+  }
+
   if (loading) return <Spinner label="Loading your profile…" />;
   if (loadError) return <ErrorNotice message={loadError} onRetry={load} />;
   if (!profile) return null;
@@ -274,6 +297,47 @@ function ProfileContent() {
             {uploadNotice.warnings.map((w, i) => (
               <p key={i} className="mt-1">
                 {w}
+              </p>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-100 dark:bg-gray-900 dark:ring-gray-800">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">Agente: mejorar CV principal</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Reescribe tu titular, resumen y logros para que se lean mejor — mismos hechos, mejor
+              redacción. No toca habilidades, educación ni certificaciones, y no afecta los CVs a medida
+              que ya generaste para vacantes específicas. Nada se guarda hasta que revises y le des a
+              Save profile.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleImproveProfile}
+            disabled={improving}
+            className="shrink-0 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {improving ? "Mejorando…" : "Mejorar CV"}
+          </button>
+        </div>
+        {improveError && (
+          <div className="mt-2">
+            <ErrorNotice message={improveError} />
+          </div>
+        )}
+        {improveNotice && (
+          <div className="mt-3 rounded-lg bg-amber-50 p-3 text-xs text-amber-800 ring-1 ring-inset ring-amber-600/20 dark:bg-amber-900/20 dark:text-amber-300 dark:ring-amber-400/30">
+            <p className="font-semibold">
+              {improveNotice.generatedBy === "ai"
+                ? "Reescrito con IA — revisa los campos abajo (Overview y Experience) y dale a Save profile."
+                : "Reescrito con reglas básicas (no hay ANTHROPIC_API_KEY configurada) — revisa antes de guardar."}
+            </p>
+            {improveNotice.changeLog.map((line, i) => (
+              <p key={i} className="mt-1">
+                {line}
               </p>
             ))}
           </div>
