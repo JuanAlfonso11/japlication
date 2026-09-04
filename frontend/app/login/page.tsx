@@ -38,11 +38,9 @@ export default function LoginPage() {
     <div className="flex min-h-dvh items-center justify-center px-4 py-10">
       <div className="w-full max-w-sm">
         <div className="mb-8 flex flex-col items-center gap-2 text-center">
-          <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-600 text-lg font-bold text-white">
-            JF
-          </span>
+          <img src="/icons/icon-192.png" alt="" className="h-12 w-12" />
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Welcome back</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400">Log in to JobFlow AI to keep swiping.</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Log in to JobPilot to keep swiping.</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-100 dark:bg-gray-900 dark:ring-gray-800">
@@ -91,7 +89,7 @@ export default function LoginPage() {
         </form>
 
         <p className="mt-5 text-center text-sm text-gray-500 dark:text-gray-400">
-          New to JobFlow AI?{" "}
+          New to JobPilot?{" "}
           <Link href="/register" className="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">
             Create an account
           </Link>

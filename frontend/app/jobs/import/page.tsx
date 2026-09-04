@@ -171,7 +171,7 @@ function ImportContent() {
       <div>
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Add a specific job</h1>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          Already found a posting elsewhere? Paste its URL or the description text — JobFlow AI
+          Already found a posting elsewhere? Paste its URL or the description text — JobPilot
           parses it into a structured job and matches it against your profile. Looking for new
           jobs instead? Try{" "}
           <a href="/discover" className="font-medium text-brand-600 hover:underline dark:text-brand-400">

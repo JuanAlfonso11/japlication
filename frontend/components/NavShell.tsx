@@ -33,10 +33,8 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
       <header className="sticky top-0 z-40 hidden border-b border-gray-200 bg-white/90 backdrop-blur md:block dark:border-gray-800 dark:bg-gray-900/90">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-3">
           <Link href="/" className="flex items-center gap-2 font-semibold text-gray-900 dark:text-gray-100">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600 text-white">
-              JF
-            </span>
-            JobFlow AI
+            <img src="/icons/icon-192.png" alt="" className="h-8 w-8" />
+            JobPilot
           </Link>
           <nav className="flex items-center gap-1">
             {NAV_ITEMS.map((item) => {
@@ -73,10 +71,8 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
         style={{ paddingTop: "calc(env(safe-area-inset-top) + 0.75rem)" }}
       >
         <Link href="/" className="flex items-center gap-2 font-semibold text-gray-900 dark:text-gray-100">
-          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-600 text-xs text-white">
-            JF
-          </span>
-          JobFlow AI
+          <img src="/icons/icon-192.png" alt="" className="h-7 w-7" />
+          JobPilot
         </Link>
         <ThemeToggle compact />
       </header>

@@ -1,6 +1,6 @@
 {
-  "name": "JobFlow AI",
-  "short_name": "JobFlow AI",
+  "name": "JobPilot",
+  "short_name": "JobPilot",
   "description": "Your personal job-search and application assistant.",
   "start_url": "/",
   "scope": "/",

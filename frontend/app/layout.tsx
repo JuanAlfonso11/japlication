@@ -4,13 +4,13 @@ import Providers from "./providers";
 import { THEME_NO_FLASH_SCRIPT } from "@/context/ThemeContext";
 
 export const metadata: Metadata = {
-  title: "JobFlow AI",
+  title: "JobPilot",
   description: "Your personal job-search and application assistant.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "JobFlow AI",
+    title: "JobPilot",
   },
   icons: {
     icon: [

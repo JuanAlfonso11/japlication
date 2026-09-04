@@ -114,7 +114,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   } catch {
     throw new ApiError(
       0,
-      "Could not reach the JobFlow AI server. Check your connection and try again."
+      "Could not reach the JobPilot server. Check your connection and try again."
     );
   }
 
@@ -165,7 +165,7 @@ async function uploadFile<T>(path: string, fieldName: string, file: File): Promi
       cache: "no-store",
     });
   } catch {
-    throw new ApiError(0, "Could not reach the JobFlow AI server. Check your connection and try again.");
+    throw new ApiError(0, "Could not reach the JobPilot server. Check your connection and try again.");
   }
 
   const text = await res.text();

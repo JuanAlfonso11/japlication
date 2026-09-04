@@ -35,15 +35,13 @@ function VerifyEmailContent() {
 
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-gray-50 px-4 text-center dark:bg-gray-950">
-      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-600 text-2xl font-bold text-white">
-        JF
-      </div>
+      <img src="/icons/icon-192.png" alt="" className="h-16 w-16" />
 
       {status === "success" ? (
         <>
           <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">Cuenta verificada</h1>
           <p className="max-w-sm text-sm text-gray-500 dark:text-gray-400">
-            Tu correo{user?.email ? ` (${user.email})` : ""} quedó confirmado. Ya puedes usar JobFlow AI
+            Tu correo{user?.email ? ` (${user.email})` : ""} quedó confirmado. Ya puedes usar JobPilot
             sin restricciones.
           </p>
         </>

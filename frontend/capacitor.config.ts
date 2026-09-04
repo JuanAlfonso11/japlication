@@ -1,6 +1,6 @@
 import type { CapacitorConfig } from "@capacitor/cli";
 
-// JobFlow AI's Android app is a thin native shell — it never bundles the
+// JobPilot's Android app is a thin native shell — it never bundles the
 // web app, it just points the WebView at the live Next.js server (same
 // approach as opening the site in a mobile browser, but as an installable
 // app with its own icon and no browser chrome). That means:
@@ -20,8 +20,12 @@ import type { CapacitorConfig } from "@capacitor/cli";
 //     the public internet in the clear. Don't point this at a public,
 //     non-Tailscale http:// host.
 const config: CapacitorConfig = {
+  // Left as the original package id from before the JobPilot rename —
+  // changing it would mean manually moving/renaming the native Java package
+  // dir too (Capacitor has no "rename appId" command), and it's purely
+  // internal plumbing, invisible to the user, so not worth the risk.
   appId: "ai.jobflow.app",
-  appName: "JobFlow AI",
+  appName: "JobPilot",
   webDir: "public",
   server: {
     url: "http://radalv11.tailb3d4c1.ts.net:3000",
