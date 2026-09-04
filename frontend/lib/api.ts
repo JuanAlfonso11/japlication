@@ -302,6 +302,43 @@ async function uploadFile<T>(path: string, fieldName: string, file: File): Promi
   return parseResponse<T>(res);
 }
 
+/** Downloads a binary file (PDF export, etc.) through an authenticated GET
+ * and hands it to the browser as a real save — same transparent-refresh-
+ * on-401 behavior as `request`, but the response body is a Blob, never
+ * parsed as JSON. */
+async function downloadFile(path: string, filename: string): Promise<void> {
+  const token = getToken();
+  let res = await rawFetch(path, "GET", undefined, undefined, token);
+
+  if (res.status === 401 && token) {
+    const newToken = await refreshAccessToken();
+    if (newToken) {
+      res = await rawFetch(path, "GET", undefined, undefined, newToken);
+    } else {
+      setToken(null);
+      setRefreshToken(null);
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event(AUTH_UNAUTHORIZED_EVENT));
+      }
+      throw new ApiError(401, "Your session expired — sign in again.");
+    }
+  }
+
+  if (!res.ok) {
+    throw new ApiError(res.status, `Request failed with status ${res.status}`);
+  }
+
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 // ---------- Auth ----------
 
 export const authApi = {
@@ -399,6 +436,7 @@ export const applicationsApi = {
 export const resumeApi = {
   get: (id: string) => request<ResumeVersion>(`/resume-versions/${id}`),
   list: () => request<ResumeVersion[]>("/resume-versions"),
+  downloadPdf: (id: string, filename: string) => downloadFile(`/resume-versions/${id}/export/pdf`, filename),
 };
 
 export const coverLetterApi = {

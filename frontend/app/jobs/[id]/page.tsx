@@ -8,7 +8,7 @@ import ErrorNotice from "@/components/ErrorNotice";
 import MatchBreakdown from "@/components/MatchBreakdown";
 import ScoreBadge from "@/components/ScoreBadge";
 import SkillTag from "@/components/SkillTag";
-import { ApiError, jobsApi } from "@/lib/api";
+import { ApiError, jobsApi, resumeApi } from "@/lib/api";
 import type { CoverLetter, Job, MatchResult, ResumeVersion, ReusableResumeSuggestion } from "@/lib/types";
 
 function resumeToPlainText(resume: ResumeVersion): string {
@@ -72,6 +72,8 @@ function JobDetailContent() {
   const [resumeLoading, setResumeLoading] = useState(false);
   const [resumeError, setResumeError] = useState<string | null>(null);
   const [reusable, setReusable] = useState<ReusableResumeSuggestion | null>(null);
+  const [pdfDownloading, setPdfDownloading] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
 
   const [coverLetter, setCoverLetter] = useState<CoverLetter | null>(null);
   const [coverLoading, setCoverLoading] = useState(false);
@@ -113,6 +115,19 @@ function JobDetailContent() {
   useEffect(() => {
     load();
   }, [load]);
+
+  async function handleDownloadPdf() {
+    if (!resume) return;
+    setPdfDownloading(true);
+    setPdfError(null);
+    try {
+      await resumeApi.downloadPdf(resume.id, `${job?.title ?? "resume"}.pdf`.replace(/[/\\?%*:|"<>]/g, "-"));
+    } catch (err) {
+      setPdfError(err instanceof ApiError ? err.message : "No se pudo descargar el PDF.");
+    } finally {
+      setPdfDownloading(false);
+    }
+  }
 
   function handleReuseResume() {
     if (reusable?.resume_version) {
@@ -329,8 +344,25 @@ function JobDetailContent() {
                   <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">{resume.content.summary}</p>
                 )}
               </div>
-              <CopyButton text={resumeToPlainText(resume)} />
+              <div className="flex shrink-0 flex-col items-end gap-1.5">
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={handleDownloadPdf}
+                    disabled={pdfDownloading}
+                    className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {pdfDownloading ? "Generando…" : "Descargar PDF"}
+                  </button>
+                  <CopyButton text={resumeToPlainText(resume)} />
+                </div>
+                {pdfError && <p className="text-xs text-rose-600 dark:text-rose-400">{pdfError}</p>}
+              </div>
             </div>
+            <p className="text-xs text-gray-400 dark:text-gray-500">
+              El PDF usa formato de una columna con encabezados estándar (sin tablas ni imágenes) para que
+              el &quot;autocompletar desde CV&quot; de la mayoría de formularios de aplicación lo lea bien.
+            </p>
 
             {resume.content.skills.length > 0 && (
               <div>

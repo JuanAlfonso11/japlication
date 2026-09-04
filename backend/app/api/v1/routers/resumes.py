@@ -2,7 +2,7 @@ from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -18,6 +18,7 @@ from app.schemas.resume_version import ReusableResumeSuggestion
 from app.schemas.resume_version import ResumeGenerateRequest
 from app.schemas.resume_version import ResumeVersion as ResumeVersionSchema
 from app.services.resume_adapter import adapt_resume
+from app.services.resume_pdf import render_resume_pdf
 from app.services.skills_taxonomy import canonical_skill_set
 
 router = APIRouter(tags=["resumes"])
@@ -226,5 +227,46 @@ async def export_resume_version(
     return PlainTextResponse(
         content=text,
         media_type="text/plain; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/resume-versions/{resume_version_id}/export/pdf")
+async def export_resume_version_pdf(
+    resume_version_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    """A real, ATS-safe PDF (single column, standard headers, selectable
+    text — see resume_pdf.py) meant to be uploaded to an external
+    application form: most of them (Greenhouse, Lever, Workday, LinkedIn/
+    Indeed Easy Apply) auto-fill name/contact/experience from an uploaded
+    resume, which is the actual, buildable way to avoid retyping the same
+    information on every site — there's no legitimate way to submit the
+    application itself from here (see docs/PUBLIC_APIS_RESEARCH.md's
+    LinkedIn section for why: every serious ATS gates its submission API
+    behind employer-only credentials, Greenhouse included)."""
+    row = (
+        await db.execute(
+            select(ResumeVersion).where(
+                ResumeVersion.id == resume_version_id, ResumeVersion.user_id == current_user.id
+            )
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Resume version not found.")
+
+    profile = (
+        await db.execute(select(CareerProfile).where(CareerProfile.id == row.career_profile_id))
+    ).scalar_one_or_none()
+    contact_info = profile.contact_info if profile is not None else {}
+
+    pdf_bytes = render_resume_pdf(
+        full_name=current_user.full_name, contact_info=contact_info, content=row.content
+    )
+    filename = f"resume-{row.id}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
