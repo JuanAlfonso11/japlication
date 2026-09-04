@@ -12,6 +12,8 @@
 | `install-backup-schedule.ps1` | Run once: schedules `backup-db.ps1` to run daily at 3 AM via Task Scheduler (task name "JobPilot DB Backup"). Already installed. |
 | `daily-job-sweep.ps1` | Runs the same job-matching sweep as the app's "search for matches" (`GET /jobs/search/auto-import`), for every user, straight inside the backend container — so new matches (and their push notification) show up even on a day JobPilot never gets opened. |
 | `install-job-sweep-schedule.ps1` | Run once: schedules `daily-job-sweep.ps1` to run daily at 8 AM via Task Scheduler (task name "JobPilot Daily Job Sweep"). Already installed. |
+| `watchdog.ps1` | Checks all 3 containers (db, backend, frontend) are actually running; if not, retries the same recovery steps as Encender (start Docker Desktop if needed, `docker compose up -d`). Logs every recovery attempt to `logs\watchdog.log` (silent when everything's already healthy). If recovery still fails, shows a Windows notification — it can't push to your phone for this one case, since the backend (what would send that push) is the thing that's down. |
+| `install-watchdog-schedule.ps1` | Run once: schedules `watchdog.ps1` to run every 15 minutes via Task Scheduler (task name "JobPilot Watchdog"). Already installed. |
 
 Note the two "start" paths overlap on purpose: **autostart** brings the app up silently at login with no window; the **desktop shortcut** is for manually turning it on/off afterward (e.g. after using Apagar, or on a PC that doesn't have autostart installed).
 

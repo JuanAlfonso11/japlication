@@ -24,6 +24,10 @@ backend/secrets/
 # never committed
 backups/
 
+# Watchdog activity log (scripts/watchdog.ps1) — local operational log, not
+# project content
+logs/
+
 # Generated .ico for the desktop shortcut (scripts/install-desktop-shortcut.ps1)
 scripts/.icon/
 
