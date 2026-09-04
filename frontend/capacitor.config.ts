@@ -14,11 +14,10 @@ import type { CapacitorConfig } from "@capacitor/cli";
 //     hostname below is this PC's Tailscale MagicDNS name — stable as long
 //     as the machine keeps the same Tailscale identity (unlike a DHCP LAN
 //     IP, it doesn't change on router reboots).
-//   - `cleartext: true` allows plain http:// (not https://) to that host.
-//     This is fine specifically because Tailscale traffic is already fully
-//     encrypted at the VPN layer between your devices — it never touches
-//     the public internet in the clear. Don't point this at a public,
-//     non-Tailscale http:// host.
+//   - Served over real HTTPS via `tailscale serve` — tailscaled itself
+//     terminates TLS with an auto-renewing Tailscale-issued cert and proxies
+//     to the plain-http Docker containers (localhost:3000/:8000) on this PC.
+//     No cleartext exception needed anywhere anymore.
 const config: CapacitorConfig = {
   // Left as the original package id from before the JobPilot rename —
   // changing it would mean manually moving/renaming the native Java package
@@ -28,13 +27,12 @@ const config: CapacitorConfig = {
   appName: "JobPilot",
   webDir: "public",
   server: {
-    url: "http://radalv11.tailb3d4c1.ts.net:3000",
-    cleartext: true,
+    url: "https://radalv11.tailb3d4c1.ts.net",
     // Without this, Capacitor's WebView blocks navigation to any origin
     // outside server.url — needed here because tapping the verification
     // email's link (see AndroidManifest.xml's intent-filter + MainActivity)
-    // sends the WebView to the *backend* on :8000, a different origin than
-    // the frontend on :3000 even though it's the same Tailscale host.
+    // sends the WebView to the *backend* on :8443, a different origin than
+    // the frontend on :443 even though it's the same Tailscale host.
     allowNavigation: ["radalv11.tailb3d4c1.ts.net"],
   },
 };

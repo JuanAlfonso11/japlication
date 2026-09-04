@@ -18,12 +18,23 @@ trouble getting router access for WireGuard.
 ## Current configuration (already done)
 
 - Tailscale installed on this PC and logged in. Its MagicDNS hostname: **`radalv11.tailb3d4c1.ts.net`**.
-- `.env` at the repo root: `CORS_EXTRA_ORIGINS` includes
-  `http://radalv11.tailb3d4c1.ts.net:3000`, and `NEXT_PUBLIC_API_URL` is
-  `http://radalv11.tailb3d4c1.ts.net:8000/api/v1`.
-- `frontend/capacitor.config.ts`: `server.url = "http://radalv11.tailb3d4c1.ts.net:3000"`, `cleartext: true`.
-- `frontend/android/app/src/main/res/xml/network_security_config.xml`: allows plain `http://` to
-  any `*.ts.net` hostname — nothing else the WebView loads can fall back to cleartext.
+- **HTTPS Certificates** enabled for the tailnet (Tailscale admin console →
+  [DNS settings](https://login.tailscale.com/admin/dns)), and `tailscale serve` set up to expose
+  both services with a real, auto-renewing Tailscale-issued TLS cert — no manual cert files, no
+  renewal cron:
+  ```
+  tailscale serve --bg --https=443  http://localhost:3000   # frontend
+  tailscale serve --bg --https=8443 http://localhost:8000   # backend
+  ```
+  This config lives in `tailscaled` itself (`--bg` = persists across reboots), not in this repo —
+  if it's ever lost, re-run the two commands above (check current state with `tailscale serve status`).
+- `.env` at the repo root: `FRONTEND_ORIGIN=https://radalv11.tailb3d4c1.ts.net`,
+  `BACKEND_PUBLIC_URL` and `NEXT_PUBLIC_API_URL` both
+  `https://radalv11.tailb3d4c1.ts.net:8443/api/v1`.
+- `frontend/capacitor.config.ts`: `server.url = "https://radalv11.tailb3d4c1.ts.net"` — no
+  `cleartext` flag anymore, it's real HTTPS end to end.
+- No `network_security_config.xml` needed anymore (removed) — the WebView only ever talks HTTPS
+  now, which is Android's secure default with no exceptions required.
 - Backend and frontend images are rebuilt and running with this config, verified reachable over
   the Tailscale hostname; `npx cap sync android` has been run, so the native project already has
   the right server URL baked in.
@@ -37,7 +48,7 @@ trouble getting router access for WireGuard.
 
 Verify it end-to-end before building the APK: with Tailscale connected on the phone (its toggle
 "on" in the Tailscale app — works over Wi-Fi or mobile data, anywhere), open
-`http://radalv11.tailb3d4c1.ts.net:3000` in Chrome. If it loads and you can log in, the hard part
+`https://radalv11.tailb3d4c1.ts.net` in Chrome. If it loads and you can log in, the hard part
 is done — the Android app below is just a wrapper around this same URL. This also already gets you
 a fast path to "always available" with zero extra tooling: Chrome on Android will offer **Add to
 Home Screen** on that URL (JobFlow AI ships a PWA manifest), which installs a full-screen icon. Do
