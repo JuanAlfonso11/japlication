@@ -80,7 +80,18 @@ export default function SwipeCard({
       // fade), otherwise a still-mounted-but-invisible card can eat the
       // next tap on the ✓/✕ buttons or the card underneath during the
       // brief window before onAnimationComplete removes it from the queue.
-      style={{ x, rotate, touchAction: "pan-y", pointerEvents: decision ? "none" : "auto" }}
+      //
+      // touchAction: "none" (not "pan-y") — "pan-y" tells the browser it's
+      // still allowed to natively handle the gesture (just restricted to
+      // vertical), and on the Android System WebView that meant the OS
+      // sometimes won the touch entirely: the whole page would pan instead
+      // of the card, so framer-motion's drag handler never fired and
+      // onDragEnd (-> the actual decide() call) never ran — a swipe that
+      // visually "moved the screen" but silently did nothing. "none" hands
+      // every touch on this element to JS, which is what a drag gesture
+      // needs; the card's own inner content div still scrolls fine since
+      // it's a separate scrollable element with its own default touch-action.
+      style={{ x, rotate, touchAction: "none", pointerEvents: decision ? "none" : "auto" }}
       drag={isTop && !decision ? "x" : false}
       dragConstraints={{ left: 0, right: 0 }}
       dragElastic={1}
