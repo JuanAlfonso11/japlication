@@ -5,6 +5,23 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import ThemeToggle from "@/components/ThemeToggle";
 
+function LockIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <rect x="3" y="11" width="18" height="11" rx="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </svg>
+  );
+}
+
 function GearIcon({ className }: { className?: string }) {
   return (
     <svg
@@ -29,6 +46,19 @@ export default function SettingsPanel() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
+  // Read straight from the WebView's own address bar state — there's no
+  // browser padlock to glance at inside a Capacitor app, so this is the
+  // only way to confirm the connection is actually HTTPS and not
+  // localhost/cleartext. Computed on mount (window isn't available during
+  // SSR), not from an env var, so it reflects what's really loaded.
+  const [connection, setConnection] = useState<{ secure: boolean; host: string } | null>(null);
+
+  useEffect(() => {
+    setConnection({
+      secure: window.location.protocol === "https:",
+      host: window.location.host,
+    });
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -81,6 +111,32 @@ export default function SettingsPanel() {
               </span>
             )}
           </div>
+
+          {connection && (
+            <div className="flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-2 dark:bg-gray-800/60">
+              <LockIcon
+                className={`h-4 w-4 shrink-0 ${
+                  connection.secure
+                    ? "text-emerald-600 dark:text-emerald-400"
+                    : "text-rose-600 dark:text-rose-400"
+                }`}
+              />
+              <div className="min-w-0">
+                <p
+                  className={`text-xs font-semibold ${
+                    connection.secure
+                      ? "text-emerald-700 dark:text-emerald-400"
+                      : "text-rose-700 dark:text-rose-400"
+                  }`}
+                >
+                  {connection.secure ? "Conexión segura (HTTPS)" : "Conexión sin cifrar"}
+                </p>
+                <p className="truncate text-[11px] text-gray-500 dark:text-gray-400">
+                  {connection.host}
+                </p>
+              </div>
+            </div>
+          )}
 
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Tema</p>

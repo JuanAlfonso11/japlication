@@ -27,13 +27,13 @@ const config: CapacitorConfig = {
   appName: "JobPilot",
   webDir: "public",
   server: {
-    url: "https://radalv11.tailb3d4c1.ts.net",
+    url: "https://jobpilot.tailb3d4c1.ts.net",
     // Without this, Capacitor's WebView blocks navigation to any origin
     // outside server.url — needed here because tapping the verification
     // email's link (see AndroidManifest.xml's intent-filter + MainActivity)
     // sends the WebView to the *backend* on :8443, a different origin than
     // the frontend on :443 even though it's the same Tailscale host.
-    allowNavigation: ["radalv11.tailb3d4c1.ts.net"],
+    allowNavigation: ["jobpilot.tailb3d4c1.ts.net"],
   },
 };
 

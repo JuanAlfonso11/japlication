@@ -37,10 +37,10 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data
                     android:scheme="https"
-                    android:host="radalv11.tailb3d4c1.ts.net" />
+                    android:host="jobpilot.tailb3d4c1.ts.net" />
                 <data
                     android:scheme="https"
-                    android:host="radalv11.tailb3d4c1.ts.net"
+                    android:host="jobpilot.tailb3d4c1.ts.net"
                     android:port="8443" />
             </intent-filter>
         </activity>

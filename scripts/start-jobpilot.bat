@@ -47,6 +47,6 @@ if not %errorlevel%==0 (
 
 echo [JobPilot] Up and running.
 echo   Web:       http://localhost:3000
-echo   Tailscale: http://radalv11.tailb3d4c1.ts.net:3000
+echo   Tailscale: https://jobpilot.tailb3d4c1.ts.net
 
 endlocal

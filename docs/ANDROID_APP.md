@@ -17,7 +17,7 @@ trouble getting router access for WireGuard.
 
 ## Current configuration (already done)
 
-- Tailscale installed on this PC and logged in. Its MagicDNS hostname: **`radalv11.tailb3d4c1.ts.net`**.
+- Tailscale installed on this PC and logged in. Its MagicDNS hostname: **`jobpilot.tailb3d4c1.ts.net`**.
 - **HTTPS Certificates** enabled for the tailnet (Tailscale admin console →
   [DNS settings](https://login.tailscale.com/admin/dns)), and `tailscale serve` set up to expose
   both services with a real, auto-renewing Tailscale-issued TLS cert — no manual cert files, no
@@ -28,10 +28,10 @@ trouble getting router access for WireGuard.
   ```
   This config lives in `tailscaled` itself (`--bg` = persists across reboots), not in this repo —
   if it's ever lost, re-run the two commands above (check current state with `tailscale serve status`).
-- `.env` at the repo root: `FRONTEND_ORIGIN=https://radalv11.tailb3d4c1.ts.net`,
+- `.env` at the repo root: `FRONTEND_ORIGIN=https://jobpilot.tailb3d4c1.ts.net`,
   `BACKEND_PUBLIC_URL` and `NEXT_PUBLIC_API_URL` both
-  `https://radalv11.tailb3d4c1.ts.net:8443/api/v1`.
-- `frontend/capacitor.config.ts`: `server.url = "https://radalv11.tailb3d4c1.ts.net"` — no
+  `https://jobpilot.tailb3d4c1.ts.net:8443/api/v1`.
+- `frontend/capacitor.config.ts`: `server.url = "https://jobpilot.tailb3d4c1.ts.net"` — no
   `cleartext` flag anymore, it's real HTTPS end to end.
 - No `network_security_config.xml` needed anymore (removed) — the WebView only ever talks HTTPS
   now, which is Android's secure default with no exceptions required.
@@ -48,7 +48,7 @@ trouble getting router access for WireGuard.
 
 Verify it end-to-end before building the APK: with Tailscale connected on the phone (its toggle
 "on" in the Tailscale app — works over Wi-Fi or mobile data, anywhere), open
-`https://radalv11.tailb3d4c1.ts.net` in Chrome. If it loads and you can log in, the hard part
+`https://jobpilot.tailb3d4c1.ts.net` in Chrome. If it loads and you can log in, the hard part
 is done — the Android app below is just a wrapper around this same URL. This also already gets you
 a fast path to "always available" with zero extra tooling: Chrome on Android will offer **Add to
 Home Screen** on that URL (JobFlow AI ships a PWA manifest), which installs a full-screen icon. Do
