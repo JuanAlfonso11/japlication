@@ -9,6 +9,14 @@ body {
 
 body {
   overscroll-behavior-y: none;
+  /* Chrome/WebView's own built-in "swipe from the edge to navigate
+     back/forward" gesture (separate from -- and not covered by -- Android's
+     OS-level gesture-nav exclusion) was winning a one-finger horizontal
+     drag on Home's swipe cards before the page's own touch handling ever
+     saw it (confirmed: a two-finger swipe, which that browser gesture
+     doesn't recognize, worked fine). This turns that specific browser
+     gesture off app-wide. */
+  overscroll-behavior-x: none;
 }
 
 * {

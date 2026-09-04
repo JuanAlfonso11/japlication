@@ -91,7 +91,13 @@ export default function SwipeCard({
       // every touch on this element to JS, which is what a drag gesture
       // needs; the card's own inner content div still scrolls fine since
       // it's a separate scrollable element with its own default touch-action.
-      style={{ x, rotate, touchAction: "none", pointerEvents: decision ? "none" : "auto" }}
+      style={{
+        x,
+        rotate,
+        touchAction: "none",
+        overscrollBehaviorX: "none",
+        pointerEvents: decision ? "none" : "auto",
+      }}
       drag={isTop && !decision ? "x" : false}
       dragConstraints={{ left: 0, right: 0 }}
       dragElastic={1}
