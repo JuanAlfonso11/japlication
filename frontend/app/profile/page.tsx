@@ -5,6 +5,7 @@ import RouteGuard from "@/components/RouteGuard";
 import Spinner from "@/components/Spinner";
 import ErrorNotice from "@/components/ErrorNotice";
 import CVEvaluationCard from "@/components/CVEvaluationCard";
+import SettingsPanel from "@/components/profile/SettingsPanel";
 import { FormField, inputClass, textareaClass } from "@/components/profile/FormField";
 import SectionCard from "@/components/profile/SectionCard";
 import SkillsSection from "@/components/profile/SkillsSection";
@@ -221,6 +222,8 @@ function ProfileContent() {
           </button>
         </div>
       </div>
+
+      <SettingsPanel />
 
       {saveError && <ErrorNotice message={saveError} />}
 

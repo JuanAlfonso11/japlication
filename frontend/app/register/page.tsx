@@ -14,12 +14,17 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // Suppresses the "already logged in" redirect below right after this
+  // page's own register() call — otherwise it would race the explicit
+  // redirect to the verification-pending screen and send the user
+  // straight to Home instead.
+  const [justRegistered, setJustRegistered] = useState(false);
 
   useEffect(() => {
-    if (!isLoading && token) {
+    if (!isLoading && token && !justRegistered) {
       router.replace("/");
     }
-  }, [isLoading, token, router]);
+  }, [isLoading, token, justRegistered, router]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -33,7 +38,8 @@ export default function RegisterPage() {
     setSubmitting(true);
     try {
       await register({ email, password, full_name: fullName });
-      router.replace("/");
+      setJustRegistered(true);
+      router.replace("/verify-email?status=pending");
     } catch (err) {
       setError(
         err instanceof ApiError ? err.message : "Could not create your account. Please try again."

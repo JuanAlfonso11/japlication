@@ -47,6 +47,16 @@ function VerifyEmailContent() {
             sin restricciones.
           </p>
         </>
+      ) : status === "pending" ? (
+        <>
+          <span className="text-4xl">📬</span>
+          <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">Revisa tu correo</h1>
+          <p className="max-w-sm text-sm text-gray-500 dark:text-gray-400">
+            Te mandamos un enlace de verificación{user?.email ? ` a ${user.email}` : ""}. Ábrelo desde tu
+            correo para confirmar tu cuenta — el enlace dura 10 minutos, si se vence puedes pedir uno
+            nuevo aquí abajo.
+          </p>
+        </>
       ) : (
         <>
           <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">No pudimos verificar tu cuenta</h1>

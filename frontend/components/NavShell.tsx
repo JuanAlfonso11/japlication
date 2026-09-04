@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import VerificationBanner from "@/components/VerificationBanner";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -16,18 +16,15 @@ const NAV_ITEMS = [
 
 export default function NavShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { user, token, logout } = useAuth();
-  const router = useRouter();
+  const { user, token } = useAuth();
 
-  const isAuthScreen = pathname === "/login" || pathname === "/register";
+  // /verify-email included here too so the "check your email" gate right
+  // after signup reads as a standalone step, not just another app page.
+  const isAuthScreen =
+    pathname === "/login" || pathname === "/register" || pathname === "/verify-email";
 
   if (isAuthScreen || !token) {
     return <div className="min-h-dvh bg-gray-50 dark:bg-gray-950">{children}</div>;
-  }
-
-  function handleLogout() {
-    logout();
-    router.replace("/login");
   }
 
   return (
@@ -65,34 +62,23 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
               <span className="hidden text-sm text-gray-500 lg:inline dark:text-gray-400">{user.full_name}</span>
             )}
             <ThemeToggle />
-            <button
-              onClick={handleLogout}
-              className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
-            >
-              Log out
-            </button>
           </div>
         </div>
       </header>
 
-      {/* Mobile top bar */}
-      <header className="sticky top-0 z-40 flex items-center justify-between border-b border-gray-200 bg-white/90 px-4 py-3 backdrop-blur md:hidden dark:border-gray-800 dark:bg-gray-900/90">
+      {/* Mobile top bar — padding-top covers the status bar (battery/clock)
+          area on the Android app, which renders edge-to-edge by default. */}
+      <header
+        className="sticky top-0 z-40 flex items-center justify-between border-b border-gray-200 bg-white/90 px-4 pb-3 backdrop-blur md:hidden dark:border-gray-800 dark:bg-gray-900/90"
+        style={{ paddingTop: "calc(env(safe-area-inset-top) + 0.75rem)" }}
+      >
         <Link href="/" className="flex items-center gap-2 font-semibold text-gray-900 dark:text-gray-100">
           <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-600 text-xs text-white">
             JF
           </span>
           JobFlow AI
         </Link>
-        <div className="flex items-center gap-2">
-          <ThemeToggle compact />
-          <button
-            onClick={handleLogout}
-            aria-label="Log out"
-            className="rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:border-gray-700 dark:text-gray-300"
-          >
-            Log out
-          </button>
-        </div>
+        <ThemeToggle compact />
       </header>
 
       <main className="mx-auto max-w-5xl px-4 pb-24 pt-4 md:px-6 md:pb-10 md:pt-6">
