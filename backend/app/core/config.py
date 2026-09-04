@@ -41,6 +41,13 @@ class Settings(BaseSettings):
     FRONTEND_ORIGIN: str = "http://localhost:3000"
     CORS_EXTRA_ORIGINS: Optional[str] = None
 
+    # This backend's own externally-reachable base URL (including API
+    # prefix) — used to build the verification link's *first* hop, which
+    # must hit GET /auth/verify-email on the backend itself (to validate the
+    # token and flip email_verified) before it redirects on to
+    # FRONTEND_ORIGIN. Same value as the frontend's NEXT_PUBLIC_API_URL.
+    BACKEND_PUBLIC_URL: str = "http://localhost:8000/api/v1"
+
     # App metadata
     PROJECT_NAME: str = "JobFlow AI"
     API_V1_PREFIX: str = "/api/v1"

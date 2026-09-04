@@ -30,6 +30,12 @@ const config: CapacitorConfig = {
   server: {
     url: "http://radalv11.tailb3d4c1.ts.net:3000",
     cleartext: true,
+    // Without this, Capacitor's WebView blocks navigation to any origin
+    // outside server.url — needed here because tapping the verification
+    // email's link (see AndroidManifest.xml's intent-filter + MainActivity)
+    // sends the WebView to the *backend* on :8000, a different origin than
+    // the frontend on :3000 even though it's the same Tailscale host.
+    allowNavigation: ["radalv11.tailb3d4c1.ts.net"],
   },
 };
 

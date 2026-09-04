@@ -36,7 +36,12 @@ _VERIFY_TOKEN_MINUTES = 10  # short-lived on purpose — request a resend if it 
 
 def _send_verification_email(user: User) -> None:
     token = create_state_token(user.id, purpose=_VERIFY_PURPOSE, expires_minutes=_VERIFY_TOKEN_MINUTES)
-    verification_url = f"{settings.FRONTEND_ORIGIN.rstrip('/')}/verify-email?token={token}"
+    # Must hit the backend's own GET /auth/verify-email first (it validates
+    # the token and flips email_verified), which then redirects on to
+    # FRONTEND_ORIGIN/verify-email?status=... — pointing straight at the
+    # frontend page here would skip verification entirely, since that page
+    # only ever reads `status`, never `token`.
+    verification_url = f"{settings.BACKEND_PUBLIC_URL.rstrip('/')}/auth/verify-email?token={token}"
     try:
         email.send_verification_email(user.email, user.full_name, verification_url, _VERIFY_TOKEN_MINUTES)
     except email.EmailError as exc:
