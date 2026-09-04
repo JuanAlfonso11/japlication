@@ -10,6 +10,15 @@ import type { Job } from "@/lib/types";
 const SWIPE_THRESHOLD = 120;
 const EXIT_DISTANCE = 700;
 
+/** Pure decision logic behind a drag release — pulled out of the
+ * component so it's testable without simulating framer-motion's actual
+ * pointer/animation lifecycle in jsdom. */
+export function resolveDragDecision(offsetX: number): "left" | "right" | null {
+  if (offsetX > SWIPE_THRESHOLD) return "right";
+  if (offsetX < -SWIPE_THRESHOLD) return "left";
+  return null;
+}
+
 export default function SwipeCard({
   job,
   onDecide,
@@ -52,8 +61,8 @@ export default function SwipeCard({
   }
 
   function handleDragEnd(_: unknown, info: PanInfo) {
-    if (info.offset.x > SWIPE_THRESHOLD) commitExit("right");
-    else if (info.offset.x < -SWIPE_THRESHOLD) commitExit("left");
+    const dragDecision = resolveDragDecision(info.offset.x);
+    if (dragDecision) commitExit(dragDecision);
   }
 
   useEffect(() => {
