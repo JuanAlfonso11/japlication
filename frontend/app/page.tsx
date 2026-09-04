@@ -275,8 +275,10 @@ function HomeContent() {
       {/* Scales with the viewport instead of a fixed height, so the
           decide buttons below always land within reach without needing
           to scroll first — the job cards, not the controls above, get
-          the space. */}
-      <div className="relative h-[min(66dvh,520px)] w-full max-w-md">
+          the space. 66dvh (measured on-device) left the buttons landing
+          exactly where the fixed bottom nav sits, ~48px of overlap;
+          48dvh/420px leaves real clearance above it. */}
+      <div className="relative h-[min(48dvh,420px)] w-full max-w-md">
         {!current && hiddenByScope && (
           <div className="flex h-full flex-col items-center justify-center gap-3 rounded-3xl border-2 border-dashed border-gray-300 p-8 text-center dark:border-gray-700">
             <span className="text-4xl">📍</span>
