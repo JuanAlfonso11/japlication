@@ -137,12 +137,30 @@ function JobDetailContent() {
   }
 
   async function handleApply() {
+    // Opened synchronously, before any `await`, so the browser still
+    // counts this as "triggered by a user gesture" and doesn't block it —
+    // once we've awaited anything, some browsers (Safari especially) treat
+    // a later window.open() as an unrequested popup and kill it.
+    if (job?.source_url) window.open(job.source_url, "_blank", "noopener,noreferrer");
+
     setApplying(true);
     setApplyError(null);
     try {
+      let activeResume = resume;
+      if (!activeResume) {
+        activeResume = await jobsApi.generateResume(jobId);
+        setResume(activeResume);
+      }
+      try {
+        await resumeApi.downloadPdf(activeResume.id, `${job?.title ?? "resume"}.pdf`.replace(/[/\\?%*:|"<>]/g, "-"));
+      } catch {
+        // The PDF is a convenience, not a prerequisite — a failed download
+        // (e.g. a flaky connection) shouldn't block recording the
+        // application or opening the real posting, which already happened.
+      }
       await jobsApi.decide(jobId, {
         decision: "right",
-        resume_version_id: resume?.id,
+        resume_version_id: activeResume.id,
         cover_letter_id: coverLetter?.id,
       });
       setApplied(true);
@@ -221,49 +239,33 @@ function JobDetailContent() {
           </div>
         )}
 
-        {job.source_url && (
-          <div className="mt-4 rounded-xl bg-brand-50 p-3 dark:bg-brand-900/20">
-            <p className="text-xs font-medium text-brand-800 dark:text-brand-300">
-              JobPilot no envía tu solicitud al empleador — para aplicar de verdad tienes que hacerlo en
-              el sitio original.
-            </p>
-            <a
-              href={job.source_url}
-              target="_blank"
-              rel="noreferrer"
-              className="mt-2 inline-block rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
-            >
-              Aplicar en el sitio original ↗
-            </a>
-          </div>
-        )}
-
-        <div className="mt-4 border-t border-gray-100 pt-4 dark:border-gray-800">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
-            Registrar en JobPilot (no aplica por ti)
+        <div className="mt-4 rounded-xl bg-brand-50 p-3 dark:bg-brand-900/20">
+          <p className="text-xs font-medium text-brand-800 dark:text-brand-300">
+            {job.source_url
+              ? "Un clic hace todo: genera (si falta) y descarga tu CV en PDF, abre la vacante real en una " +
+                "pestaña nueva para que subas ese PDF ahí, y lo registra en tu pipeline. JobPilot no envía " +
+                "la solicitud por ti — el paso de completar y mandar el formulario en el sitio real sigue " +
+                "siendo tuyo."
+              : "Esta vacante no tiene un link al sitio original — solo puedo generar el CV/carta y registrar " +
+                "la decisión en tu pipeline."}
           </p>
-          {applyError && <ErrorNotice message={applyError} />}
+          {applyError && (
+            <div className="mt-2">
+              <ErrorNotice message={applyError} />
+            </div>
+          )}
           <button
             type="button"
             onClick={handleApply}
             disabled={applying || applied}
-            className="w-full rounded-lg bg-gray-800 px-4 py-2.5 text-sm font-semibold text-white hover:bg-gray-900 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto dark:bg-gray-700 dark:hover:bg-gray-600"
+            className="mt-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {applied ? "Registrado en JobPilot ✓" : applying ? "Guardando…" : "Marcar como aplicado"}
+            {applied ? "Aplicado ✓" : applying ? "Preparando…" : job.source_url ? "Aplicar" : "Marcar como aplicado"}
           </button>
-          {!applied && (
-            <p className="mt-1.5 text-xs text-gray-400 dark:text-gray-500">
-              {resume || coverLetter
-                ? "Guarda esta aplicación en tu pipeline junto con el CV y/o la carta generados abajo."
-                : job.requires_cover_letter
-                  ? "Este puesto requiere carta de presentación — se generará una automáticamente si la marcas sin crear una."
-                  : "Guarda esta aplicación en tu pipeline (Home/Aplicaciones) — no sustituye aplicar en el sitio real."}
-            </p>
-          )}
-          {applied && job.source_url && (
-            <p className="mt-1.5 text-xs text-amber-600 dark:text-amber-400">
-              Recuerda: esto solo quedó registrado en JobPilot — si todavía no aplicaste en el sitio
-              original, usa el botón de arriba.
+          {applied && (
+            <p className="mt-1.5 text-xs text-brand-700 dark:text-brand-400">
+              Registrado en tu pipeline con el CV descargado. Termina de completar el formulario en la
+              pestaña que se abrió.
             </p>
           )}
         </div>
