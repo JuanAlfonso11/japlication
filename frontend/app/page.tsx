@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import RouteGuard from "@/components/RouteGuard";
 import Spinner from "@/components/Spinner";
 import ErrorNotice from "@/components/ErrorNotice";
-import StatusBadge from "@/components/StatusBadge";
+import { STATUS_LABELS } from "@/components/StatusBadge";
 import SwipeCard from "@/components/SwipeCard";
 import { useAuth } from "@/context/AuthContext";
 import { applicationsApi, ApiError, jobsApi } from "@/lib/api";
@@ -21,7 +21,10 @@ import type { Application, Job } from "@/lib/types";
 const PIPELINE_STATUSES = ["applied", "interviewing", "offer"];
 const DEFAULT_SCOPE_INDEX = SCOPE_LEVELS.length - 1; // "Cualquier lugar" — never hides jobs by default
 
-function ScopeSlider({
+/** A small pill trigger — tap to open the actual distance slider in a
+ * popover. Used to matter as much visually as the job cards themselves;
+ * this keeps it out of the way by default while staying one tap away. */
+function ScopePill({
   scopeIndex,
   onChange,
   geoStatus,
@@ -34,70 +37,88 @@ function ScopeSlider({
   geoError: string | null;
   userLocation: UserLocation | null;
 }) {
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [open]);
+
   const locationText = userLocation
     ? [userLocation.city, userLocation.region, userLocation.country].filter(Boolean).join(", ")
     : null;
 
   return (
-    <div className="w-full max-w-md rounded-xl border border-gray-100 bg-white p-3 shadow-sm dark:border-gray-800 dark:bg-gray-900">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
-          📍 Alcance: {SCOPE_LEVELS[scopeIndex].label}
-        </span>
-        {geoStatus === "locating" && (
-          <span className="text-[11px] text-gray-400 dark:text-gray-500">Ubicando…</span>
-        )}
-      </div>
-      <input
-        type="range"
-        min={0}
-        max={SCOPE_LEVELS.length - 1}
-        step={1}
-        value={scopeIndex}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="mt-2 w-full accent-brand-600"
-      />
-      <div className="mt-1 flex justify-between text-[9px] leading-tight text-gray-400 dark:text-gray-500">
-        {SCOPE_LEVELS.map((lvl) => (
-          <span key={lvl.scope} className="w-12 text-center first:text-left last:text-right">
-            {lvl.label}
-          </span>
-        ))}
-      </div>
-      {geoStatus === "denied" && geoError && (
-        <p className="mt-1.5 text-[11px] text-rose-500 dark:text-rose-400">
-          {geoError} Activa el permiso de ubicación en tu navegador o elige &quot;Cualquier lugar&quot;.
-        </p>
-      )}
-      {locationText && (
-        <p className="mt-1.5 text-[11px] text-gray-400 dark:text-gray-500">Tu ubicación: {locationText}</p>
+    <div ref={wrapperRef} className="relative shrink-0">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-[11px] font-medium text-gray-600 shadow-sm ring-1 ring-gray-200 dark:bg-gray-900 dark:text-gray-300 dark:ring-gray-700"
+      >
+        📍 {SCOPE_LEVELS[scopeIndex].label}
+        {geoStatus === "locating" && <span className="text-gray-400">…</span>}
+      </button>
+
+      {open && (
+        <div className="absolute left-0 top-8 z-20 w-64 rounded-xl bg-white p-3 shadow-lg ring-1 ring-gray-100 dark:bg-gray-900 dark:ring-gray-800">
+          <input
+            type="range"
+            min={0}
+            max={SCOPE_LEVELS.length - 1}
+            step={1}
+            value={scopeIndex}
+            onChange={(e) => onChange(Number(e.target.value))}
+            className="w-full accent-brand-600"
+          />
+          <div className="mt-1 flex justify-between text-[9px] leading-tight text-gray-400 dark:text-gray-500">
+            {SCOPE_LEVELS.map((lvl) => (
+              <span key={lvl.scope} className="w-12 text-center first:text-left last:text-right">
+                {lvl.label}
+              </span>
+            ))}
+          </div>
+          {geoStatus === "denied" && geoError && (
+            <p className="mt-1.5 text-[11px] text-rose-500 dark:text-rose-400">
+              {geoError} Activa el permiso de ubicación en tu navegador o elige &quot;Cualquier lugar&quot;.
+            </p>
+          )}
+          {locationText && (
+            <p className="mt-1.5 text-[11px] text-gray-400 dark:text-gray-500">Tu ubicación: {locationText}</p>
+          )}
+        </div>
       )}
     </div>
   );
 }
 
-function StatsStrip({ applications, queueCount }: { applications: Application[]; queueCount: number }) {
+/** Small muted chips instead of the old bordered/shadowed stat cards —
+ * the counts are still all there, just no longer competing with the job
+ * cards for visual weight. */
+function StatsRow({ applications, queueCount }: { applications: Application[]; queueCount: number }) {
   const counts = PIPELINE_STATUSES.reduce<Record<string, number>>((acc, status) => {
     acc[status] = applications.filter((a) => a.status === status).length;
     return acc;
   }, {});
 
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-      <div className="rounded-xl border border-gray-100 bg-white px-3 py-2.5 text-center shadow-sm dark:border-gray-800 dark:bg-gray-900">
-        <p className="text-xl font-bold text-gray-900 dark:text-gray-100">{queueCount}</p>
-        <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400">in queue</p>
-      </div>
+    <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+      <span className="shrink-0 rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-medium text-gray-500 dark:bg-gray-800 dark:text-gray-400">
+        {queueCount} en cola
+      </span>
       {PIPELINE_STATUSES.map((status) => (
         <Link
           key={status}
           href={`/applications?status=${status}`}
-          className="rounded-xl border border-gray-100 bg-white px-3 py-2.5 text-center shadow-sm transition-colors hover:bg-gray-50 dark:border-gray-800 dark:bg-gray-900 dark:hover:bg-gray-800"
+          className="shrink-0 rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-medium text-gray-500 transition-colors hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700"
         >
-          <p className="text-xl font-bold text-gray-900 dark:text-gray-100">{counts[status]}</p>
-          <div className="mt-0.5 flex justify-center">
-            <StatusBadge status={status} />
-          </div>
+          {counts[status]} {STATUS_LABELS[status]}
         </Link>
       ))}
     </div>
@@ -227,25 +248,23 @@ function HomeContent() {
   const hiddenByScope = (queue?.length ?? 0) > 0 && (filteredQueue?.length ?? 0) === 0;
 
   return (
-    <div className="flex flex-col items-center gap-5 pb-4 animate-fade-in">
+    <div className="flex flex-col items-center gap-3 pb-4 animate-fade-in">
       <div className="w-full max-w-md">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+        <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">
           Hi{user?.full_name ? `, ${user.full_name.split(" ")[0]}` : ""} 👋
         </h1>
-        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          Matches ranked against your CV. Swipe right to save, left to pass.
-        </p>
       </div>
 
-      <ScopeSlider
-        scopeIndex={scopeIndex}
-        onChange={handleScopeChange}
-        geoStatus={geoStatus}
-        geoError={geoError}
-        userLocation={userLocation}
-      />
-
-      {applications && <div className="w-full max-w-md"><StatsStrip applications={applications} queueCount={filteredQueue?.length ?? 0} /></div>}
+      <div className="flex w-full max-w-md items-center gap-1.5">
+        <ScopePill
+          scopeIndex={scopeIndex}
+          onChange={handleScopeChange}
+          geoStatus={geoStatus}
+          geoError={geoError}
+          userLocation={userLocation}
+        />
+        {applications && <StatsRow applications={applications} queueCount={filteredQueue?.length ?? 0} />}
+      </div>
 
       {actionError && (
         <div className="w-full max-w-md">
@@ -253,7 +272,11 @@ function HomeContent() {
         </div>
       )}
 
-      <div className="relative h-[520px] w-full max-w-md">
+      {/* Scales with the viewport instead of a fixed height, so the
+          decide buttons below always land within reach without needing
+          to scroll first — the job cards, not the controls above, get
+          the space. */}
+      <div className="relative h-[min(66dvh,520px)] w-full max-w-md">
         {!current && hiddenByScope && (
           <div className="flex h-full flex-col items-center justify-center gap-3 rounded-3xl border-2 border-dashed border-gray-300 p-8 text-center dark:border-gray-700">
             <span className="text-4xl">📍</span>
