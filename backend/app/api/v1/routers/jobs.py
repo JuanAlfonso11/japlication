@@ -782,17 +782,39 @@ def _profile_search_query(profile: CareerProfile) -> Optional[str]:
     return None
 
 
-_AUTO_IMPORT_LIMIT = 20
+_HOME_QUEUE_TARGET = 30  # Home's swipe queue is topped up to this many undecided matches, never left to grow past it.
+_AUTO_IMPORT_LIMIT = 20  # Hard ceiling per sweep regardless of queue headroom, so one run can't dump 30 at once.
+
+
+async def _undecided_queue_size(user_id: UUID, db: AsyncSession) -> int:
+    """How many jobs are currently sitting in this user's Home queue —
+    matched but not yet swiped on. Same shape as GET /matches' own count
+    query, kept separate since that endpoint also supports a min_score
+    filter this one doesn't need."""
+    decided_job_ids_subq = select(Application.job_id).where(Application.user_id == user_id)
+    count_stmt = (
+        select(func.count())
+        .select_from(JobMatch)
+        .where(JobMatch.user_id == user_id, JobMatch.job_id.not_in(decided_job_ids_subq))
+    )
+    return (await db.execute(count_stmt)).scalar_one()
 
 
 async def run_auto_import_for_user(user: User, db: AsyncSession) -> AutoImportResponse:
     """Searches every no-auth provider using the saved career profile
     (headline, most recent role, or top skills) and imports the newest
     matches straight into `jobs` with a computed match score — this is
-    what runs right after a CV-derived profile is saved, so Home's swipe
+    what runs right after a CV-derived profile is saved, on every pull-to-
+    refresh, and on the every-2-hours scheduled sweep, so Home's swipe
     queue has something to show without the user having to visit Discover
     first. Only genuinely new postings are counted/matched; ones already
     in the database (by source_url) are left alone.
+
+    Tops the queue up to `_HOME_QUEUE_TARGET` (30) rather than always
+    adding up to `_AUTO_IMPORT_LIMIT` more — a user who swipes slower than
+    the 2-hour sweep would otherwise see the queue grow without bound;
+    this keeps it capped so there's always a fresh batch waiting without
+    ever overflowing.
 
     Extracted from the route handler below so the same logic can also run
     unattended — see app/scripts/run_daily_sweep.py, invoked on a schedule
@@ -811,6 +833,13 @@ async def run_auto_import_for_user(user: User, db: AsyncSession) -> AutoImportRe
             detail="Add a headline, a recent role, or a few skills to your profile first so we know what to search for.",
         )
 
+    current_queue_size = await _undecided_queue_size(user.id, db)
+    room = max(0, _HOME_QUEUE_TARGET - current_queue_size)
+    import_limit = min(room, _AUTO_IMPORT_LIMIT)
+
+    if import_limit == 0:
+        return AutoImportResponse(imported=0, query=q, sources=[])
+
     outcomes = await asyncio.gather(
         *[_run_search_provider(p, q, None, None, None, None) for p in _SEARCH_PROVIDERS]
     )
@@ -823,7 +852,7 @@ async def run_auto_import_for_user(user: User, db: AsyncSession) -> AutoImportRe
     all_results.sort(key=_aggregate_sort_key, reverse=True)
 
     imported = 0
-    for result in all_results[:_AUTO_IMPORT_LIMIT]:
+    for result in all_results[:import_limit]:
         try:
             job, created = await _get_or_create_external_job(
                 result.model_dump(), result.source, user.id, db

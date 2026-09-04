@@ -229,6 +229,7 @@ function HomeContent() {
   // triggers its own exit internally and calls `decide` directly once the
   // animation finishes, so this stays null in that path.
   const [pendingDecision, setPendingDecision] = useState<"left" | "right" | null>(null);
+  const [justApplied, setJustApplied] = useState<Job | null>(null);
 
   const decide = useCallback(
     async (decision: "left" | "right") => {
@@ -239,6 +240,7 @@ function HomeContent() {
       try {
         await jobsApi.decide(target.id, { decision });
         setQueue((prev) => (prev ? prev.filter((j) => j.id !== target.id) : prev));
+        setJustApplied(decision === "right" ? target : null);
       } catch (err) {
         setActionError(
           err instanceof ApiError ? err.message : "Could not record your decision. Try again."
@@ -378,6 +380,42 @@ function HomeContent() {
           >
             <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
           </button>
+        </div>
+      )}
+
+      {justApplied && (
+        <div className="w-full max-w-md rounded-xl bg-brand-50 p-3 dark:bg-brand-900/20">
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-xs text-brand-800 dark:text-brand-300">
+              Guardado en tu pipeline. JobPilot no lo envía por ti — para aplicar de verdad a{" "}
+              <strong>{justApplied.title}</strong> tienes que hacerlo en el sitio original.
+            </p>
+            <button
+              type="button"
+              onClick={() => setJustApplied(null)}
+              aria-label="Cerrar"
+              className="shrink-0 text-brand-400 hover:text-brand-600 dark:text-brand-500"
+            >
+              ✕
+            </button>
+          </div>
+          {justApplied.source_url ? (
+            <a
+              href={justApplied.source_url}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-2 inline-block rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700"
+            >
+              Aplicar en el sitio original ↗
+            </a>
+          ) : (
+            <Link
+              href={`/jobs/${justApplied.id}`}
+              className="mt-2 inline-block text-xs font-semibold text-brand-700 hover:underline dark:text-brand-300"
+            >
+              Ver detalles del trabajo →
+            </Link>
+          )}
         </div>
       )}
 

@@ -189,16 +189,6 @@ function JobDetailContent() {
                 Requiere carta de presentación
               </span>
             )}
-            {job.source_url && (
-              <a
-                href={job.source_url}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-1 block text-xs text-brand-600 hover:text-brand-700"
-              >
-                View original posting ↗
-              </a>
-            )}
           </div>
           {match && <ScoreBadge score={match.overall_score} size="lg" />}
         </div>
@@ -216,23 +206,49 @@ function JobDetailContent() {
           </div>
         )}
 
+        {job.source_url && (
+          <div className="mt-4 rounded-xl bg-brand-50 p-3 dark:bg-brand-900/20">
+            <p className="text-xs font-medium text-brand-800 dark:text-brand-300">
+              JobPilot no envía tu solicitud al empleador — para aplicar de verdad tienes que hacerlo en
+              el sitio original.
+            </p>
+            <a
+              href={job.source_url}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-2 inline-block rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+            >
+              Aplicar en el sitio original ↗
+            </a>
+          </div>
+        )}
+
         <div className="mt-4 border-t border-gray-100 pt-4 dark:border-gray-800">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
+            Registrar en JobPilot (no aplica por ti)
+          </p>
           {applyError && <ErrorNotice message={applyError} />}
           <button
             type="button"
             onClick={handleApply}
             disabled={applying || applied}
-            className="w-full rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+            className="w-full rounded-lg bg-gray-800 px-4 py-2.5 text-sm font-semibold text-white hover:bg-gray-900 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto dark:bg-gray-700 dark:hover:bg-gray-600"
           >
-            {applied ? "Aplicado ✓" : applying ? "Enviando…" : "Aplicar"}
+            {applied ? "Registrado en JobPilot ✓" : applying ? "Guardando…" : "Marcar como aplicado"}
           </button>
           {!applied && (
             <p className="mt-1.5 text-xs text-gray-400 dark:text-gray-500">
               {resume || coverLetter
-                ? "Se enviará con el CV y/o la carta de presentación generados abajo."
+                ? "Guarda esta aplicación en tu pipeline junto con el CV y/o la carta generados abajo."
                 : job.requires_cover_letter
-                  ? "Este puesto requiere carta de presentación — se generará una automáticamente si aplicas sin crear una."
-                  : "Puedes aplicar directamente, o generar un CV/carta a medida abajo antes."}
+                  ? "Este puesto requiere carta de presentación — se generará una automáticamente si la marcas sin crear una."
+                  : "Guarda esta aplicación en tu pipeline (Home/Aplicaciones) — no sustituye aplicar en el sitio real."}
+            </p>
+          )}
+          {applied && job.source_url && (
+            <p className="mt-1.5 text-xs text-amber-600 dark:text-amber-400">
+              Recuerda: esto solo quedó registrado en JobPilot — si todavía no aplicaste en el sitio
+              original, usa el botón de arriba.
             </p>
           )}
         </div>
