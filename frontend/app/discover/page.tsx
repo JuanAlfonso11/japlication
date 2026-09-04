@@ -118,7 +118,7 @@ function ExternalResultCard({
   );
 }
 
-// A keyed provider (Adzuna/USAJobs/France Travail/SerpApi) without its key
+// A keyed provider (Adzuna/USAJobs/SerpApi) without its key
 // in .env always fails with this exact message (see each service's
 // is_configured() check) — that's expected, not broken, so it gets a
 // neutral "sin clave" badge instead of the alarming red "error" one a
@@ -254,7 +254,7 @@ function DiscoverContent() {
       <div>
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Discover jobs</h1>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          Busca a la vez en 12 fuentes (9 públicas sin login + Adzuna/USAJobs/France Travail si
+          Busca a la vez en 12 fuentes (9 públicas sin login + Adzuna/USAJobs/Google Jobs si
           configuraste sus claves) y combina los resultados en una sola lista. Todo lo que agregues
           queda comparado contra tu perfil en Home.
         </p>
