@@ -1,0 +1,23 @@
+#!/bin/sh
+# Runs the backend test suite before every commit, via the running
+# docker-compose backend container. Skips gracefully (never blocks the
+# commit) if Docker/the backend isn't up right now — this is a safety net
+# for a personal single-dev repo, not a hard CI gate.
+#
+# Installed via: git config core.hooksPath .githooks
+# Bypass once with: git commit --no-verify
+
+if ! docker compose ps --status running --services 2>/dev/null | grep -q "^backend$"; then
+    echo "[pre-commit] Backend container isn't running — skipping backend tests."
+    exit 0
+fi
+
+echo "[pre-commit] Running backend tests..."
+if ! docker compose exec -T backend python -m pytest -q; then
+    echo "[pre-commit] Backend tests FAILED — commit blocked."
+    echo "[pre-commit] Fix the failure, or bypass with: git commit --no-verify"
+    exit 1
+fi
+
+echo "[pre-commit] Backend tests passed."
+exit 0

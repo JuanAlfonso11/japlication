@@ -17,3 +17,12 @@ Note the two "start" paths overlap on purpose: **autostart** brings the app up s
 
 To restore a backup: `Get-Content backups\jobflow_<timestamp>.sql | docker compose exec -T db psql -U jobflow -d jobflow`
 (stop the backend first so it isn't writing mid-restore).
+
+## Pre-commit hook
+
+`.githooks/pre-commit` runs the backend test suite before every commit
+(skips gracefully if the backend container isn't running — never blocks a
+commit over Docker being off). `core.hooksPath` is a local git config, not
+versioned, so **after a fresh clone run once**: `git config core.hooksPath .githooks`
+(already configured on this machine). Bypass a single commit with `git commit --no-verify`.
+
