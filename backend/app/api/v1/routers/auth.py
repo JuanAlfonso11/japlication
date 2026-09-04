@@ -2,13 +2,14 @@ import logging
 from datetime import datetime, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.core.config import settings
+from app.core.rate_limit import limiter
 from app.core.security import (
     create_access_token,
     create_state_token,
@@ -51,7 +52,8 @@ def _send_verification_email(user: User) -> None:
 
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
-async def register(payload: UserRegister, db: AsyncSession = Depends(get_db)) -> TokenResponse:
+@limiter.limit("5/minute")
+async def register(request: Request, payload: UserRegister, db: AsyncSession = Depends(get_db)) -> TokenResponse:
     existing = await db.execute(select(User).where(User.email == payload.email.lower()))
     if existing.scalar_one_or_none() is not None:
         raise HTTPException(status_code=409, detail="An account with this email already exists.")
@@ -72,7 +74,8 @@ async def register(payload: UserRegister, db: AsyncSession = Depends(get_db)) ->
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(payload: UserLogin, db: AsyncSession = Depends(get_db)) -> TokenResponse:
+@limiter.limit("10/minute")
+async def login(request: Request, payload: UserLogin, db: AsyncSession = Depends(get_db)) -> TokenResponse:
     result = await db.execute(select(User).where(User.email == payload.email.lower()))
     user = result.scalar_one_or_none()
     if user is None or not verify_password(payload.password, user.hashed_password):
@@ -88,8 +91,9 @@ async def me(current_user: User = Depends(get_current_user)) -> UserSchema:
 
 
 @router.post("/resend-verification", response_model=ResendVerificationResponse)
+@limiter.limit("3/minute")
 async def resend_verification(
-    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+    request: Request, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ) -> ResendVerificationResponse:
     if current_user.email_verified:
         return ResendVerificationResponse(sent=False, detail="Your email is already verified.")
@@ -98,7 +102,8 @@ async def resend_verification(
 
 
 @router.get("/verify-email")
-async def verify_email(token: str, db: AsyncSession = Depends(get_db)) -> RedirectResponse:
+@limiter.limit("20/minute")
+async def verify_email(request: Request, token: str, db: AsyncSession = Depends(get_db)) -> RedirectResponse:
     """The link in the verification email points the browser here directly
     (no Authorization header available), so identity comes from the signed
     `token` rather than a bearer token — same pattern as any other

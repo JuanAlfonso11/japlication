@@ -2,11 +2,14 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from slowapi.errors import RateLimitExceeded
 
 from app.api.v1.routers import applications, auth, cover_letters, jobs, match, profile, resumes
 from app.core.config import settings
+from app.core.rate_limit import limiter
 
 app = FastAPI(title=settings.PROJECT_NAME, version="1.0.0")
+app.state.limiter = limiter
 
 app.add_middleware(
     CORSMiddleware,
@@ -15,6 +18,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
+    return JSONResponse(
+        status_code=429,
+        content={"detail": "Too many attempts — please wait a moment and try again."},
+    )
 
 
 @app.exception_handler(HTTPException)
