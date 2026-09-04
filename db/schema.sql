@@ -21,6 +21,20 @@ CREATE TABLE users (
 );
 
 -- =========================================================
+-- device_tokens (FCM push-notification tokens, one row per installed app)
+-- =========================================================
+CREATE TABLE device_tokens (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token       TEXT UNIQUE NOT NULL,
+    platform    TEXT NOT NULL DEFAULT 'android',
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_device_tokens_user ON device_tokens (user_id);
+
+-- =========================================================
 -- career_profiles  (the "CV Maestro" - factual, user-owned truth)
 -- =========================================================
 CREATE TABLE career_profiles (
@@ -198,4 +212,6 @@ CREATE TRIGGER trg_career_profiles_updated_at BEFORE UPDATE ON career_profiles
 CREATE TRIGGER trg_jobs_updated_at BEFORE UPDATE ON jobs
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 CREATE TRIGGER trg_applications_updated_at BEFORE UPDATE ON applications
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+CREATE TRIGGER trg_device_tokens_updated_at BEFORE UPDATE ON device_tokens
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();

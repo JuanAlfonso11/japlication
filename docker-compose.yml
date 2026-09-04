@@ -37,6 +37,9 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-no-reply@jobflow.ai}
       SMTP_USE_TLS: ${SMTP_USE_TLS:-true}
+      FIREBASE_CREDENTIALS_PATH: ${FIREBASE_CREDENTIALS_PATH:-}
+    volumes:
+      - ./backend/secrets:/app/secrets:ro
     ports:
       - "8000:8000"
 

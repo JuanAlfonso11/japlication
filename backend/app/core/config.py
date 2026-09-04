@@ -48,6 +48,11 @@ class Settings(BaseSettings):
     # FRONTEND_ORIGIN. Same value as the frontend's NEXT_PUBLIC_API_URL.
     BACKEND_PUBLIC_URL: str = "http://localhost:8000/api/v1"
 
+    # Push notifications (Firebase Cloud Messaging). Without this set, the
+    # backend just skips sending pushes — same graceful-degradation pattern
+    # as SMTP/Claude/every other optional external service.
+    FIREBASE_CREDENTIALS_PATH: Optional[str] = None
+
     # App metadata
     PROJECT_NAME: str = "JobFlow AI"
     API_V1_PREFIX: str = "/api/v1"

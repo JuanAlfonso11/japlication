@@ -16,6 +16,10 @@ npm-debug.log*
 .env
 .env.local
 
+# Firebase Admin SDK service account key — full admin credential for the
+# Firebase project, never committed (same treatment as .env)
+backend/secrets/
+
 # Local DB backups (scripts/backup-db.ps1) — contain real user data,
 # never committed
 backups/

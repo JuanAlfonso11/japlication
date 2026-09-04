@@ -11,6 +11,7 @@ from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.application import Application
 from app.models.career_profile import CareerProfile
+from app.models.device_token import DeviceToken
 from app.models.enums import ApplicationStatus, JobSource
 from app.models.job import Job
 from app.models.job_match import JobMatch
@@ -33,6 +34,7 @@ from app.services import (
     experience_level,
     himalayas,
     jobicy,
+    push_notifications,
     remotejobs_org,
     remotive,
     themuse,
@@ -642,6 +644,18 @@ async def auto_import_matching_jobs(
             continue
         await compute_and_persist_match(profile, job, current_user.id, db)
         imported += 1
+
+    if imported > 0 and push_notifications.is_configured():
+        tokens = (
+            await db.execute(select(DeviceToken.token).where(DeviceToken.user_id == current_user.id))
+        ).scalars().all()
+        plural = "s" if imported != 1 else ""
+        for device_token in tokens:
+            push_notifications.send_push(
+                device_token,
+                "JobPilot",
+                f"Encontramos {imported} vacante{plural} nueva{plural} que hacen match — ya están en tu cola.",
+            )
 
     return AutoImportResponse(imported=imported, query=q, sources=sources)
 

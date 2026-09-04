@@ -35,3 +35,7 @@ next-env.d.ts
 /android/*.jks
 /android/captures/
 /android/.idea/
+# Firebase config — identifies the project/API key; kept local rather than
+# committed, consistent with how every other credential in this repo is
+# handled (.env, SMTP password, etc.)
+/android/app/google-services.json

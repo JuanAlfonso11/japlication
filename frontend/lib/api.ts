@@ -272,3 +272,12 @@ export const resumeApi = {
 export const coverLetterApi = {
   get: (id: string) => request<CoverLetter>(`/cover-letters/${id}`),
 };
+
+// ---------- Push notifications ----------
+
+export const notificationsApi = {
+  registerDevice: (token: string, platform: string = "android") =>
+    request<void>("/notifications/register-device", { method: "POST", body: { token, platform } }),
+  unregisterDevice: (token: string, platform: string = "android") =>
+    request<void>("/notifications/register-device", { method: "DELETE", body: { token, platform } }),
+};
