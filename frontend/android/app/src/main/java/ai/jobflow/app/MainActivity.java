@@ -1,8 +1,13 @@
 package ai.jobflow.app;
 
+import android.app.DownloadManager;
+import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Environment;
+import android.webkit.URLUtil;
+import android.widget.Toast;
 import com.getcapacitor.BridgeActivity;
 
 /**
@@ -28,6 +33,7 @@ public class MainActivity extends BridgeActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         handleViewIntent(getIntent());
+        setupDownloadListener();
     }
 
     @Override
@@ -43,5 +49,41 @@ public class MainActivity extends BridgeActivity {
         if (getBridge() != null && getBridge().getWebView() != null) {
             getBridge().getWebView().loadUrl(data.toString());
         }
+    }
+
+    /**
+     * The update banner (UpdateChecker.tsx) links straight to the APK
+     * download — but that URL shares JobPilot's own Tailscale hostname
+     * (already in capacitor.config.ts's allowNavigation, needed for the
+     * email-verification link), so Capacitor's own external-link handling
+     * (Bridge.launchIntent, host-based) treats it as an in-app navigation
+     * rather than something to hand off externally. A bare WebView also
+     * has no DownloadListener by default — Capacitor doesn't register one
+     * — so without this, tapping the link would just try to "render" the
+     * APK's bytes as a page and silently fail. Registering one hands any
+     * non-renderable response (the APK's Content-Disposition: attachment)
+     * to Android's own DownloadManager, the same system-level download +
+     * "tap notification to install" flow a normal browser gives you.
+     */
+    private void setupDownloadListener() {
+        if (getBridge() == null || getBridge().getWebView() == null) return;
+        getBridge()
+            .getWebView()
+            .setDownloadListener((url, userAgent, contentDisposition, mimetype, contentLength) -> {
+                try {
+                    String filename = URLUtil.guessFileName(url, contentDisposition, mimetype);
+                    DownloadManager.Request request = new DownloadManager.Request(Uri.parse(url));
+                    request.setMimeType(mimetype);
+                    request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+                    request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, filename);
+                    DownloadManager downloadManager = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
+                    if (downloadManager != null) {
+                        downloadManager.enqueue(request);
+                        Toast.makeText(getApplicationContext(), "Descargando actualización…", Toast.LENGTH_LONG).show();
+                    }
+                } catch (Exception e) {
+                    Toast.makeText(getApplicationContext(), "No se pudo iniciar la descarga.", Toast.LENGTH_LONG).show();
+                }
+            });
     }
 }

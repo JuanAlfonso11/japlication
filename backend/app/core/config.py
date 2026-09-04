@@ -79,6 +79,18 @@ class Settings(BaseSettings):
     # https://serpapi.com/users/sign_up.
     SERPAPI_API_KEY: Optional[str] = None
 
+    # Android in-app update check (GET /app/android-update) — lets the app
+    # prompt "there's a newer build" without a cable. Bump
+    # ANDROID_LATEST_VERSION_CODE to match android/app/build.gradle's
+    # versionCode and point ANDROID_UPDATE_APK_URL at wherever the new APK
+    # is being served (see scripts/apk-server/) every time a native build
+    # ships. Unset (None) means no update is tracked — the banner just
+    # never shows, same graceful-degradation pattern as everywhere else.
+    ANDROID_LATEST_VERSION_CODE: Optional[int] = None
+    ANDROID_LATEST_VERSION_NAME: Optional[str] = None
+    ANDROID_UPDATE_APK_URL: Optional[str] = None
+    ANDROID_UPDATE_NOTES: Optional[str] = None
+
     # App metadata
     PROJECT_NAME: str = "JobFlow AI"
     API_V1_PREFIX: str = "/api/v1"

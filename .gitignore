@@ -31,6 +31,10 @@ logs/
 # Generated .ico for the desktop shortcut (scripts/install-desktop-shortcut.ps1)
 scripts/.icon/
 
+# The actual APK binary served by scripts/apk-server/ — rebuilt and copied
+# here each native release (see docs/ANDROID_APP.md), never committed.
+scripts/apk-server/*.apk
+
 # OS
 .DS_Store
 

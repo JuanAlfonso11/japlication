@@ -5,6 +5,7 @@ import { ThemeProvider } from "@/context/ThemeContext";
 import NavShell from "@/components/NavShell";
 import PushNotificationsSetup from "@/components/PushNotificationsSetup";
 import BackButtonHandler from "@/components/BackButtonHandler";
+import UpdateChecker from "@/components/UpdateChecker";
 
 export default function Providers({ children }: { children: React.ReactNode }) {
   return (
@@ -12,6 +13,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
       <AuthProvider>
         <PushNotificationsSetup />
         <BackButtonHandler />
+        <UpdateChecker />
         <NavShell>{children}</NavShell>
       </AuthProvider>
     </ThemeProvider>

@@ -24,6 +24,7 @@ import type {
   RegisterPayload,
   CVUploadResult,
   ResendVerificationResponse,
+  AndroidUpdateInfo,
   ProfileImprovementResult,
   ResumeGeneratePayload,
   ResumeVersion,
@@ -451,4 +452,12 @@ export const notificationsApi = {
     request<void>("/notifications/register-device", { method: "POST", body: { token, platform } }),
   unregisterDevice: (token: string, platform: string = "android") =>
     request<void>("/notifications/register-device", { method: "DELETE", body: { token, platform } }),
+};
+
+// ---------- Android in-app update check ----------
+
+export const appUpdateApi = {
+  // Unauthenticated — this is what UpdateChecker.tsx polls on every app
+  // launch, before there's necessarily a session to be authenticated with.
+  check: () => request<AndroidUpdateInfo>("/app/android-update", { auth: false }),
 };

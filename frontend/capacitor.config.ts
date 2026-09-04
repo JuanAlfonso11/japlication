@@ -34,6 +34,17 @@ const config: CapacitorConfig = {
     // sends the WebView to the *backend* on :8443, a different origin than
     // the frontend on :443 even though it's the same Tailscale host.
     allowNavigation: ["jobpilot.tailb3d4c1.ts.net"],
+    // Capacitor's own WebViewClient (BridgeWebViewClient) already loads
+    // this bundled local page automatically whenever the main-frame
+    // request to server.url fails for ANY reason — DNS never resolving
+    // because the phone's own Tailscale VPN isn't connected
+    // (net::ERR_NAME_NOT_RESOLVED, since the hostname only resolves
+    // through Tailscale's MagicDNS), connection refused because the PC is
+    // off, or a plain timeout. public/offline.html is bundled straight
+    // into the APK (not fetched over the network), so it renders with
+    // zero connectivity of any kind — no custom native WebViewClient code
+    // needed, this is a stock Capacitor config option.
+    errorPath: "offline.html",
   },
 };
 

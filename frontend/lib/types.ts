@@ -516,3 +516,12 @@ export interface ApiErrorShape {
   detail: string;
   code?: string;
 }
+
+// ---------- Android in-app update check ----------
+
+export interface AndroidUpdateInfo {
+  version_code: number | null;
+  version_name: string | null;
+  apk_url: string | null;
+  notes: string | null;
+}
