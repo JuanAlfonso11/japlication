@@ -23,6 +23,7 @@ quedó documentado como descartado, con el motivo.
 | 10 | USAJobs | API key gratis (registro instantáneo) | Sí (2026-09) — código listo, esperando claves |
 | 11 | France Travail (ex-Pôle Emploi) | OAuth2 client credentials (registro instantáneo) | Sí (2026-09) — código listo, esperando claves |
 | 12 | Get on Board | Ninguna (facet pública de su API) | Sí (2026-09) |
+| 13 | SerpApi (Google Jobs) | API key gratis (registro instantáneo) | Sí (2026-09) |
 | — | RemoteOK | Ninguna en teoría | **No** — ver nota |
 | — | Reed.co.uk | API key gratis | **No** — ver nota |
 | — | JSearch (RapidAPI) | API key gratis (cuota mínima) | **No** — ver nota |
@@ -245,6 +246,35 @@ República Dominicana (ver más abajo la nota completa sobre esa lista — Get o
 - **Límites**: sin límite documentado públicamente; se cachea 15 min como el resto de fuentes sin auth
 - **Implementación**: `backend/app/services/getonbrd.py`
 
+## 13. SerpApi (Google Jobs)
+
+Agregada 2026-09 como respuesta directa a "¿cómo consigo datos de LinkedIn sin arriesgar mi cuenta?" —
+ver la sección de LinkedIn más abajo para el porqué de fondo. SerpApi no es una fuente propia: es una capa
+sobre el motor "Google for Jobs", que a su vez indexa vacantes públicas de sitios como LinkedIn, Indeed,
+Glassdoor y ZipRecruiter (entre muchos otros) porque esos sitios permiten que Google las rastree. Nunca se
+toca linkedin.com ni ninguna cuenta — la cuenta del usuario de JobPilot jamás entra en la ecuación.
+
+- **Endpoint**: `GET https://serpapi.com/search.json?engine=google_jobs&q=...`
+- **Auth**: `api_key` gratis, registro instantáneo en https://serpapi.com/users/sign_up
+- **Cuota gratis**: 250 búsquedas/mes, 50/hora — de sobra para revisión personal periódica (no para
+  polling continuo)
+- **Formato**: JSON — `jobs_results[]` con `title`, `company_name`, `location`, `description`, `via`
+  (el sitio real de origen — `"LinkedIn"`, `"Indeed"`, etc.), `detected_extensions` (`posted_at` relativo
+  tipo "3 days ago", `salary`, `schedule_type`, `work_from_home`), `job_highlights[]` (secciones
+  "Qualifications"/"Responsibilities" ya estructuradas), `apply_options[]` y `source_link` (URL real del
+  posting en el sitio de origen — se usa como `source_url`)
+- **Ubicación/alcance**: la cobertura más amplia de todas las 13 fuentes — agrega de facto varios boards
+  grandes (incluido LinkedIn) en una sola búsqueda
+- **Nivel de experiencia**: no expone campo nativo → heurística de texto sobre título+descripción
+- **Límites**: sin paginación real (Google Jobs pagina con un `next_page_token` opaco en vez de un número
+  de página) — mismo compromiso que ya asumen Remotive/Jobicy/We Work Remotely/Hacker News (siempre
+  `has_more: false`, una sola tanda de resultados por búsqueda)
+- **Fechas relativas**: `detected_extensions.posted_at` viene como texto relativo ("3 days ago", "yesterday") en
+  vez de una fecha absoluta — se intenta convertir a una fecha real para ordenar, y siempre se guarda el
+  texto original en `posted_at_text` para mostrarlo tal cual
+- **Implementación**: `backend/app/services/serpapi_jobs.py` — **funciona en cuanto se agregue
+  `SERPAPI_API_KEY` a `.env`**
+
 ### Sobre la lista de ~20 plataformas "buenas para RD"
 
 Se investigaron Workana, Upwork, Fiverr, Computrabajo RD, Wellfound, Toptal, BairesDev, Turing, Crossover,
@@ -291,6 +321,17 @@ documentación oficial vigente (Microsoft Learn para LinkedIn, docs.indeed.com p
 - **Conclusión**: inviable para un proyecto personal. La única superficie self-serve de LinkedIn para
   desarrolladores individuales es "Sign In with LinkedIn" (autenticación/perfil básico) — no incluye datos
   de empleos.
+- **Scraping directo — por qué se descartó explícitamente**: "uso personal" no exime de romper el User
+  Agreement (es una prohibición contractual, no distingue por escala/propósito), y el riesgo real e
+  inmediato no es legal sino la propia cuenta — LinkedIn detecta y banea cuentas que scrapean, sin importar
+  el volumen. `hiQ Labs v. LinkedIn` (sobre si scrapear datos públicos sin login viola la ley CFAA de EEUU)
+  no cambia esto: es sobre otra ley, no sobre el contrato de LinkedIn, y menos aún protege a alguien
+  scrapeando con su propia cuenta logueada.
+- **Vía legítima encontrada**: SerpApi/Google Jobs (ver fuente #13 arriba) — Google indexa públicamente
+  páginas individuales de vacantes de LinkedIn (LinkedIn lo permite), y SerpApi expone ese índice ya
+  agregado. La cuenta de LinkedIn del usuario nunca se toca — es Google el que rastrea, no nosotros ni
+  SerpApi scrapeando LinkedIn directamente. Cobertura parcial (solo lo que Google ya indexó), pero sin el
+  riesgo de cuenta.
 
 ### Indeed — Job Sync API / Partner APIs
 
@@ -326,7 +367,7 @@ documentación oficial vigente (Microsoft Learn para LinkedIn, docs.indeed.com p
 
 ## Cómo se integran (resumen técnico — detalle completo en `backend/README.md`)
 
-- El endpoint **`GET /jobs/search/aggregate`** dispara las 12 fuentes **en paralelo**
+- El endpoint **`GET /jobs/search/aggregate`** dispara las 13 fuentes **en paralelo**
   (`asyncio.gather`) y devuelve un solo listado combinado — así es como Discover muestra "todos los
   resultados de todas las APIs integradas" en una sola búsqueda, sin que el usuario tenga que elegir
   proveedor uno por uno. Un proveedor que falla no tumba a los demás: se reporta por separado — esto
@@ -336,6 +377,6 @@ documentación oficial vigente (Microsoft Learn para LinkedIn, docs.indeed.com p
   (`backend/app/services/experience_level.py`). Himalayas y The Muse lo mandan como parámetro nativo al
   proveedor; Jobicy lo trae en la respuesta (`jobLevel`) y se normaliza; Arbeitnow/Remotive/RemoteJobs.org
   no lo exponen, así que se infiere por heurística de texto sobre título+descripción (mismo enfoque que ya
-  usa `job_importer.py` para seniority) — mismo filtro, aplicado de forma uniforme sobre las 12 fuentes.
+  usa `job_importer.py` para seniority) — mismo filtro, aplicado de forma uniforme sobre las 13 fuentes.
 - **Ubicación por defecto**: el campo de ubicación en el formulario de Discover arranca con `"Remote"`
   precargado (no es una restricción dura — el usuario puede borrarlo o cambiarlo).

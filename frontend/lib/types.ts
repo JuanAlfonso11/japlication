@@ -162,10 +162,10 @@ export interface JobCreatePayload {
   requires_cover_letter?: boolean;
 }
 
-// ---------- External job search (12 providers — GET /jobs/search/aggregate).
-// 9 are free/no-auth; adzuna, usajobs and francetravail need API keys set
-// in the backend's .env and simply report an error in `sources` (not a
-// hard failure) when unconfigured. ----------
+// ---------- External job search (13 providers — GET /jobs/search/aggregate).
+// 9 are free/no-auth; adzuna, usajobs, francetravail and serpapi need API
+// keys set in the backend's .env and simply report an error in `sources`
+// (not a hard failure) when unconfigured. ----------
 
 export type ExternalProvider =
   | "himalayas"
@@ -179,7 +179,8 @@ export type ExternalProvider =
   | "getonbrd"
   | "adzuna"
   | "usajobs"
-  | "francetravail";
+  | "francetravail"
+  | "serpapi";
 
 export const PROVIDER_LABELS: Record<ExternalProvider, string> = {
   himalayas: "Himalayas",
@@ -194,6 +195,7 @@ export const PROVIDER_LABELS: Record<ExternalProvider, string> = {
   adzuna: "Adzuna",
   usajobs: "USAJobs",
   francetravail: "France Travail",
+  serpapi: "Google Jobs (SerpApi)",
 };
 
 export type ExperienceLevel = "internship" | "entry" | "mid" | "senior" | "lead";

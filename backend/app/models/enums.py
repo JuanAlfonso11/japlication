@@ -20,6 +20,7 @@ class JobSource(str, enum.Enum):
     usajobs = "usajobs"
     francetravail = "francetravail"
     getonbrd = "getonbrd"
+    serpapi = "serpapi"
     manual = "manual"
 
 

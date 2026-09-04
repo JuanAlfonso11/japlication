@@ -78,6 +78,12 @@ class Settings(BaseSettings):
     FRANCE_TRAVAIL_CLIENT_ID: Optional[str] = None
     FRANCE_TRAVAIL_CLIENT_SECRET: Optional[str] = None
 
+    # SerpApi (Google Jobs — aggregates LinkedIn/Indeed/Glassdoor/
+    # ZipRecruiter/etc. via Google's own public job-posting index, never
+    # touching linkedin.com directly). Free self-serve key at
+    # https://serpapi.com/users/sign_up.
+    SERPAPI_API_KEY: Optional[str] = None
+
     # App metadata
     PROJECT_NAME: str = "JobFlow AI"
     API_V1_PREFIX: str = "/api/v1"
