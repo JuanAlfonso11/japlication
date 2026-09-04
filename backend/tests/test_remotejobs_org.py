@@ -56,3 +56,39 @@ def test_search_reads_data_and_pagination_envelope(monkeypatch):
     assert len(data["results"]) == 1
     assert data["has_more"] is False
     assert remotejobs_org.get_cached_result("7") is not None
+
+
+def test_search_filters_irrelevant_results_client_side(monkeypatch):
+    """RemoteJobs.org's own `q` param doesn't actually filter by
+    relevance — searching "Software Developer" comes back with unrelated
+    postings (Product Marketing Manager, Medical Underwriting Nurse, ...)
+    mixed in untouched. Must re-filter client-side, same as
+    Arbeitnow/The Muse already do for the same gap."""
+    unrelated = dict(SAMPLE_RAW, id=8, title="Product Marketing Manager",
+                      description="<p>Own our go-to-market strategy and campaigns.</p>")
+
+    class FakeResponse:
+        status_code = 200
+
+        def json(self):
+            return {"data": [SAMPLE_RAW, unrelated], "pagination": {"has_more": False}}
+
+    class FakeAsyncClient:
+        def __init__(self, *a, **k):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def get(self, url, params=None):
+            return FakeResponse()
+
+    monkeypatch.setattr(remotejobs_org.httpx, "AsyncClient", FakeAsyncClient)
+    remotejobs_org._search_cache.clear()
+
+    data = asyncio.run(remotejobs_org.search_remotejobs_org_jobs(q="Software Developer"))
+    titles = [r["title"] for r in data["results"]]
+    assert "Product Marketing Manager" not in titles

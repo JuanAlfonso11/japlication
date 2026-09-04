@@ -121,6 +121,17 @@ async def search_remotejobs_org_jobs(
     for raw in jobs or []:
         normalized = _normalize(raw)
 
+        if q:
+            # RemoteJobs.org's own `q` param (sent above) doesn't actually
+            # filter by relevance -- searching "Software Developer" comes
+            # back with things like "Product Marketing Manager" and
+            # "Medical Underwriting Nurse" mixed in untouched. Re-filter
+            # client-side, same substring approach already used for
+            # Arbeitnow/The Muse, whose APIs have the same gap.
+            haystack = f"{normalized['title']} {normalized['description']} {' '.join(s['name'] for s in normalized['skills_required'])}".lower()
+            if q.lower() not in haystack:
+                continue
+
         loc = (location or "").strip().lower()
         if loc and loc not in ("worldwide", "remote", "remoto"):
             if loc not in (normalized["location"] or "").lower():
