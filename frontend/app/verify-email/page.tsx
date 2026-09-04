@@ -2,23 +2,44 @@
 
 import Link from "next/link";
 import { Suspense, useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { ApiError, authApi } from "@/lib/api";
 
+const AUTO_REDIRECT_SECONDS = 3;
+
 function VerifyEmailContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const status = searchParams.get("status");
   const { user, token, refreshUser } = useAuth();
   const [refreshed, setRefreshed] = useState(false);
   const [resending, setResending] = useState(false);
   const [resendMessage, setResendMessage] = useState<string | null>(null);
+  const [redirectIn, setRedirectIn] = useState(AUTO_REDIRECT_SECONDS);
 
   useEffect(() => {
     if (status === "success" && token && !refreshed) {
       refreshUser().finally(() => setRefreshed(true));
     }
   }, [status, token, refreshed, refreshUser]);
+
+  // Verifying via the email link opens a normal page — this session only
+  // has an active token if it happens to share storage with the app (e.g.
+  // the link was tapped inside the app's own webview). When it does, take
+  // the user straight back into the app instead of leaving them stranded
+  // on a standalone confirmation screen. True automatic app-switching from
+  // an external browser would need Android App Links, which can't be
+  // verified reliably against a Tailscale-only (non-public) domain.
+  useEffect(() => {
+    if (status !== "success" || !token || !refreshed) return;
+    if (redirectIn <= 0) {
+      router.replace("/");
+      return;
+    }
+    const t = setTimeout(() => setRedirectIn((s) => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [status, token, refreshed, redirectIn, router]);
 
   async function handleResend() {
     setResending(true);
@@ -44,6 +65,11 @@ function VerifyEmailContent() {
             Tu correo{user?.email ? ` (${user.email})` : ""} quedó confirmado. Ya puedes usar JobPilot
             sin restricciones.
           </p>
+          {token && (
+            <p className="text-xs text-gray-400 dark:text-gray-500">
+              Te llevamos a Home en {redirectIn}s…
+            </p>
+          )}
         </>
       ) : status === "pending" ? (
         <>

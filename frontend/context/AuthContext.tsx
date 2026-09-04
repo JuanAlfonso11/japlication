@@ -74,6 +74,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(u);
   }, []);
 
+  // Refresh user state whenever the app regains focus — e.g. the user
+  // taps the email-verification link (which opens in the phone's browser,
+  // a separate session from the app's) and then switches back into the
+  // app. Without this, the "verify your email" banner would keep showing
+  // until the next manual reload even though verification succeeded.
+  useEffect(() => {
+    function handleVisibilityChange() {
+      if (document.visibilityState === "visible" && getToken()) {
+        refreshUser().catch(() => {
+          // Non-fatal — the next explicit action that needs fresh user
+          // data (or the next resume) will just try again.
+        });
+      }
+    }
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [refreshUser]);
+
   const value = useMemo<AuthContextValue>(
     () => ({ user, token, isLoading, login, register, logout, refreshUser }),
     [user, token, isLoading, login, register, logout, refreshUser]
