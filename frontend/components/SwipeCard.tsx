@@ -75,7 +75,12 @@ export default function SwipeCard({
   return (
     <motion.div
       className="absolute inset-0"
-      style={{ x, rotate, touchAction: "pan-y" }}
+      // Once a decision is committed, this card is on its way out — it
+      // must stop intercepting touches immediately (not just visually
+      // fade), otherwise a still-mounted-but-invisible card can eat the
+      // next tap on the ✓/✕ buttons or the card underneath during the
+      // brief window before onAnimationComplete removes it from the queue.
+      style={{ x, rotate, touchAction: "pan-y", pointerEvents: decision ? "none" : "auto" }}
       drag={isTop && !decision ? "x" : false}
       dragConstraints={{ left: 0, right: 0 }}
       dragElastic={1}
@@ -85,7 +90,16 @@ export default function SwipeCard({
           ? { x: exitX, opacity: 0, scale: 0.92 }
           : { x: 0, opacity: 1, scale: 1 }
       }
-      transition={{ type: "spring", stiffness: 300, damping: 30 }}
+      // A fixed-duration tween for the exit (not spring physics) — a
+      // spring's settle time depends on velocity/stiffness/damping
+      // interacting, which on some devices resolved fast enough to look
+      // like a flash-cut instead of a glide. Snapping back to center
+      // (drag released short of the threshold) keeps the springy feel.
+      transition={
+        exitX !== null
+          ? { type: "tween", duration: 0.32, ease: "easeIn" }
+          : { type: "spring", stiffness: 300, damping: 30 }
+      }
       onAnimationComplete={() => {
         if (decision) onDecide(decision);
       }}

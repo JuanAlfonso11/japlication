@@ -120,6 +120,13 @@ function buildQueryString(
   return qs ? `?${qs}` : "";
 }
 
+/** No request is allowed to hang forever. Without this, a single stalled
+ * connection (Tailscale hiccup, WebView networking glitch, ...) leaves the
+ * caller's `pending` state stuck `true` with no error ever thrown — the
+ * swipe/decide buttons stay disabled indefinitely with nothing on screen
+ * to explain why, since neither the success nor the catch path ever runs. */
+const REQUEST_TIMEOUT_MS = 20000;
+
 async function rawFetch(
   path: string,
   method: string,
@@ -129,18 +136,26 @@ async function rawFetch(
 ): Promise<Response> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (token) headers["Authorization"] = `Bearer ${token}`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
     return await fetch(`${API_BASE_URL}${path}${buildQueryString(query)}`, {
       method,
       headers,
       body: body !== undefined ? JSON.stringify(body) : undefined,
       cache: "no-store",
+      signal: controller.signal,
     });
-  } catch {
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new ApiError(0, "The server took too long to respond. Please try again.");
+    }
     throw new ApiError(
       0,
       "Could not reach the JobPilot server. Check your connection and try again."
     );
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -233,6 +248,11 @@ function safeJsonParse(text: string): unknown {
  * JSON — the browser sets its own Content-Type with the boundary, so we
  * must not set one ourselves. Same transparent-refresh-on-401 behavior as
  * `request` — see there for why. */
+// Longer than REQUEST_TIMEOUT_MS — this path includes Claude-based PDF
+// parsing (profile/import-cv), which legitimately takes longer than a
+// normal JSON request.
+const UPLOAD_TIMEOUT_MS = 60000;
+
 async function doUpload(path: string, fieldName: string, file: File, token: string | null): Promise<Response> {
   const headers: Record<string, string> = {};
   if (token) headers["Authorization"] = `Bearer ${token}`;
@@ -240,15 +260,23 @@ async function doUpload(path: string, fieldName: string, file: File, token: stri
   const formData = new FormData();
   formData.append(fieldName, file);
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), UPLOAD_TIMEOUT_MS);
   try {
     return await fetch(`${API_BASE_URL}${path}`, {
       method: "POST",
       headers,
       body: formData,
       cache: "no-store",
+      signal: controller.signal,
     });
-  } catch {
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new ApiError(0, "The server took too long to respond. Please try again.");
+    }
     throw new ApiError(0, "Could not reach the JobPilot server. Check your connection and try again.");
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
