@@ -5,6 +5,7 @@ import RouteGuard from "@/components/RouteGuard";
 import ErrorNotice from "@/components/ErrorNotice";
 import ImportedJobCard from "@/components/ImportedJobCard";
 import SkillTag from "@/components/SkillTag";
+import { Select } from "@/components/ui/Field";
 import { ApiError, jobsApi } from "@/lib/api";
 import { importAndMatch } from "@/lib/jobActions";
 import {
@@ -194,63 +195,65 @@ function DiscoverContent() {
 
       <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-100 dark:bg-gray-900 dark:ring-gray-800">
         <div className="space-y-4">
-          <form onSubmit={handleSubmit} className="flex flex-wrap gap-2">
-            <select
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              className="min-w-[200px] flex-1 rounded-lg border border-gray-300 px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:focus:ring-brand-900/40"
-            >
-              <option value="">Cualquier puesto</option>
-              {JOB_TITLE_GROUPS.map((group) => (
-                <optgroup key={group.label} label={group.label}>
-                  {group.options.map((title) => (
-                    <option key={title} value={title}>
-                      {title}
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
-            <select
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              className="min-w-[160px] rounded-lg border border-gray-300 px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:focus:ring-brand-900/40"
-            >
-              <option value="">Cualquier ubicación</option>
-              {LOCATION_OPTIONS.map((loc) => (
-                <option key={loc} value={loc}>
-                  {loc}
-                </option>
-              ))}
-            </select>
-            <select
-              value={remoteType}
-              onChange={(e) => setRemoteType(e.target.value as RemoteType | "")}
-              className="min-w-[150px] rounded-lg border border-gray-300 px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:focus:ring-brand-900/40"
-            >
-              <option value="">Cualquier modalidad</option>
-              {REMOTE_TYPES.map((rt) => (
-                <option key={rt} value={rt}>
-                  {REMOTE_TYPE_LABELS[rt]}
-                </option>
-              ))}
-            </select>
-            <select
-              value={experienceLevelFilter}
-              onChange={(e) => setExperienceLevelFilter(e.target.value as ExperienceLevel | "")}
-              className="min-w-[170px] rounded-lg border border-gray-300 px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:focus:ring-brand-900/40"
-            >
-              <option value="">Cualquier nivel</option>
-              {EXPERIENCE_LEVELS.map((lvl) => (
-                <option key={lvl} value={lvl}>
-                  {EXPERIENCE_LEVEL_LABELS[lvl]}
-                </option>
-              ))}
-            </select>
+          <form onSubmit={handleSubmit} className="space-y-2">
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+              <Select
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                className="col-span-2 sm:min-w-[180px] sm:flex-1"
+              >
+                <option value="">Cualquier puesto</option>
+                {JOB_TITLE_GROUPS.map((group) => (
+                  <optgroup key={group.label} label={group.label}>
+                    {group.options.map((title) => (
+                      <option key={title} value={title}>
+                        {title}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </Select>
+              <Select
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                className="sm:min-w-[160px] sm:flex-1"
+              >
+                <option value="">Cualquier ubicación</option>
+                {LOCATION_OPTIONS.map((loc) => (
+                  <option key={loc} value={loc}>
+                    {loc}
+                  </option>
+                ))}
+              </Select>
+              <Select
+                value={remoteType}
+                onChange={(e) => setRemoteType(e.target.value as RemoteType | "")}
+                className="sm:min-w-[160px] sm:flex-1"
+              >
+                <option value="">Cualquier modalidad</option>
+                {REMOTE_TYPES.map((rt) => (
+                  <option key={rt} value={rt}>
+                    {REMOTE_TYPE_LABELS[rt]}
+                  </option>
+                ))}
+              </Select>
+              <Select
+                value={experienceLevelFilter}
+                onChange={(e) => setExperienceLevelFilter(e.target.value as ExperienceLevel | "")}
+                className="sm:min-w-[160px] sm:flex-1"
+              >
+                <option value="">Cualquier nivel</option>
+                {EXPERIENCE_LEVELS.map((lvl) => (
+                  <option key={lvl} value={lvl}>
+                    {EXPERIENCE_LEVEL_LABELS[lvl]}
+                  </option>
+                ))}
+              </Select>
+            </div>
             <button
               type="submit"
               disabled={loading}
-              className="rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+              className="w-full rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
             >
               {loading ? "Searching…" : "Search"}
             </button>

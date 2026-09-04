@@ -4,6 +4,7 @@ import { useState } from "react";
 import RouteGuard from "@/components/RouteGuard";
 import ErrorNotice from "@/components/ErrorNotice";
 import ImportedJobCard from "@/components/ImportedJobCard";
+import { inputClass, textareaClass } from "@/components/ui/Field";
 import { ApiError, jobsApi } from "@/lib/api";
 import { importAndMatch } from "@/lib/jobActions";
 import type { Job } from "@/lib/types";
@@ -41,7 +42,7 @@ function ImportByUrl({ onImported }: { onImported: (job: Job) => void }) {
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           placeholder="https://company.com/careers/senior-engineer"
-          className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:focus:ring-brand-900/40"
+          className={inputClass}
         />
       </label>
       <button
@@ -99,31 +100,28 @@ function ManualJobForm({ onImported }: { onImported: (job: Job) => void }) {
     }
   }
 
-  const fieldClass =
-    "w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:focus:ring-brand-900/40";
-
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
       {error && <ErrorNotice message={error} />}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <label className="block">
           <span className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">Title</span>
-          <input required className={fieldClass} value={title} onChange={(e) => setTitle(e.target.value)} />
+          <input required className={inputClass} value={title} onChange={(e) => setTitle(e.target.value)} />
         </label>
         <label className="block">
           <span className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">Company</span>
-          <input required className={fieldClass} value={company} onChange={(e) => setCompany(e.target.value)} />
+          <input required className={inputClass} value={company} onChange={(e) => setCompany(e.target.value)} />
         </label>
         <label className="block sm:col-span-2">
           <span className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">Location</span>
-          <input className={fieldClass} value={location} onChange={(e) => setLocation(e.target.value)} />
+          <input className={inputClass} value={location} onChange={(e) => setLocation(e.target.value)} />
         </label>
       </div>
       <label className="block">
         <span className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">Full description</span>
         <textarea
           required
-          className={`${fieldClass} min-h-[120px]`}
+          className={`${textareaClass} min-h-[120px]`}
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           placeholder="Paste the full job description text here…"
@@ -134,7 +132,7 @@ function ManualJobForm({ onImported }: { onImported: (job: Job) => void }) {
           Requirements (one per line)
         </span>
         <textarea
-          className={`${fieldClass} min-h-[90px]`}
+          className={`${textareaClass} min-h-[90px]`}
           value={requirements}
           onChange={(e) => setRequirements(e.target.value)}
           placeholder={"5+ years of backend development\nExperience with distributed systems"}
@@ -145,7 +143,7 @@ function ManualJobForm({ onImported }: { onImported: (job: Job) => void }) {
           Skills (comma-separated)
         </span>
         <input
-          className={fieldClass}
+          className={inputClass}
           value={skills}
           onChange={(e) => setSkills(e.target.value)}
           placeholder="C#, SQL, Kubernetes"

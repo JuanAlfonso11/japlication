@@ -8,6 +8,7 @@ import Spinner from "@/components/Spinner";
 import ErrorNotice from "@/components/ErrorNotice";
 import StatusBadge, { STATUS_LABELS } from "@/components/StatusBadge";
 import ScoreBadge from "@/components/ScoreBadge";
+import { Select } from "@/components/ui/Field";
 import { ApiError, applicationsApi } from "@/lib/api";
 import type { Application, ApplicationStatus } from "@/lib/types";
 
@@ -99,19 +100,19 @@ function ApplicationRow({
             <label className="text-xs font-medium text-gray-600 dark:text-gray-400" htmlFor={`status-${application.id}`}>
               Status
             </label>
-            <select
+            <Select
               id={`status-${application.id}`}
               value={application.status}
               disabled={saving}
               onChange={(e) => updateStatus(e.target.value as ApplicationStatus)}
-              className="rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm text-gray-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:focus:ring-brand-900/40"
+              className="w-44"
             >
               {EDITABLE_STATUSES.map((s) => (
                 <option key={s} value={s}>
                   {STATUS_LABELS[s]}
                 </option>
               ))}
-            </select>
+            </Select>
             {job && (
               <Link
                 href={`/jobs/${job.id}`}

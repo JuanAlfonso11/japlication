@@ -93,7 +93,7 @@ export default function SettingsPanel() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-12 w-64 space-y-4 rounded-xl bg-white p-4 shadow-lg ring-1 ring-gray-100 dark:bg-gray-900 dark:ring-gray-800">
+        <div className="absolute right-0 top-12 w-64 origin-top-right animate-fade-in space-y-4 rounded-2xl bg-white p-4 shadow-lg ring-1 ring-gray-100 dark:bg-gray-900 dark:ring-gray-800">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Cuenta</p>

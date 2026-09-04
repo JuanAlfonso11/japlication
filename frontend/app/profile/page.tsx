@@ -6,7 +6,7 @@ import Spinner from "@/components/Spinner";
 import ErrorNotice from "@/components/ErrorNotice";
 import CVEvaluationCard from "@/components/CVEvaluationCard";
 import SettingsPanel from "@/components/profile/SettingsPanel";
-import { FormField, inputClass, textareaClass } from "@/components/profile/FormField";
+import { FormField, inputClass, textareaClass } from "@/components/ui/Field";
 import SectionCard from "@/components/profile/SectionCard";
 import SkillsSection from "@/components/profile/SkillsSection";
 import ExperienceSection from "@/components/profile/ExperienceSection";

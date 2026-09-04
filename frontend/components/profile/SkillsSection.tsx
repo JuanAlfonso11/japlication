@@ -1,6 +1,6 @@
 import type { Skill } from "@/lib/types";
 import SectionCard, { EntryCard } from "./SectionCard";
-import { FormField, inputClass } from "./FormField";
+import { FormField, inputClass, Select } from "./FormField";
 
 const LEVELS = ["beginner", "intermediate", "advanced", "expert"];
 
@@ -57,8 +57,7 @@ export default function SkillsSection({
                 />
               </FormField>
               <FormField label="Level">
-                <select
-                  className={inputClass}
+                <Select
                   value={skill.level}
                   onChange={(e) => update(i, { level: e.target.value })}
                 >
@@ -67,7 +66,7 @@ export default function SkillsSection({
                       {l}
                     </option>
                   ))}
-                </select>
+                </Select>
               </FormField>
               <FormField label="Years of experience" className="col-span-2">
                 <input

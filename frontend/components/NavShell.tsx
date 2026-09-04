@@ -100,7 +100,18 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
                   active ? "text-brand-600 dark:text-brand-400" : "text-gray-500 dark:text-gray-400"
                 }`}
               >
-                <Icon active={active} />
+                {/* Same filled-pill treatment as the desktop nav's active
+                    link (bg-brand-50), so "active" reads identically on
+                    both — mobile just applies it to the icon instead of
+                    the whole row, since there's no room for a label pill
+                    in a 5-column bottom bar. */}
+                <span
+                  className={`flex items-center justify-center rounded-full px-3 py-1 transition-colors ${
+                    active ? "bg-brand-50 dark:bg-brand-900/40" : ""
+                  }`}
+                >
+                  <Icon active={active} />
+                </span>
                 {item.label}
               </Link>
             );
