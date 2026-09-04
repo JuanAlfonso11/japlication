@@ -188,12 +188,16 @@ function ApplicationsContent() {
         </p>
       </div>
 
-      <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
+      {/* Always wraps (never a hidden horizontal scroll) — with 8 filters,
+          a scrollable single row cut off the last couple off-screen with
+          no visual hint there was more to see. Wrapping keeps every
+          filter visible up front, at the cost of taking 2-3 lines. */}
+      <div className="flex flex-wrap gap-2 pt-1">
         {FILTERS.map((f) => (
           <button
             key={f.value}
             onClick={() => setFilter(f.value)}
-            className={`shrink-0 rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
+            className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
               filter === f.value
                 ? "bg-brand-600 text-white"
                 : "bg-white text-gray-600 ring-1 ring-gray-200 hover:bg-gray-50 dark:bg-gray-900 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-gray-800"
