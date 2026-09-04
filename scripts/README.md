@@ -18,6 +18,17 @@ Note the two "start" paths overlap on purpose: **autostart** brings the app up s
 To restore a backup: `Get-Content backups\jobflow_<timestamp>.sql | docker compose exec -T db psql -U jobflow -d jobflow`
 (stop the backend first so it isn't writing mid-restore).
 
+**Drill-tested (2026-09-03)**: took a real `pg_dump`, restored it into a throwaway
+`jobflow_restore_test` database on the same running container (never touched the live `jobflow`
+database), and confirmed every table's row count matched exactly with no errors, before dropping
+the scratch database. To repeat that drill instead of restoring straight into the live database:
+```powershell
+docker compose exec -T db psql -U jobflow -d jobflow -c "CREATE DATABASE jobflow_restore_test;"
+Get-Content backups\jobflow_<timestamp>.sql | docker compose exec -T db psql -U jobflow -d jobflow_restore_test
+docker compose exec -T db psql -U jobflow -d jobflow_restore_test -c "SELECT count(*) FROM users;"  # spot-check
+docker compose exec -T db psql -U jobflow -d jobflow -c "DROP DATABASE jobflow_restore_test;"
+```
+
 ## Pre-commit hook
 
 `.githooks/pre-commit` runs the backend test suite before every commit
