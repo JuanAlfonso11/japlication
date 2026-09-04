@@ -1,8 +1,13 @@
 # Runs the same job-matching sweep the app runs on demand
 # (GET /jobs/search/auto-import), for every user, straight inside the
 # backend container - so new matches (and their push notification) show
-# up even on a day you never open JobPilot. Safe to double-click/run any
-# time; it only imports genuinely new postings.
+# up on their own, without you having to open JobPilot and ask for them.
+# Safe to double-click/run any time; it only imports genuinely new
+# postings. Scheduled every 2 hours while the app is on
+# (install-job-sweep-schedule.ps1), and also run once immediately
+# whenever the app is turned on (jobpilot-control.ps1 / start-jobpilot.bat)
+# so a stretch of being off doesn't mean missing a sweep - it just runs
+# late, right when you next power on.
 
 $ErrorActionPreference = "Stop"
 

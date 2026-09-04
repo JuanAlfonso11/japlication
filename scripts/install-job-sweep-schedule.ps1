@@ -1,35 +1,40 @@
-# Schedules daily-job-sweep.ps1 to run automatically every day at 8 AM via
+# Schedules daily-job-sweep.ps1 to run automatically every 2 hours via
 # Windows Task Scheduler - so new matching jobs (and the push notification
-# about them) show up even on a day JobPilot never gets opened. Runs only
-# while you're logged in (Docker Desktop needs your user session) - if the
-# PC is off or asleep at 8 AM, it catches up the next time you log in
-# instead of silently skipping the day. Picked 8 AM (5 hours after the 3
-# AM DB backup) so it doesn't compete with it for Docker/DB load.
+# about them) keep showing up on their own, without you having to open
+# JobPilot and ask for them. Runs only while you're logged in (Docker
+# Desktop needs your user session) - if the PC/app is off, it simply
+# doesn't fire; jobpilot-control.ps1 / start-jobpilot.bat run one sweep
+# immediately every time the app is turned back on, so a stretch of being
+# off just means that sweep runs late instead of being lost.
 
 $ErrorActionPreference = "Stop"
 
 $repoDir = Split-Path -Parent $PSScriptRoot
 $sweepScript = Join-Path $repoDir "scripts\daily-job-sweep.ps1"
-$taskName = "JobPilot Daily Job Sweep"
+$taskName = "JobPilot Job Sweep"
 
 $action = New-ScheduledTaskAction -Execute "powershell.exe" `
     -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$sweepScript`""
 
-$trigger = New-ScheduledTaskTrigger -Daily -At 8am
-$trigger.StartBoundary = [DateTime]::Today.AddHours(8).ToString("yyyy-MM-ddTHH:mm:ss")
+$trigger = New-ScheduledTaskTrigger -Once -At (Get-Date) `
+    -RepetitionInterval (New-TimeSpan -Hours 2) -RepetitionDuration (New-TimeSpan -Days 3650)
 
 $settings = New-ScheduledTaskSettingsSet `
     -StartWhenAvailable `
     -DontStopOnIdleEnd `
+    -MultipleInstances IgnoreNew `
     -ExecutionTimeLimit (New-TimeSpan -Minutes 15)
 
 $principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive
 
 Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
+# Old name from when this ran once a day - remove it too, if present, so
+# there's never a stale duplicate task left behind.
+Unregister-ScheduledTask -TaskName "JobPilot Daily Job Sweep" -Confirm:$false -ErrorAction SilentlyContinue
 
 Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger `
     -Settings $settings -Principal $principal `
-    -Description "Daily job-matching sweep for every JobPilot user (scripts\daily-job-sweep.ps1)." | Out-Null
+    -Description "Job-matching sweep for every JobPilot user, every 2 hours (scripts\daily-job-sweep.ps1)." | Out-Null
 
-Write-Host "Installed: '$taskName' scheduled task, runs daily at 8 AM."
+Write-Host "Installed: '$taskName' scheduled task, runs every 2 hours."
 Write-Host "To undo, run: Unregister-ScheduledTask -TaskName '$taskName'"

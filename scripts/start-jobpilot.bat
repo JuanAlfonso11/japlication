@@ -51,6 +51,12 @@ REM it at the placeholder instead - if the PC was shut down/rebooted while
 REM off, that setting would otherwise still be in effect here).
 "%ProgramFiles%\Tailscale\tailscale.exe" serve --bg --https=443 http://localhost:3000 >nul 2>&1
 
+REM Catch up on job matches right away instead of waiting for the next
+REM scheduled 2-hour sweep (install-job-sweep-schedule.ps1) - covers
+REM however long the PC/app was off. Detached so login doesn't sit
+REM waiting on external job-search API calls.
+start "" /min powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "%REPO_DIR%\scripts\daily-job-sweep.ps1"
+
 echo [JobPilot] Up and running.
 echo   Web:       http://localhost:3000
 echo   Tailscale: https://jobpilot.tailb3d4c1.ts.net

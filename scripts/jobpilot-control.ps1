@@ -83,6 +83,16 @@ function Start-JobPilot {
     # either way; only where tailscale serve forwards to changes.
     & $Tailscale serve --bg --https=443 http://localhost:3000 *> $null
 
+    # A job-matching sweep runs every 2 hours while the app is on
+    # (install-job-sweep-schedule.ps1) — also fire one right now, in the
+    # background, so turning the app back on after any stretch of being
+    # off immediately catches the queue up instead of waiting for the
+    # next scheduled slot. Detached (Start-Process, not called inline) so
+    # the button doesn't sit disabled for however long the external job
+    # searches take.
+    Start-Process powershell.exe -WindowStyle Hidden -ArgumentList `
+        "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "`"$RepoDir\scripts\daily-job-sweep.ps1`""
+
     Update-Status
     $startButton.Enabled = $true
     $stopButton.Enabled = $true
