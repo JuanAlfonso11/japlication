@@ -1,3 +1,5 @@
+import hashlib
+import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 from uuid import UUID
@@ -19,10 +21,28 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 
 def create_access_token(subject: str | UUID, expires_minutes: Optional[int] = None) -> str:
-    expire_delta = timedelta(minutes=expires_minutes or settings.JWT_EXPIRE_MINUTES)
+    expire_delta = timedelta(minutes=expires_minutes or settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     expire = datetime.now(timezone.utc) + expire_delta
     to_encode: dict[str, Any] = {"sub": str(subject), "exp": expire}
     return jwt.encode(to_encode, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
+
+
+def create_refresh_token() -> str:
+    """A high-entropy opaque value (not a JWT) — the server is the only
+    place that can tell it's valid, by looking up its hash in
+    `refresh_tokens`. That's what makes it revocable (log out, a stolen
+    token, ...) unlike a self-contained JWT, which nothing can invalidate
+    before its own expiry."""
+    return secrets.token_urlsafe(48)
+
+
+def hash_refresh_token(token: str) -> str:
+    """SHA-256, not bcrypt — this token is already 48 bytes of random
+    entropy (unlike a human password), so a slow, salted KDF buys nothing
+    here and would just add needless cost to every refresh request. Storing
+    the hash rather than the raw token means a DB leak alone doesn't hand
+    out usable sessions."""
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 def decode_access_token(token: str) -> Optional[str]:

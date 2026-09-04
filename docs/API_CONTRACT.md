@@ -5,10 +5,18 @@ Auth: `Authorization: Bearer <jwt>` (except `/auth/register`, `/auth/login`)
 All bodies/responses are JSON. IDs are UUID strings. Timestamps are ISO-8601.
 
 ## Auth
-- `POST /auth/register` `{email, password, full_name}` -> `{access_token, token_type, user}` (201).
+- `POST /auth/register` `{email, password, full_name}` -> `{access_token, refresh_token, token_type, user}` (201).
   Also sends a verification email in the background (see below) — registration succeeds and returns a
   usable token even if that email fails to send; the user can always request another one.
-- `POST /auth/login` `{email, password}` -> `{access_token, token_type, user}`
+- `POST /auth/login` `{email, password}` -> `{access_token, refresh_token, token_type, user}`
+- `POST /auth/refresh` `{refresh_token}` -> `{access_token, refresh_token, token_type}` (no auth header —
+  identity comes from the refresh token itself). `access_token` is short-lived
+  (`ACCESS_TOKEN_EXPIRE_MINUTES`, default 30 min); call this to get a new one before/when it expires.
+  Rotates on every call — the `refresh_token` used is revoked and a new one is returned, so always store
+  the new one and discard the old. 401 if the refresh token is invalid, expired, or already revoked
+  (session is over — the user has to log in again).
+- `POST /auth/logout` `{refresh_token}` -> 204. Revokes that refresh token server-side. Best-effort/
+  idempotent — always 204 even if the token was already gone.
 - `GET /auth/me` -> `User` (includes `email_verified`, `email_verified_at`)
 - `POST /auth/resend-verification` (auth required) -> `{sent: bool, detail: string}` — no-ops with
   `sent: false` if already verified.

@@ -12,10 +12,17 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = "postgresql+asyncpg://jobflow:jobflow@localhost:5432/jobflow"
 
-    # Auth
+    # Auth. Access tokens are short-lived on purpose — they're a bearer
+    # credential sent on every request, so a leaked one should go stale
+    # fast. Staying logged in long-term comes from the refresh token
+    # instead (a random opaque value, stored hashed in `refresh_tokens` so
+    # it can be revoked — unlike a JWT, which is valid until it expires no
+    # matter what). The frontend refreshes the access token transparently;
+    # see lib/api.ts.
     JWT_SECRET: str = "dev-secret-change-me"
     JWT_ALGORITHM: str = "HS256"
-    JWT_EXPIRE_MINUTES: int = 10080  # 7 days
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 90
 
     # Optional AI features
     ANTHROPIC_API_KEY: Optional[str] = None

@@ -35,6 +35,24 @@ CREATE TABLE device_tokens (
 CREATE INDEX idx_device_tokens_user ON device_tokens (user_id);
 
 -- =========================================================
+-- refresh_tokens (long-lived "stay logged in" credential; the access JWT
+-- is short-lived and gets renewed via one of these). Stores a hash, not
+-- the raw token, and is revocable (logout, rotation on each use) -- unlike
+-- the JWT it hands out, which nothing can invalidate before it expires.
+-- =========================================================
+CREATE TABLE refresh_tokens (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_hash  TEXT UNIQUE NOT NULL,
+    expires_at  TIMESTAMPTZ NOT NULL,
+    revoked_at  TIMESTAMPTZ,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_refresh_tokens_user ON refresh_tokens (user_id);
+CREATE INDEX idx_refresh_tokens_hash ON refresh_tokens (token_hash);
+
+-- =========================================================
 -- career_profiles  (the "CV Maestro" - factual, user-owned truth)
 -- =========================================================
 CREATE TABLE career_profiles (

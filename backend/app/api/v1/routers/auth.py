@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -12,14 +12,19 @@ from app.core.config import settings
 from app.core.rate_limit import limiter
 from app.core.security import (
     create_access_token,
+    create_refresh_token,
     create_state_token,
     decode_state_token,
     hash_password,
+    hash_refresh_token,
     verify_password,
 )
 from app.db.session import get_db
+from app.models.refresh_token import RefreshToken
 from app.models.user import User
 from app.schemas.user import (
+    RefreshRequest,
+    RefreshResponse,
     ResendVerificationResponse,
     TokenResponse,
     User as UserSchema,
@@ -33,6 +38,24 @@ logger = logging.getLogger("jobflow.auth")
 
 _VERIFY_PURPOSE = "email_verify"
 _VERIFY_TOKEN_MINUTES = 10  # short-lived on purpose — request a resend if it expires
+
+
+async def _issue_token_pair(user: User, db: AsyncSession) -> tuple[str, str]:
+    """Mints a fresh access token (JWT) + refresh token (opaque, stored
+    hashed) for `user`, and commits the refresh token's DB row. Returns
+    (access_token, raw_refresh_token) — the raw value is only ever seen by
+    the client, never stored."""
+    access_token = create_access_token(user.id)
+    raw_refresh = create_refresh_token()
+    db.add(
+        RefreshToken(
+            user_id=user.id,
+            token_hash=hash_refresh_token(raw_refresh),
+            expires_at=datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
+        )
+    )
+    await db.commit()
+    return access_token, raw_refresh
 
 
 def _send_verification_email(user: User) -> None:
@@ -69,8 +92,8 @@ async def register(request: Request, payload: UserRegister, db: AsyncSession = D
 
     _send_verification_email(user)
 
-    token = create_access_token(user.id)
-    return TokenResponse(access_token=token, user=UserSchema.model_validate(user))
+    access_token, refresh_token = await _issue_token_pair(user, db)
+    return TokenResponse(access_token=access_token, refresh_token=refresh_token, user=UserSchema.model_validate(user))
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -81,8 +104,50 @@ async def login(request: Request, payload: UserLogin, db: AsyncSession = Depends
     if user is None or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid email or password.")
 
-    token = create_access_token(user.id)
-    return TokenResponse(access_token=token, user=UserSchema.model_validate(user))
+    access_token, refresh_token = await _issue_token_pair(user, db)
+    return TokenResponse(access_token=access_token, refresh_token=refresh_token, user=UserSchema.model_validate(user))
+
+
+@router.post("/refresh", response_model=RefreshResponse)
+@limiter.limit("30/minute")
+async def refresh(request: Request, payload: RefreshRequest, db: AsyncSession = Depends(get_db)) -> RefreshResponse:
+    """Exchanges a still-valid refresh token for a new access token — this
+    is what actually keeps the user "logged in" across the access token's
+    short lifetime, transparently (see frontend/lib/api.ts). Rotates the
+    refresh token on every use (the old one is revoked, a new one issued):
+    if a stolen refresh token and the real one both later try to use the
+    same now-revoked value, that's a signal it leaked, without needing any
+    extra infrastructure to detect it."""
+    invalid = HTTPException(status_code=401, detail="Invalid or expired refresh token.")
+
+    token_hash = hash_refresh_token(payload.refresh_token)
+    result = await db.execute(select(RefreshToken).where(RefreshToken.token_hash == token_hash))
+    stored = result.scalar_one_or_none()
+    if stored is None or stored.revoked_at is not None or stored.expires_at < datetime.now(timezone.utc):
+        raise invalid
+
+    result = await db.execute(select(User).where(User.id == stored.user_id))
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise invalid
+
+    stored.revoked_at = datetime.now(timezone.utc)
+    access_token, new_refresh_token = await _issue_token_pair(user, db)
+    return RefreshResponse(access_token=access_token, refresh_token=new_refresh_token)
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+async def logout(payload: RefreshRequest, db: AsyncSession = Depends(get_db)) -> None:
+    """Revokes one refresh token server-side. Best-effort and always 204 —
+    logging out doesn't need to prove the token existed, and a client that
+    already lost its refresh token has nothing left to revoke anyway (its
+    access token still just expires on its own, shortly)."""
+    token_hash = hash_refresh_token(payload.refresh_token)
+    result = await db.execute(select(RefreshToken).where(RefreshToken.token_hash == token_hash))
+    stored = result.scalar_one_or_none()
+    if stored is not None and stored.revoked_at is None:
+        stored.revoked_at = datetime.now(timezone.utc)
+        await db.commit()
 
 
 @router.get("/me", response_model=UserSchema)

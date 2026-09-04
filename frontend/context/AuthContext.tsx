@@ -9,7 +9,14 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { ApiError, authApi, getToken, setToken } from "@/lib/api";
+import {
+  AUTH_UNAUTHORIZED_EVENT,
+  authApi,
+  getRefreshToken,
+  getToken,
+  setRefreshToken,
+  setToken,
+} from "@/lib/api";
 import type { LoginPayload, RegisterPayload, User } from "@/lib/types";
 
 interface AuthContextValue {
@@ -39,25 +46,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     authApi
       .me()
       .then((u) => setUser(u))
-      .catch((err) => {
-        // Only a real 401 means the token itself is invalid/expired — log
-        // out in that case. Anything else (network error, backend/Tailscale
-        // briefly unreachable, 5xx, ...) must NOT clear a still-valid saved
-        // session; that was the actual cause of "the app forgets me" —
-        // keep the token, RouteGuard only checks its presence, and the next
-        // visibilitychange/manual retry will pick user data back up.
-        if (err instanceof ApiError && err.status === 401) {
-          setToken(null);
-          setTokenState(null);
-          setUser(null);
-        }
+      .catch(() => {
+        // A network error (backend/Tailscale briefly unreachable) leaves
+        // the saved session alone — RouteGuard only checks token
+        // presence, so the app stays usable and retries later (e.g. on
+        // the next visibilitychange below). A genuine expired/invalid
+        // token is handled by request()'s own refresh-then-give-up logic
+        // in lib/api.ts, which already cleared storage and fired
+        // AUTH_UNAUTHORIZED_EVENT before this rejection even reaches
+        // here — see the listener below.
       })
       .finally(() => setIsLoading(false));
+  }, []);
+
+  // request()/uploadFile() (lib/api.ts) clear the saved token pair and
+  // dispatch this the moment a 401 survives a silent refresh attempt —
+  // i.e. the session is genuinely over, not just a momentary hiccup.
+  // Reacting to it here (rather than every call site checking its own
+  // error) is what makes that redirect to /login instant everywhere.
+  useEffect(() => {
+    function handleUnauthorized() {
+      setTokenState(null);
+      setUser(null);
+    }
+    window.addEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized);
+    return () => window.removeEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized);
   }, []);
 
   const login = useCallback(async (payload: LoginPayload) => {
     const res = await authApi.login(payload);
     setToken(res.access_token);
+    setRefreshToken(res.refresh_token);
     setTokenState(res.access_token);
     setUser(res.user);
   }, []);
@@ -65,14 +84,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const register = useCallback(async (payload: RegisterPayload) => {
     const res = await authApi.register(payload);
     setToken(res.access_token);
+    setRefreshToken(res.refresh_token);
     setTokenState(res.access_token);
     setUser(res.user);
   }, []);
 
   const logout = useCallback(() => {
+    const refreshToken = getRefreshToken();
     setToken(null);
+    setRefreshToken(null);
     setTokenState(null);
     setUser(null);
+    if (refreshToken) {
+      // Best-effort server-side revocation — local state is already
+      // cleared either way, so a failed request here isn't worth
+      // surfacing to the user.
+      authApi.logout(refreshToken).catch(() => {});
+    }
   }, []);
 
   const refreshUser = useCallback(async () => {

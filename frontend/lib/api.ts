@@ -33,6 +33,15 @@ export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 
 const TOKEN_KEY = "jobflow_token";
+const REFRESH_TOKEN_KEY = "jobflow_refresh_token";
+
+/** Fired on `window` when a request's access token turns out to be
+ * unrecoverable — invalid/expired AND the background refresh attempt
+ * (below) also failed, meaning the session is genuinely over, not just a
+ * momentarily-unreachable backend. AuthContext listens for this to clear
+ * its React state; storage itself is already cleared by the time it
+ * fires. */
+export const AUTH_UNAUTHORIZED_EVENT = "jobpilot:unauthorized";
 
 export function getToken(): string | null {
   if (typeof window === "undefined") return null;
@@ -50,6 +59,28 @@ export function setToken(token: string | null): void {
       window.localStorage.setItem(TOKEN_KEY, token);
     } else {
       window.localStorage.removeItem(TOKEN_KEY);
+    }
+  } catch {
+    // localStorage unavailable (private mode, etc.) — silently ignore.
+  }
+}
+
+export function getRefreshToken(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage.getItem(REFRESH_TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setRefreshToken(token: string | null): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (token) {
+      window.localStorage.setItem(REFRESH_TOKEN_KEY, token);
+    } else {
+      window.localStorage.removeItem(REFRESH_TOKEN_KEY);
     }
   } catch {
     // localStorage unavailable (private mode, etc.) — silently ignore.
@@ -89,23 +120,17 @@ function buildQueryString(
   return qs ? `?${qs}` : "";
 }
 
-async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { method = "GET", body, auth = true, query } = options;
-
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
-
-  if (auth) {
-    const token = getToken();
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
-    }
-  }
-
-  let res: Response;
+async function rawFetch(
+  path: string,
+  method: string,
+  body: unknown,
+  query: RequestOptions["query"],
+  token: string | null
+): Promise<Response> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
   try {
-    res = await fetch(`${API_BASE_URL}${path}${buildQueryString(query)}`, {
+    return await fetch(`${API_BASE_URL}${path}${buildQueryString(query)}`, {
       method,
       headers,
       body: body !== undefined ? JSON.stringify(body) : undefined,
@@ -117,7 +142,38 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
       "Could not reach the JobPilot server. Check your connection and try again."
     );
   }
+}
 
+/** In-flight refresh call, shared by every request that hits a 401 at the
+ * same time — without this, N concurrent requests would each try to spend
+ * the same (single-use, rotating) refresh token, and only the first would
+ * succeed; the rest would wrongly look like the session expired. */
+let refreshPromise: Promise<string | null> | null = null;
+
+async function refreshAccessToken(): Promise<string | null> {
+  if (refreshPromise) return refreshPromise;
+  refreshPromise = (async () => {
+    const refreshToken = getRefreshToken();
+    if (!refreshToken) return null;
+    try {
+      const res = await rawFetch("/auth/refresh", "POST", { refresh_token: refreshToken }, undefined, null);
+      if (!res.ok) return null;
+      const data = (await res.json()) as { access_token: string; refresh_token: string };
+      setToken(data.access_token);
+      setRefreshToken(data.refresh_token);
+      return data.access_token;
+    } catch {
+      return null;
+    }
+  })();
+  try {
+    return await refreshPromise;
+  } finally {
+    refreshPromise = null;
+  }
+}
+
+async function parseResponse<T>(res: Response): Promise<T> {
   if (res.status === 204) {
     return undefined as T;
   }
@@ -137,6 +193,34 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   return data as T;
 }
 
+async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  const { method = "GET", body, auth = true, query } = options;
+
+  const token = auth ? getToken() : null;
+  let res = await rawFetch(path, method, body, query, token);
+
+  if (res.status === 401 && auth && token) {
+    // The access token is short-lived by design — a 401 on an
+    // authenticated request most likely just means it expired, not that
+    // the session itself is over. Try a silent refresh and replay the
+    // request once before giving up.
+    const newToken = await refreshAccessToken();
+    if (newToken) {
+      res = await rawFetch(path, method, body, query, newToken);
+    } else {
+      // Refresh also failed (refresh token missing/expired/revoked) — the
+      // session really is over. Clear storage and let AuthContext know.
+      setToken(null);
+      setRefreshToken(null);
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event(AUTH_UNAUTHORIZED_EVENT));
+      }
+    }
+  }
+
+  return parseResponse<T>(res);
+}
+
 function safeJsonParse(text: string): unknown {
   try {
     return JSON.parse(text);
@@ -147,18 +231,17 @@ function safeJsonParse(text: string): unknown {
 
 /** Like `request`, but sends a multipart/form-data body (a File) instead of
  * JSON — the browser sets its own Content-Type with the boundary, so we
- * must not set one ourselves. */
-async function uploadFile<T>(path: string, fieldName: string, file: File): Promise<T> {
+ * must not set one ourselves. Same transparent-refresh-on-401 behavior as
+ * `request` — see there for why. */
+async function doUpload(path: string, fieldName: string, file: File, token: string | null): Promise<Response> {
   const headers: Record<string, string> = {};
-  const token = getToken();
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
   const formData = new FormData();
   formData.append(fieldName, file);
 
-  let res: Response;
   try {
-    res = await fetch(`${API_BASE_URL}${path}`, {
+    return await fetch(`${API_BASE_URL}${path}`, {
       method: "POST",
       headers,
       body: formData,
@@ -167,16 +250,26 @@ async function uploadFile<T>(path: string, fieldName: string, file: File): Promi
   } catch {
     throw new ApiError(0, "Could not reach the JobPilot server. Check your connection and try again.");
   }
+}
 
-  const text = await res.text();
-  const data = text ? safeJsonParse(text) : null;
+async function uploadFile<T>(path: string, fieldName: string, file: File): Promise<T> {
+  const token = getToken();
+  let res = await doUpload(path, fieldName, file, token);
 
-  if (!res.ok) {
-    const shape = (data ?? {}) as Partial<ApiErrorShape>;
-    throw new ApiError(res.status, shape.detail || `Request failed with status ${res.status}`, shape.code);
+  if (res.status === 401 && token) {
+    const newToken = await refreshAccessToken();
+    if (newToken) {
+      res = await doUpload(path, fieldName, file, newToken);
+    } else {
+      setToken(null);
+      setRefreshToken(null);
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event(AUTH_UNAUTHORIZED_EVENT));
+      }
+    }
   }
 
-  return data as T;
+  return parseResponse<T>(res);
 }
 
 // ---------- Auth ----------
@@ -189,6 +282,11 @@ export const authApi = {
   me: () => request<User>("/auth/me"),
   resendVerification: () =>
     request<ResendVerificationResponse>("/auth/resend-verification", { method: "POST" }),
+  // Not used directly by app code (request()/uploadFile() call the raw
+  // endpoint themselves to refresh transparently) — exposed for
+  // AuthContext.logout(), which revokes the refresh token server-side.
+  logout: (refreshToken: string) =>
+    request<void>("/auth/logout", { method: "POST", body: { refresh_token: refreshToken }, auth: false }),
 };
 
 // ---------- Career Profile ----------
