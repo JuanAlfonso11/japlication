@@ -76,6 +76,13 @@ function Start-JobPilot {
     Set-Status "Encendiendo..." $ColorWorking
     docker compose up -d *> $null
 
+    # Point tailscale serve back at the real frontend now that it's up —
+    # while it was off, this pointed at the offline placeholder page
+    # instead (see Stop-JobPilot). scripts\offline-page\serve-offline.ps1
+    # (started at login, independent of Docker) keeps answering on :3001
+    # either way; only where tailscale serve forwards to changes.
+    & $Tailscale serve --bg --https=443 http://localhost:3000 *> $null
+
     Update-Status
     $startButton.Enabled = $true
     $stopButton.Enabled = $true
@@ -87,6 +94,12 @@ function Stop-JobPilot {
     Set-Status "Apagando..." $ColorWorking
 
     Set-Location $RepoDir
+
+    # Switch tailscale serve to the always-on offline placeholder page
+    # BEFORE stopping the containers, so there's no gap where the real
+    # app is down but the URL still points at it (which would just show a
+    # connection error instead of the "JobPilot esta descansando" page).
+    & $Tailscale serve --bg --https=443 http://localhost:3001 *> $null
     docker compose stop *> $null
 
     Update-Status

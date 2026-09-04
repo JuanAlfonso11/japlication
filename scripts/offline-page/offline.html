@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>JobPilot</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body {
+    height: 100%;
+    margin: 0;
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 28px;
+    min-height: 100dvh;
+    padding: 24px;
+    text-align: center;
+    background: linear-gradient(135deg, #4c6ef5 0%, #2547e9 45%, #202c85 100%);
+    overflow: hidden;
+  }
+
+  /* -- Mascot: a sleepy version of the app's own card-stack mark -- */
+  .mascot {
+    position: relative;
+    width: 168px;
+    height: 168px;
+    animation: bob 3.2s ease-in-out infinite;
+  }
+  @keyframes bob {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+  }
+
+  .card {
+    position: absolute;
+    border-radius: 22px;
+    background: #fff;
+  }
+  .card.back {
+    width: 122px; height: 86px;
+    left: 6px; top: 6px;
+    background: rgba(255,255,255,0.55);
+  }
+  .card.mid {
+    width: 122px; height: 86px;
+    left: 20px; top: 22px;
+    background: rgba(255,255,255,0.78);
+  }
+  .card.front {
+    width: 122px; height: 86px;
+    left: 34px; top: 38px;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.25);
+  }
+  .card.front::before {
+    /* the accent bar, same as the app icon's front card */
+    content: "";
+    position: absolute;
+    top: 14px; left: 16px; right: 16px;
+    height: 8px;
+    border-radius: 4px;
+    background: #2547e9;
+  }
+  /* sleepy face on the front card */
+  .eye {
+    position: absolute;
+    top: 40px;
+    width: 16px;
+    height: 8px;
+    border-bottom: 3px solid #2547e9;
+    border-radius: 0 0 50% 50%;
+  }
+  .eye.left { left: 22px; }
+  .eye.right { left: 54px; }
+  .mouth {
+    position: absolute;
+    top: 56px;
+    left: 41px;
+    width: 20px;
+    height: 10px;
+    border-bottom: 3px solid #2547e9;
+    border-radius: 50%;
+  }
+
+  .zzz {
+    position: absolute;
+    top: 6px;
+    right: -8px;
+    font-weight: 800;
+    color: #fff;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  }
+  .zzz span {
+    position: absolute;
+    opacity: 0;
+    animation: rise 3.2s ease-in infinite;
+  }
+  .zzz span:nth-child(1) { font-size: 14px; animation-delay: 0s; }
+  .zzz span:nth-child(2) { font-size: 18px; left: 10px; top: -8px; animation-delay: 0.6s; }
+  .zzz span:nth-child(3) { font-size: 22px; left: 22px; top: -18px; animation-delay: 1.2s; }
+  @keyframes rise {
+    0%   { opacity: 0; transform: translateY(4px); }
+    15%  { opacity: 0.9; }
+    70%  { opacity: 0.5; }
+    100% { opacity: 0; transform: translateY(-26px); }
+  }
+
+  h1 {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 800;
+    color: #fff;
+  }
+  p {
+    margin: 6px 0 0;
+    font-size: 14px;
+    color: rgba(255,255,255,0.78);
+    max-width: 320px;
+    line-height: 1.5;
+  }
+
+  .checking {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: rgba(255,255,255,0.6);
+    margin-top: 4px;
+  }
+  .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.7);
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 0.3; transform: scale(0.85); }
+    50% { opacity: 1; transform: scale(1); }
+  }
+</style>
+</head>
+<body>
+  <div class="mascot">
+    <div class="card back"></div>
+    <div class="card mid"></div>
+    <div class="card front">
+      <div class="eye left"></div>
+      <div class="eye right"></div>
+      <div class="mouth"></div>
+    </div>
+    <div class="zzz"><span>z</span><span>z</span><span>Z</span></div>
+  </div>
+
+  <div>
+    <h1>JobPilot está descansando</h1>
+    <p>Enciende la aplicación desde tu PC (el botón "Encender" del panel) para seguir buscando empleos.</p>
+  </div>
+
+  <div class="checking">
+    <span class="dot"></span>
+    Revisando si ya está encendida…
+  </div>
+
+  <script>
+    // Once JobPilot is turned back on, tailscale serve starts pointing this
+    // same URL at the real app instead of this static page — a plain
+    // reload is all it takes to pick that up, no special detection needed.
+    setInterval(function () {
+      location.reload();
+    }, 5000);
+  </script>
+</body>
+</html>

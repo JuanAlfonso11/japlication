@@ -45,6 +45,12 @@ if not %errorlevel%==0 (
     exit /b 1
 )
 
+REM Make sure tailscale serve is pointed at the real frontend, not the
+REM offline placeholder page (jobpilot-control.ps1's Apagar button points
+REM it at the placeholder instead - if the PC was shut down/rebooted while
+REM off, that setting would otherwise still be in effect here).
+"%ProgramFiles%\Tailscale\tailscale.exe" serve --bg --https=443 http://localhost:3000 >nul 2>&1
+
 echo [JobPilot] Up and running.
 echo   Web:       http://localhost:3000
 echo   Tailscale: https://jobpilot.tailb3d4c1.ts.net
