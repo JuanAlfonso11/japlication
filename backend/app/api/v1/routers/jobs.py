@@ -596,20 +596,21 @@ def _profile_search_query(profile: CareerProfile) -> Optional[str]:
 _AUTO_IMPORT_LIMIT = 20
 
 
-@router.post("/jobs/search/auto-import", response_model=AutoImportResponse)
-async def auto_import_matching_jobs(
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-) -> AutoImportResponse:
+async def run_auto_import_for_user(user: User, db: AsyncSession) -> AutoImportResponse:
     """Searches every no-auth provider using the saved career profile
     (headline, most recent role, or top skills) and imports the newest
     matches straight into `jobs` with a computed match score — this is
     what runs right after a CV-derived profile is saved, so Home's swipe
     queue has something to show without the user having to visit Discover
     first. Only genuinely new postings are counted/matched; ones already
-    in the database (by source_url) are left alone."""
+    in the database (by source_url) are left alone.
+
+    Extracted from the route handler below so the same logic can also run
+    unattended — see app/scripts/run_daily_sweep.py, invoked on a schedule
+    (scripts/install-job-sweep-schedule.ps1) so new matches show up (with a
+    push notification) even if the app was never opened that day."""
     profile = (
-        await db.execute(select(CareerProfile).where(CareerProfile.user_id == current_user.id))
+        await db.execute(select(CareerProfile).where(CareerProfile.user_id == user.id))
     ).scalar_one_or_none()
     if profile is None:
         raise HTTPException(status_code=400, detail="Save your career profile before auto-searching for matches.")
@@ -636,18 +637,18 @@ async def auto_import_matching_jobs(
     for result in all_results[:_AUTO_IMPORT_LIMIT]:
         try:
             job, created = await _get_or_create_external_job(
-                result.model_dump(), result.source, current_user.id, db
+                result.model_dump(), result.source, user.id, db
             )
         except Exception:
             continue
         if not created:
             continue
-        await compute_and_persist_match(profile, job, current_user.id, db)
+        await compute_and_persist_match(profile, job, user.id, db)
         imported += 1
 
     if imported > 0 and push_notifications.is_configured():
         tokens = (
-            await db.execute(select(DeviceToken.token).where(DeviceToken.user_id == current_user.id))
+            await db.execute(select(DeviceToken.token).where(DeviceToken.user_id == user.id))
         ).scalars().all()
         plural = "s" if imported != 1 else ""
         for device_token in tokens:
@@ -658,6 +659,14 @@ async def auto_import_matching_jobs(
             )
 
     return AutoImportResponse(imported=imported, query=q, sources=sources)
+
+
+@router.post("/jobs/search/auto-import", response_model=AutoImportResponse)
+async def auto_import_matching_jobs(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> AutoImportResponse:
+    return await run_auto_import_for_user(current_user, db)
 
 
 @router.get("/jobs/{job_id}", response_model=JobSchema)

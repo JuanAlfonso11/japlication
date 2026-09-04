@@ -10,6 +10,8 @@
 | `uninstall-autostart.ps1` | Removes that autostart entry. |
 | `backup-db.ps1` | Dumps the Postgres database to `backups/jobflow_<timestamp>.sql`, deletes backups older than 30 days. |
 | `install-backup-schedule.ps1` | Run once: schedules `backup-db.ps1` to run daily at 3 AM via Task Scheduler (task name "JobPilot DB Backup"). Already installed. |
+| `daily-job-sweep.ps1` | Runs the same job-matching sweep as the app's "search for matches" (`GET /jobs/search/auto-import`), for every user, straight inside the backend container — so new matches (and their push notification) show up even on a day JobPilot never gets opened. |
+| `install-job-sweep-schedule.ps1` | Run once: schedules `daily-job-sweep.ps1` to run daily at 8 AM via Task Scheduler (task name "JobPilot Daily Job Sweep"). Already installed. |
 
 Note the two "start" paths overlap on purpose: **autostart** brings the app up silently at login with no window; the **desktop shortcut** is for manually turning it on/off afterward (e.g. after using Apagar, or on a PC that doesn't have autostart installed).
 
