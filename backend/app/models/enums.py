@@ -14,6 +14,8 @@ class JobSource(str, enum.Enum):
     jobicy = "jobicy"
     remotejobs_org = "remotejobs_org"
     themuse = "themuse"
+    weworkremotely = "weworkremotely"
+    hackernews = "hackernews"
     manual = "manual"
 
 

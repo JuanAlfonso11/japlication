@@ -9,17 +9,19 @@ no existe documentación oficial, contra el comportamiento real del endpoint) en
 | # | Plataforma | Auth | ¿Integrada? |
 |---|---|---|---|
 | 1 | Himalayas | Ninguna | Sí (ya estaba) |
-| 2 | Arbeitnow | Ninguna | Sí (nueva) |
-| 3 | Remotive | Ninguna | Sí (nueva) |
-| 4 | Jobicy | Ninguna | Sí (nueva) |
-| 5 | RemoteJobs.org | Ninguna | Sí (nueva) |
-| 6 | The Muse | Opcional (funciona sin ella) | Sí (nueva) |
+| 2 | Arbeitnow | Ninguna | Sí |
+| 3 | Remotive | Ninguna | Sí |
+| 4 | Jobicy | Ninguna | Sí |
+| 5 | RemoteJobs.org | Ninguna | Sí |
+| 6 | The Muse | Opcional (funciona sin ella) | Sí |
+| 7 | We Work Remotely | Ninguna (RSS público) | Sí (2026-09) |
+| 8 | Hacker News — "Who is hiring?" | Ninguna (API Algolia oficial) | Sí (2026-09) |
 | — | RemoteOK | Ninguna en teoría | **No** — ver nota |
 
 Excluidas de raíz por requerir API key/OAuth/partnership: Adzuna, Reed.co.uk, USAJobs, Jooble,
 Findwork.dev, Careerjet (requiere `affid` registrado), Google Jobs (vía SerpApi), Upwork, LinkedIn e Indeed.
 **Google Jobs y Upwork ya estuvieron integrados como opciones separadas ("con credenciales") en una versión
-anterior de la app, pero se quitaron por decisión explícita** — la app hoy solo trabaja con las 6 fuentes
+anterior de la app, pero se quitaron por decisión explícita** — la app hoy solo trabaja con las 8 fuentes
 sin autenticación de esta tabla. LinkedIn e Indeed se investigan a fondo en la sección siguiente porque el
 resultado no es un simple "pide key": ninguna de las dos ofrece siquiera una API de búsqueda.
 
@@ -134,6 +136,27 @@ verificarla en producción.
   ```
 - **Limitaciones**: rate limit por hora (ver arriba); headers `X-RateLimit-Remaining/-Limit/-Reset` en cada respuesta para monitorear consumo
 
+## 7. We Work Remotely
+
+- **Endpoint**: `GET https://weworkremotely.com/remote-jobs.rss` (más feeds por categoría, ej. `.../categories/2-programming.rss`)
+- **Auth**: ninguna — es un RSS público, condición de uso: enlazar de vuelta al listado original (se cumple automáticamente, `source_url` siempre es la página real de WWR)
+- **Formato**: XML/RSS 2.0. Cada `<item>` trae `title` ("Empresa: Puesto"), `region`, `country`, `type`, `description` (HTML), `pubDate`, `guid` (= URL del puesto)
+- **Ubicación**: 100% remoto por naturaleza del sitio; `region` es texto libre (ej. "Worldwide", "Latin America Only")
+- **Nivel de experiencia**: no expone campo nativo → heurística de texto (`job_importer.parse_job_text_heuristic`)
+- **Límites**: el propio `ttl` del feed es 60 min → se cachea por esa misma ventana en vez de re-pedir el feed completo (~50 avisos) en cada búsqueda
+- **Implementación**: `backend/app/services/weworkremotely.py`
+
+## 8. Hacker News — "Who is hiring?"
+
+- **Endpoint**: API Algolia oficial de HN (`hn.algolia.com/api/v1`), no la Firebase API cruda — un solo `GET /items/{id}` trae el hilo completo con todos los comentarios anidados
+- **Auth**: ninguna
+- **Cómo se ubica el hilo del mes**: `GET /search_by_date?tags=story,author_whoishiring` y se toma el primer resultado cuyo título empiece con "Ask HN: Who is hiring?" (el hilo hermano "Who wants to be hired?" es del lado candidato, no de vacantes)
+- **Formato**: cada comentario de primer nivel es una vacante en **texto libre**, por convención de la comunidad (no forzada) "Empresa | Puesto | Ubicación | Tipo | Salario | URL" en la primera línea. Se parsea con un heurístico propio (split por `|` + `job_importer.parse_job_text_heuristic` sobre el resto) — no es tan confiable como un JSON estructurado, pero es la única fuente 100% gratis y sin auth de este tipo
+- **Ubicación**: variable, texto libre por posting; muchas veces remoto pero no siempre
+- **Nivel de experiencia**: no expone campo nativo → heurística de texto
+- **Límites**: el hilo solo recibe comentarios nuevos los primeros días del mes, después queda estático — se cachea 6 horas
+- **Implementación**: `backend/app/services/hackernews.py`
+
 ---
 
 ## Investigación adicional: ¿cómo se consigue acceso a las APIs de Indeed y LinkedIn?
@@ -196,7 +219,7 @@ documentación oficial vigente (Microsoft Learn para LinkedIn, docs.indeed.com p
 
 ## Cómo se integran (resumen técnico — detalle completo en `backend/README.md`)
 
-- El endpoint **`GET /jobs/search/aggregate`** dispara las 6 fuentes sin auth **en paralelo**
+- El endpoint **`GET /jobs/search/aggregate`** dispara las 8 fuentes sin auth **en paralelo**
   (`asyncio.gather`) y devuelve un solo listado combinado — así es como Discover muestra "todos los
   resultados de todas las APIs integradas" en una sola búsqueda, sin que el usuario tenga que elegir
   proveedor uno por uno. Un proveedor que falla no tumba a los demás: se reporta por separado.
@@ -204,6 +227,6 @@ documentación oficial vigente (Microsoft Learn para LinkedIn, docs.indeed.com p
   (`backend/app/services/experience_level.py`). Himalayas y The Muse lo mandan como parámetro nativo al
   proveedor; Jobicy lo trae en la respuesta (`jobLevel`) y se normaliza; Arbeitnow/Remotive/RemoteJobs.org
   no lo exponen, así que se infiere por heurística de texto sobre título+descripción (mismo enfoque que ya
-  usa `job_importer.py` para seniority) — mismo filtro, aplicado de forma uniforme sobre las 6 fuentes.
+  usa `job_importer.py` para seniority) — mismo filtro, aplicado de forma uniforme sobre las 8 fuentes.
 - **Ubicación por defecto**: el campo de ubicación en el formulario de Discover arranca con `"Remote"`
   precargado (no es una restricción dura — el usuario puede borrarlo o cambiarlo).

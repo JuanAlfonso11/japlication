@@ -154,7 +154,7 @@ export interface JobCreatePayload {
   source_url?: string | null;
 }
 
-// ---------- External job search (6 free, no-auth APIs — GET /jobs/search/aggregate) ----------
+// ---------- External job search (8 free, no-auth APIs — GET /jobs/search/aggregate) ----------
 
 export type ExternalProvider =
   | "himalayas"
@@ -162,7 +162,9 @@ export type ExternalProvider =
   | "remotive"
   | "jobicy"
   | "remotejobs_org"
-  | "themuse";
+  | "themuse"
+  | "weworkremotely"
+  | "hackernews";
 
 export const PROVIDER_LABELS: Record<ExternalProvider, string> = {
   himalayas: "Himalayas",
@@ -171,6 +173,8 @@ export const PROVIDER_LABELS: Record<ExternalProvider, string> = {
   jobicy: "Jobicy",
   remotejobs_org: "RemoteJobs.org",
   themuse: "The Muse",
+  weworkremotely: "We Work Remotely",
+  hackernews: "Hacker News",
 };
 
 export type ExperienceLevel = "internship" | "entry" | "mid" | "senior" | "lead";
