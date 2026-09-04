@@ -16,6 +16,10 @@ npm-debug.log*
 .env
 .env.local
 
+# Local DB backups (scripts/backup-db.ps1) — contain real user data,
+# never committed
+backups/
+
 # OS
 .DS_Store
 

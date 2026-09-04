@@ -107,7 +107,7 @@ function VerifyEmailContent() {
 
       <Link
         href={token ? "/" : "/login"}
-        className="mt-1 text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+        className="mt-1 w-full max-w-xs rounded-lg bg-brand-600 px-6 py-3 text-base font-semibold text-white hover:bg-brand-700"
       >
         {token ? "Ir a Home" : "Iniciar sesión"}
       </Link>
