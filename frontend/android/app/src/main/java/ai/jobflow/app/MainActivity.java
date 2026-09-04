@@ -14,6 +14,14 @@ import com.getcapacitor.BridgeActivity;
  * link and having Android open JobPilot actually navigates to it (letting
  * the backend validate the token and redirect, same as a normal browser
  * tap would) rather than just opening the app to its default Home screen.
+ *
+ * (This class previously also excluded Android's edge swipe-back gesture
+ * app-wide via setSystemGestureExclusionRects(), as a fix attempt for
+ * Home's swipe cards not registering one-finger drags. That turned out to
+ * be the wrong layer entirely — the real cause was a CSS touch-action
+ * inheritance gap (see globals.css) — and excluding the whole window had
+ * the side effect of also disabling the OS back-gesture everywhere else
+ * in the app, e.g. backing out of a job's detail page. Removed.)
  */
 public class MainActivity extends BridgeActivity {
     @Override
