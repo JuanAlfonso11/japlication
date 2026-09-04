@@ -30,16 +30,22 @@ textarea {
 }
 
 /* SwipeCard's drag surface: `touch-action` is NOT inherited by
-   descendants in CSS — setting it to "none" on the card's own wrapper
-   only governs touches that start exactly on that element, not on the
+   descendants in CSS — setting it only on the card's own wrapper governs
+   touches that start exactly on that element, not on the
    title/description/tags text inside it. Confirmed on-device via remote
    devtools: a touch starting on the job title reported `touch-action:
-   auto` despite the wrapper's "none", and the browser fired a
+   auto` despite the wrapper's own setting, and the browser fired a
    `pointercancel` moments into the drag (handing it to native
    scroll/navigation) instead of letting framer-motion's drag handler
-   ever see it — that's the actual reason one-finger swiping did
-   nothing. Forcing every descendant to "none" too closes that gap. */
+   ever see it. Forcing every descendant to the same value closes that gap.
+   `pan-y`, not `none` — `none` fixed the swipe but also blocked the
+   description's own native vertical scroll (its overflow-y-auto div is
+   inside this same subtree). `pan-y` still tells the browser to keep its
+   hands off horizontal panning everywhere in here (so framer-motion's
+   drag reliably gets it, from any touch target inside the card), while
+   leaving vertical scroll natively handled — which is exactly what the
+   inner content needs. */
 .swipe-drag-surface,
 .swipe-drag-surface * {
-  touch-action: none;
+  touch-action: pan-y;
 }
