@@ -154,8 +154,8 @@ export interface JobCreatePayload {
   source_url?: string | null;
 }
 
-// ---------- External job search (11 providers — GET /jobs/search/aggregate).
-// 8 are free/no-auth; adzuna, usajobs and francetravail need API keys set
+// ---------- External job search (12 providers — GET /jobs/search/aggregate).
+// 9 are free/no-auth; adzuna, usajobs and francetravail need API keys set
 // in the backend's .env and simply report an error in `sources` (not a
 // hard failure) when unconfigured. ----------
 
@@ -168,6 +168,7 @@ export type ExternalProvider =
   | "themuse"
   | "weworkremotely"
   | "hackernews"
+  | "getonbrd"
   | "adzuna"
   | "usajobs"
   | "francetravail";
@@ -181,6 +182,7 @@ export const PROVIDER_LABELS: Record<ExternalProvider, string> = {
   themuse: "The Muse",
   weworkremotely: "We Work Remotely",
   hackernews: "Hacker News",
+  getonbrd: "Get on Board",
   adzuna: "Adzuna",
   usajobs: "USAJobs",
   francetravail: "France Travail",

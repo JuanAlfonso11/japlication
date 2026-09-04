@@ -7,6 +7,7 @@ import ImportedJobCard from "@/components/ImportedJobCard";
 import SkillTag from "@/components/SkillTag";
 import { Select } from "@/components/ui/Field";
 import { ApiError, jobsApi } from "@/lib/api";
+import { EXTERNAL_PLATFORM_GROUPS } from "@/lib/externalPlatforms";
 import { importAndMatch } from "@/lib/jobActions";
 import {
   EXPERIENCE_LEVEL_LABELS,
@@ -143,6 +144,53 @@ function SourcesSummary({ sources }: { sources: AggregateSourceStatus[] }) {
   );
 }
 
+function ExternalPlatformsSection() {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-100 dark:bg-gray-900 dark:ring-gray-800">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between text-left"
+      >
+        <div>
+          <h2 className="font-semibold text-gray-900 dark:text-gray-100">Otras plataformas para buscar</h2>
+          <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+            No tienen API pública, así que no aparecen en la búsqueda de arriba — pero son buenas opciones
+            para revisar y aplicar manualmente desde RD.
+          </p>
+        </div>
+        <span className="shrink-0 text-gray-400 dark:text-gray-500">{open ? "−" : "+"}</span>
+      </button>
+      {open && (
+        <div className="mt-4 space-y-4">
+          {EXTERNAL_PLATFORM_GROUPS.map((group) => (
+            <div key={group.label}>
+              <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
+                {group.label}
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                {group.platforms.map((p) => (
+                  <a
+                    key={p.name}
+                    href={p.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={p.note}
+                    className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-700 hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700 dark:border-gray-800 dark:bg-gray-800/60 dark:text-gray-300 dark:hover:bg-brand-900/30 dark:hover:text-brand-300"
+                  >
+                    {p.name} ↗
+                  </a>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DiscoverContent() {
   const [q, setQ] = useState("");
   const [location, setLocation] = useState("");
@@ -187,9 +235,9 @@ function DiscoverContent() {
       <div>
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Discover jobs</h1>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          Busca a la vez en 6 APIs públicas sin login (Himalayas, Arbeitnow, Remotive, Jobicy,
-          RemoteJobs.org y The Muse) y combina los resultados en una sola lista. Anything you add
-          shows up matched against your profile back on Home.
+          Busca a la vez en 12 fuentes (9 públicas sin login + Adzuna/USAJobs/France Travail si
+          configuraste sus claves) y combina los resultados en una sola lista. Todo lo que agregues
+          queda comparado contra tu perfil en Home.
         </p>
       </div>
 
@@ -277,13 +325,15 @@ function DiscoverContent() {
 
           {!loading && !searched && (
             <p className="py-6 text-center text-sm text-gray-400 dark:text-gray-500">
-              Busca algo para ver resultados combinados de las 6 fuentes sin login.
+              Busca algo para ver resultados combinados de todas las fuentes sin login.
             </p>
           )}
         </div>
       </div>
 
       {lastAdded && <ImportedJobCard job={lastAdded} />}
+
+      <ExternalPlatformsSection />
     </div>
   );
 }

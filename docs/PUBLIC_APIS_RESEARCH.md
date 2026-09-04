@@ -22,6 +22,7 @@ quedó documentado como descartado, con el motivo.
 | 9 | Adzuna | API key gratis (registro instantáneo) | Sí (2026-09) — código listo, esperando claves |
 | 10 | USAJobs | API key gratis (registro instantáneo) | Sí (2026-09) — código listo, esperando claves |
 | 11 | France Travail (ex-Pôle Emploi) | OAuth2 client credentials (registro instantáneo) | Sí (2026-09) — código listo, esperando claves |
+| 12 | Get on Board | Ninguna (facet pública de su API) | Sí (2026-09) |
 | — | RemoteOK | Ninguna en teoría | **No** — ver nota |
 | — | Reed.co.uk | API key gratis | **No** — ver nota |
 | — | JSearch (RapidAPI) | API key gratis (cuota mínima) | **No** — ver nota |
@@ -230,6 +231,39 @@ verificarla en producción.
 - **Límites**: ~10 solicitudes/segundo — muy generoso; el token OAuth2 se cachea en memoria (~25 min) para no pedir uno nuevo en cada búsqueda
 - **Implementación**: `backend/app/services/francetravail.py` — **funciona en cuanto se agreguen `FRANCE_TRAVAIL_CLIENT_ID`/`FRANCE_TRAVAIL_CLIENT_SECRET` a `.env`**
 
+## 12. Get on Board
+
+Agregada 2026-09 a partir de una lista de plataformas buenas para alguien buscando trabajo remoto desde
+República Dominicana (ver más abajo la nota completa sobre esa lista — Get on Board fue la única de esas
+~20 plataformas con una API pública real).
+
+- **Endpoint**: `GET https://www.getonbrd.com/api/v0/search/jobs?query=...` — **no** `GET /jobs` (ese sí exige key y devuelve 401); el endpoint de búsqueda es la "public facet" documentada en su cliente oficial de Ruby y no pide ninguna credencial
+- **Auth**: ninguna, para la facet pública. `query` es obligatorio y debe tener 3+ caracteres — sin término de búsqueda válido, este módulo usa `"remote"` como término amplio en vez de fallar
+- **Formato**: JSON:API — `data[]` con `attributes.title`, `attributes.description` (HTML), `attributes.remote`/`remote_modality`, `attributes.countries`, `attributes.min_salary`/`max_salary`, relaciones expandibles `company`/`modality`/`seniority` (se piden expandidas con `expand[]=`), y `links.public_url` como URL canónica del puesto
+- **Ubicación/alcance**: fuerte en Chile y LatAm en general (empresa chilena); trae también roles 100% remotos abiertos a toda la región — complementa bien a We Work Remotely/Himalayas, que son más globales/US-céntricos
+- **Nivel de experiencia**: viene en `seniority.data.attributes.name` (Junior/Senior/etc.) — se normaliza con la misma heurística de palabras clave que el resto
+- **Límites**: sin límite documentado públicamente; se cachea 15 min como el resto de fuentes sin auth
+- **Implementación**: `backend/app/services/getonbrd.py`
+
+### Sobre la lista de ~20 plataformas "buenas para RD"
+
+Se investigaron Workana, Upwork, Fiverr, Computrabajo RD, Wellfound, Toptal, BairesDev, Turing, Crossover,
+Revelo, TECLA, Near, Torre.ai, GetOnBrd, Contra, Deel, LinkedIn, Empleate.gob.do, SuperEmpleo.com.do,
+Tecoloco.com.do y OpcionEmpleo.com.do para ver cuáles tenían una fuente de datos (RSS o API) integrable de
+la misma forma que las 11 anteriores. El resultado:
+
+- **Get on Board**: única con API pública sin registro → integrada (arriba).
+- **Upwork**: sí tiene API (GraphQL), pero el registro exige verificación de negocio/identidad — no es
+  autoservicio instantáneo como Adzuna/USAJobs/France Travail, así que no se integró por ahora.
+- **Todas las demás** (Workana, Fiverr, Computrabajo RD, Wellfound, Toptal, BairesDev, Turing, Crossover,
+  Revelo, TECLA, Near, Torre.ai, Contra, Deel, LinkedIn, y los 4 portales locales dominicanos): sin
+  API/RSS público, o son plataformas de "aplica con tu perfil" (agencias de staffing/freelance) en vez de
+  tener listados buscables — no hay forma de traer sus vacantes automáticamente sin hacer scraping (fuera
+  de alcance: frágil y en varios casos prohibido explícitamente por sus términos, ej. LinkedIn). Estas
+  quedan como accesos directos dentro de la app (sección "Otras plataformas" en Discover) en vez de fuentes
+  de búsqueda en vivo — la idea es que sirvan como referencia rápida para aplicar manualmente o negociar
+  flexibilidad de ubicación una vez hay una entrevista encaminada, no para traer resultados automáticos.
+
 ---
 
 ## Investigación adicional: ¿cómo se consigue acceso a las APIs de Indeed y LinkedIn?
@@ -292,7 +326,7 @@ documentación oficial vigente (Microsoft Learn para LinkedIn, docs.indeed.com p
 
 ## Cómo se integran (resumen técnico — detalle completo en `backend/README.md`)
 
-- El endpoint **`GET /jobs/search/aggregate`** dispara las 11 fuentes **en paralelo**
+- El endpoint **`GET /jobs/search/aggregate`** dispara las 12 fuentes **en paralelo**
   (`asyncio.gather`) y devuelve un solo listado combinado — así es como Discover muestra "todos los
   resultados de todas las APIs integradas" en una sola búsqueda, sin que el usuario tenga que elegir
   proveedor uno por uno. Un proveedor que falla no tumba a los demás: se reporta por separado — esto
@@ -302,6 +336,6 @@ documentación oficial vigente (Microsoft Learn para LinkedIn, docs.indeed.com p
   (`backend/app/services/experience_level.py`). Himalayas y The Muse lo mandan como parámetro nativo al
   proveedor; Jobicy lo trae en la respuesta (`jobLevel`) y se normaliza; Arbeitnow/Remotive/RemoteJobs.org
   no lo exponen, así que se infiere por heurística de texto sobre título+descripción (mismo enfoque que ya
-  usa `job_importer.py` para seniority) — mismo filtro, aplicado de forma uniforme sobre las 11 fuentes.
+  usa `job_importer.py` para seniority) — mismo filtro, aplicado de forma uniforme sobre las 12 fuentes.
 - **Ubicación por defecto**: el campo de ubicación en el formulario de Discover arranca con `"Remote"`
   precargado (no es una restricción dura — el usuario puede borrarlo o cambiarlo).

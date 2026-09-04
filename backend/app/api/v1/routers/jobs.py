@@ -34,6 +34,7 @@ from app.services import (
     arbeitnow,
     experience_level,
     francetravail,
+    getonbrd,
     hackernews,
     himalayas,
     jobicy,
@@ -55,7 +56,7 @@ router = APIRouter(tags=["jobs"])
 # for LinkedIn/Indeed, can't be) part of this list.
 _NO_AUTH_PROVIDERS = {
     "himalayas", "arbeitnow", "remotive", "jobicy", "remotejobs_org", "themuse",
-    "weworkremotely", "hackernews",
+    "weworkremotely", "hackernews", "getonbrd",
 }
 
 # Registration-required providers. Each degrades gracefully when its keys
@@ -287,7 +288,7 @@ async def list_jobs(
 async def search_jobs(
     provider: str = Query(
         "himalayas",
-        pattern="^(himalayas|arbeitnow|remotive|jobicy|remotejobs_org|themuse|weworkremotely|hackernews|adzuna|usajobs|francetravail)$",
+        pattern="^(himalayas|arbeitnow|remotive|jobicy|remotejobs_org|themuse|weworkremotely|hackernews|getonbrd|adzuna|usajobs|francetravail)$",
     ),
     q: Optional[str] = Query(None),
     location: Optional[str] = Query(None),
@@ -307,7 +308,7 @@ async def search_jobs(
     """Live-search one provider. Nothing is persisted — pick a
     result and call POST /jobs/search/import to add it to `jobs`.
 
-    See GET /jobs/search/aggregate to query all eleven providers in one
+    See GET /jobs/search/aggregate to query all twelve providers in one
     call, which is what Discover uses by default. adzuna/usajobs/
     francetravail require their own API keys (see .env) — calling them
     without keys configured returns a 502.
@@ -454,6 +455,23 @@ async def search_jobs(
         ]
         return ExternalJobsSearchResponse(provider="hackernews", results=results, has_more=False)
 
+    if provider == "getonbrd":
+        try:
+            data = await getonbrd.search_getonbrd_jobs(
+                q=q, location=location, experience_level_filter=experience_level_filter,
+                remote_type_filter=remote_type_filter, page=page,
+            )
+        except getonbrd.GetOnBrdError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        results = [
+            ExternalJobResult(external_id=r["getonbrd_job_id"], **{k: v for k, v in r.items() if k != "getonbrd_job_id"})
+            for r in data["results"]
+            if r.get("getonbrd_job_id")
+        ]
+        return ExternalJobsSearchResponse(
+            provider="getonbrd", results=results, page=page + 1 if data["has_more"] else None, has_more=data["has_more"]
+        )
+
     if provider == "adzuna":
         try:
             data = await adzuna.search_adzuna_jobs(
@@ -573,6 +591,12 @@ async def _run_search_provider(
                 remote_type_filter=remote_type_filter,
             )
             id_key = "hn_job_id"
+        elif provider == "getonbrd":
+            data = await getonbrd.search_getonbrd_jobs(
+                q=q, location=location, experience_level_filter=experience_level_filter,
+                remote_type_filter=remote_type_filter,
+            )
+            id_key = "getonbrd_job_id"
         elif provider == "adzuna":
             data = await adzuna.search_adzuna_jobs(
                 q=q, location=location, experience_level_filter=experience_level_filter,
@@ -628,9 +652,10 @@ async def search_jobs_aggregate(
 ) -> AggregateSearchResponse:
     """Fans out to every job-search provider at once (Himalayas, Arbeitnow,
     Remotive, Jobicy, RemoteJobs.org, The Muse, We Work Remotely, Hacker
-    News, plus Adzuna/USAJobs/France Travail whenever their keys are set
-    in .env) and merges the results into one list, newest first — this is
-    what the Discover tab's "search all sources" action calls. A provider
+    News, Get on Board, plus Adzuna/USAJobs/France Travail whenever their
+    keys are set in .env) and merges the results into one list, newest
+    first — this is what the Discover tab's "search all sources" action
+    calls. A provider
     that errors — including a keyed provider with no credentials
     configured — doesn't take the others down with it: its failure shows
     up in `sources` instead of the result list. `location` is purely
@@ -723,6 +748,7 @@ async def import_external_job(
         "themuse": themuse.get_cached_result,
         "weworkremotely": weworkremotely.get_cached_result,
         "hackernews": hackernews.get_cached_result,
+        "getonbrd": getonbrd.get_cached_result,
         "adzuna": adzuna.get_cached_result,
         "usajobs": usajobs.get_cached_result,
         "francetravail": francetravail.get_cached_result,
