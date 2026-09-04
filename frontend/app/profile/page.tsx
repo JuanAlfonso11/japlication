@@ -6,6 +6,7 @@ import Spinner from "@/components/Spinner";
 import ErrorNotice from "@/components/ErrorNotice";
 import CVEvaluationCard from "@/components/CVEvaluationCard";
 import SettingsPanel from "@/components/profile/SettingsPanel";
+import UsedResumesSection from "@/components/profile/UsedResumesSection";
 import { FormField, inputClass, textareaClass } from "@/components/ui/Field";
 import SectionCard from "@/components/profile/SectionCard";
 import SkillsSection from "@/components/profile/SkillsSection";
@@ -280,6 +281,8 @@ function ProfileContent() {
       </div>
 
       <CVEvaluationCard evaluation={evaluation} loading={evalLoading} error={evalError} />
+
+      <UsedResumesSection />
 
       <SectionCard title="Overview" description="How recruiters see you at a glance.">
         <FormField label="Headline">

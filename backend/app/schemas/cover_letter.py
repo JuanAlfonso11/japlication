@@ -5,6 +5,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict
 
 from app.models.enums import GenerationSource
+from app.schemas.application import JobSummary
 
 
 class CoverLetterGenerateRequest(BaseModel):
@@ -23,3 +24,4 @@ class CoverLetter(BaseModel):
     tone: str
     generated_by: GenerationSource
     created_at: datetime
+    job: Optional[JobSummary] = None

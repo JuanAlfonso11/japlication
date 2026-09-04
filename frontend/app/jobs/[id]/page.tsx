@@ -9,7 +9,7 @@ import MatchBreakdown from "@/components/MatchBreakdown";
 import ScoreBadge from "@/components/ScoreBadge";
 import SkillTag from "@/components/SkillTag";
 import { ApiError, jobsApi } from "@/lib/api";
-import type { CoverLetter, Job, MatchResult, ResumeVersion } from "@/lib/types";
+import type { CoverLetter, Job, MatchResult, ResumeVersion, ReusableResumeSuggestion } from "@/lib/types";
 
 function resumeToPlainText(resume: ResumeVersion): string {
   const lines: string[] = [resume.title, ""];
@@ -71,10 +71,15 @@ function JobDetailContent() {
   const [resume, setResume] = useState<ResumeVersion | null>(null);
   const [resumeLoading, setResumeLoading] = useState(false);
   const [resumeError, setResumeError] = useState<string | null>(null);
+  const [reusable, setReusable] = useState<ReusableResumeSuggestion | null>(null);
 
   const [coverLetter, setCoverLetter] = useState<CoverLetter | null>(null);
   const [coverLoading, setCoverLoading] = useState(false);
   const [coverError, setCoverError] = useState<string | null>(null);
+
+  const [applying, setApplying] = useState(false);
+  const [applyError, setApplyError] = useState<string | null>(null);
+  const [applied, setApplied] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -92,6 +97,12 @@ function JobDetailContent() {
           // Match may not be computable yet — non-fatal.
         }
       }
+      try {
+        const suggestion = await jobsApi.reusableResume(jobId);
+        if (suggestion.resume_version) setReusable(suggestion);
+      } catch {
+        // Reuse suggestion is a nice-to-have — never blocks the page.
+      }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to load this job.");
     } finally {
@@ -102,6 +113,30 @@ function JobDetailContent() {
   useEffect(() => {
     load();
   }, [load]);
+
+  function handleReuseResume() {
+    if (reusable?.resume_version) {
+      setResume(reusable.resume_version);
+      setReusable(null);
+    }
+  }
+
+  async function handleApply() {
+    setApplying(true);
+    setApplyError(null);
+    try {
+      await jobsApi.decide(jobId, {
+        decision: "right",
+        resume_version_id: resume?.id,
+        cover_letter_id: coverLetter?.id,
+      });
+      setApplied(true);
+    } catch (err) {
+      setApplyError(err instanceof ApiError ? err.message : "Could not send the application.");
+    } finally {
+      setApplying(false);
+    }
+  }
 
   async function handleGenerateResume() {
     setResumeLoading(true);
@@ -149,12 +184,17 @@ function JobDetailContent() {
               {job.company}
               {job.location ? ` · ${job.location}` : ""}
             </p>
+            {job.requires_cover_letter && (
+              <span className="mt-1.5 inline-block rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                Requiere carta de presentación
+              </span>
+            )}
             {job.source_url && (
               <a
                 href={job.source_url}
                 target="_blank"
                 rel="noreferrer"
-                className="mt-1 inline-block text-xs text-brand-600 hover:text-brand-700"
+                className="mt-1 block text-xs text-brand-600 hover:text-brand-700"
               >
                 View original posting ↗
               </a>
@@ -175,6 +215,27 @@ function JobDetailContent() {
             ))}
           </div>
         )}
+
+        <div className="mt-4 border-t border-gray-100 pt-4 dark:border-gray-800">
+          {applyError && <ErrorNotice message={applyError} />}
+          <button
+            type="button"
+            onClick={handleApply}
+            disabled={applying || applied}
+            className="w-full rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+          >
+            {applied ? "Aplicado ✓" : applying ? "Enviando…" : "Aplicar"}
+          </button>
+          {!applied && (
+            <p className="mt-1.5 text-xs text-gray-400 dark:text-gray-500">
+              {resume || coverLetter
+                ? "Se enviará con el CV y/o la carta de presentación generados abajo."
+                : job.requires_cover_letter
+                  ? "Este puesto requiere carta de presentación — se generará una automáticamente si aplicas sin crear una."
+                  : "Puedes aplicar directamente, o generar un CV/carta a medida abajo antes."}
+            </p>
+          )}
+        </div>
       </div>
 
       {match && (
@@ -226,6 +287,23 @@ function JobDetailContent() {
           </button>
         </div>
         {resumeError && <ErrorNotice message={resumeError} />}
+        {reusable?.resume_version && !resume && (
+          <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-brand-100 bg-brand-50 p-3 text-sm dark:border-brand-900/40 dark:bg-brand-900/20">
+            <p className="text-brand-800 dark:text-brand-300">
+              Encontramos un CV ya adaptado para <strong>{reusable.source_job_title}</strong>
+              {reusable.source_company ? ` @ ${reusable.source_company}` : ""} con{" "}
+              {Math.round(reusable.similarity * 100)}% de requisitos en común — puedes reutilizarlo sin
+              generar otro.
+            </p>
+            <button
+              type="button"
+              onClick={handleReuseResume}
+              className="shrink-0 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700"
+            >
+              Reutilizar
+            </button>
+          </div>
+        )}
         {resume && (
           <div className="mt-2 space-y-3 rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-gray-800 dark:bg-gray-800/50">
             <div className="flex items-start justify-between gap-3">

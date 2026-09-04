@@ -39,3 +39,4 @@ class ResumeVersion(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     career_profile = relationship("CareerProfile", back_populates="resume_versions")
+    job = relationship("Job", foreign_keys=[job_id], lazy="noload")

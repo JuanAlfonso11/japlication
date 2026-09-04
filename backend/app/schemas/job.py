@@ -36,6 +36,7 @@ class JobCreate(BaseModel):
     salary_currency: Optional[str] = None
     posted_at: Optional[datetime] = None
     source_url: Optional[str] = None
+    requires_cover_letter: bool = False
 
 
 class Job(BaseModel):
@@ -59,6 +60,7 @@ class Job(BaseModel):
     salary_max: Optional[float] = None
     salary_currency: Optional[str] = None
     posted_at: Optional[datetime] = None
+    requires_cover_letter: bool = False
     created_at: datetime
     updated_at: datetime
     match: Optional[MatchResult] = None

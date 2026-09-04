@@ -63,6 +63,7 @@ function ManualJobForm({ onImported }: { onImported: (job: Job) => void }) {
   const [description, setDescription] = useState("");
   const [requirements, setRequirements] = useState("");
   const [skills, setSkills] = useState("");
+  const [requiresCoverLetter, setRequiresCoverLetter] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -85,6 +86,7 @@ function ManualJobForm({ onImported }: { onImported: (job: Job) => void }) {
           .map((s) => s.trim())
           .filter(Boolean)
           .map((name) => ({ name, importance: "required" as const })),
+        requires_cover_letter: requiresCoverLetter,
       });
       onImported(await importAndMatch(job));
       setTitle("");
@@ -93,6 +95,7 @@ function ManualJobForm({ onImported }: { onImported: (job: Job) => void }) {
       setDescription("");
       setRequirements("");
       setSkills("");
+      setRequiresCoverLetter(false);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not save that job.");
     } finally {
@@ -148,6 +151,15 @@ function ManualJobForm({ onImported }: { onImported: (job: Job) => void }) {
           onChange={(e) => setSkills(e.target.value)}
           placeholder="C#, SQL, Kubernetes"
         />
+      </label>
+      <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+        <input
+          type="checkbox"
+          checked={requiresCoverLetter}
+          onChange={(e) => setRequiresCoverLetter(e.target.checked)}
+          className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500 dark:border-gray-600"
+        />
+        Requiere carta de presentación
       </label>
       <button
         type="submit"

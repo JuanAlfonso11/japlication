@@ -10,12 +10,16 @@ from sqlalchemy.orm import selectinload
 from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.application import Application
-from app.models.enums import ApplicationStatus, SwipeDecision
+from app.models.career_profile import CareerProfile
+from app.models.cover_letter import CoverLetter
+from app.models.enums import ApplicationStatus, GenerationSource, SwipeDecision
 from app.models.job import Job
 from app.models.job_match import JobMatch
+from app.models.resume_version import ResumeVersion
 from app.models.user import User
 from app.schemas.application import Application as ApplicationSchema
 from app.schemas.application import ApplicationUpdate, DecisionRequest, JobSummary
+from app.services.cover_letter_generator import generate_cover_letter
 
 router = APIRouter(tags=["applications"])
 
@@ -34,6 +38,58 @@ def _serialize(app_row: Application) -> ApplicationSchema:
     if app_row.job is not None:
         schema.job = JobSummary.model_validate(app_row.job)
     return schema
+
+
+async def _reuse_or_generate_cover_letter(
+    db: AsyncSession,
+    current_user: User,
+    job: Job,
+    resume_version_id: Optional[UUID],
+    match_row: Optional[JobMatch],
+) -> Optional[UUID]:
+    """Backs the "auto-send" behavior for jobs that require a cover letter:
+    reuses the most recent one already generated for this exact job if
+    there is one (e.g. the user generated it manually from the job-detail
+    page before swiping), otherwise generates a fresh one from the
+    profile. Returns None (never raises) when there's no career profile
+    to generate from yet — a right swipe still goes through and applies,
+    just without a cover letter attached, rather than blocking the swipe
+    on an optional artifact."""
+    reusable = (
+        await db.execute(
+            select(CoverLetter)
+            .where(CoverLetter.user_id == current_user.id, CoverLetter.job_id == job.id)
+            .order_by(CoverLetter.created_at.desc())
+        )
+    ).scalars().first()
+    if reusable is not None:
+        return reusable.id
+
+    profile = (
+        await db.execute(select(CareerProfile).where(CareerProfile.user_id == current_user.id))
+    ).scalar_one_or_none()
+    if profile is None:
+        return None
+
+    matched_skills = list(match_row.matched_skills) if match_row else []
+    generated = generate_cover_letter(
+        profile=profile,
+        job=job,
+        candidate_name=current_user.full_name,
+        matched_skills=matched_skills,
+        tone="professional",
+    )
+    cover_letter = CoverLetter(
+        user_id=current_user.id,
+        job_id=job.id,
+        resume_version_id=resume_version_id,
+        content=generated["content"],
+        tone=generated["tone"],
+        generated_by=GenerationSource(generated["generated_by"]),
+    )
+    db.add(cover_letter)
+    await db.flush()
+    return cover_letter.id
 
 
 @router.post("/jobs/{job_id}/decision", response_model=ApplicationSchema, status_code=status.HTTP_201_CREATED)
@@ -65,6 +121,44 @@ async def swipe_decision(
     new_status = DECISION_TO_STATUS[payload.decision]
     applied_at = datetime.now(timezone.utc) if new_status == ApplicationStatus.applied else None
 
+    resume_version_id = payload.resume_version_id
+    if resume_version_id is not None:
+        owned = (
+            await db.execute(
+                select(ResumeVersion.id).where(
+                    ResumeVersion.id == resume_version_id, ResumeVersion.user_id == current_user.id
+                )
+            )
+        ).scalar_one_or_none()
+        if owned is None:
+            raise HTTPException(status_code=404, detail="Resume version not found.")
+
+    cover_letter_id = payload.cover_letter_id
+    if cover_letter_id is not None:
+        owned = (
+            await db.execute(
+                select(CoverLetter.id).where(
+                    CoverLetter.id == cover_letter_id, CoverLetter.user_id == current_user.id
+                )
+            )
+        ).scalar_one_or_none()
+        if owned is None:
+            raise HTTPException(status_code=404, detail="Cover letter not found.")
+
+    # A right swipe IS the apply decision — for a job that requires a
+    # cover letter, auto-attach one (reusing an existing one for this job
+    # if there is one) unless the caller already provided one.
+    already_attached = existing.cover_letter_id if existing else None
+    if (
+        new_status == ApplicationStatus.applied
+        and job.requires_cover_letter
+        and cover_letter_id is None
+        and already_attached is None
+    ):
+        cover_letter_id = await _reuse_or_generate_cover_letter(
+            db, current_user, job, resume_version_id, match_row
+        )
+
     if existing is None:
         app_row = Application(
             user_id=current_user.id,
@@ -72,6 +166,8 @@ async def swipe_decision(
             status=new_status,
             decision=payload.decision,
             match_score=match_score,
+            resume_version_id=resume_version_id,
+            cover_letter_id=cover_letter_id,
             applied_at=applied_at,
         )
         db.add(app_row)
@@ -80,6 +176,10 @@ async def swipe_decision(
         existing.status = new_status
         if match_score is not None:
             existing.match_score = match_score
+        if resume_version_id is not None:
+            existing.resume_version_id = resume_version_id
+        if cover_letter_id is not None:
+            existing.cover_letter_id = cover_letter_id
         if applied_at is not None and existing.applied_at is None:
             existing.applied_at = applied_at
         app_row = existing

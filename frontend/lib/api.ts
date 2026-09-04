@@ -26,6 +26,7 @@ import type {
   ResendVerificationResponse,
   ResumeGeneratePayload,
   ResumeVersion,
+  ReusableResumeSuggestion,
   User,
 } from "./types";
 
@@ -351,6 +352,8 @@ export const jobsApi = {
     request<Application>(`/jobs/${id}/decision`, { method: "POST", body: payload }),
   generateResume: (id: string, payload?: ResumeGeneratePayload) =>
     request<ResumeVersion>(`/jobs/${id}/resume`, { method: "POST", body: payload ?? {} }),
+  reusableResume: (id: string) =>
+    request<ReusableResumeSuggestion>(`/jobs/${id}/resume/reusable`),
   generateCoverLetter: (id: string, payload?: CoverLetterGeneratePayload) =>
     request<CoverLetter>(`/jobs/${id}/cover-letter`, { method: "POST", body: payload ?? {} }),
   search: (params: {
@@ -393,10 +396,12 @@ export const applicationsApi = {
 
 export const resumeApi = {
   get: (id: string) => request<ResumeVersion>(`/resume-versions/${id}`),
+  list: () => request<ResumeVersion[]>("/resume-versions"),
 };
 
 export const coverLetterApi = {
   get: (id: string) => request<CoverLetter>(`/cover-letters/${id}`),
+  list: () => request<CoverLetter[]>("/cover-letters"),
 };
 
 // ---------- Push notifications ----------

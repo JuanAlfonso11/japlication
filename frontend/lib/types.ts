@@ -136,6 +136,7 @@ export interface Job {
   skills_required: SkillRequirement[];
   source_url?: string | null;
   created_at?: string;
+  requires_cover_letter?: boolean;
   match?: MatchResult | null;
 }
 
@@ -152,6 +153,7 @@ export interface JobCreatePayload {
   responsibilities?: string[];
   skills_required: SkillRequirement[];
   source_url?: string | null;
+  requires_cover_letter?: boolean;
 }
 
 // ---------- External job search (12 providers — GET /jobs/search/aggregate).
@@ -418,6 +420,13 @@ export interface Application {
 
 export interface DecisionPayload {
   decision: Decision;
+  // Set from the job-detail page's "Apply" button once a tailored resume/
+  // cover letter has been generated there, so the Application is created
+  // with them already attached. Omitted for a plain swipe from Home — a
+  // right swipe on a job that requires a cover letter still gets one
+  // auto-generated (or reused) server-side either way.
+  resume_version_id?: string;
+  cover_letter_id?: string;
 }
 
 export interface ApplicationUpdatePayload {
@@ -462,10 +471,18 @@ export interface ResumeVersion {
   change_log: string[];
   generated_by: "manual" | "ai";
   created_at: string;
+  job?: Job | null;
 }
 
 export interface ResumeGeneratePayload {
   tone?: string;
+}
+
+export interface ReusableResumeSuggestion {
+  resume_version: ResumeVersion | null;
+  similarity: number;
+  source_job_title?: string | null;
+  source_company?: string | null;
 }
 
 // ---------- Cover letters ----------
@@ -479,6 +496,7 @@ export interface CoverLetter {
   tone: string;
   generated_by: "manual" | "ai";
   created_at: string;
+  job?: Job | null;
 }
 
 export interface CoverLetterGeneratePayload {

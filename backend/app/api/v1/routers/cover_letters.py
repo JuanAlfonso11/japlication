@@ -3,6 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_current_user
 from app.db.session import get_db
@@ -85,6 +86,22 @@ async def generate_cover_letter_endpoint(
     return CoverLetterSchema.model_validate(cover_letter)
 
 
+@router.get("/cover-letters", response_model=list[CoverLetterSchema])
+async def list_cover_letters(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> list[CoverLetterSchema]:
+    rows = (
+        await db.execute(
+            select(CoverLetter)
+            .options(selectinload(CoverLetter.job))
+            .where(CoverLetter.user_id == current_user.id)
+            .order_by(CoverLetter.created_at.desc())
+        )
+    ).scalars().all()
+    return [CoverLetterSchema.model_validate(r) for r in rows]
+
+
 @router.get("/cover-letters/{cover_letter_id}", response_model=CoverLetterSchema)
 async def get_cover_letter(
     cover_letter_id: UUID,
@@ -93,9 +110,9 @@ async def get_cover_letter(
 ) -> CoverLetterSchema:
     row = (
         await db.execute(
-            select(CoverLetter).where(
-                CoverLetter.id == cover_letter_id, CoverLetter.user_id == current_user.id
-            )
+            select(CoverLetter)
+            .options(selectinload(CoverLetter.job))
+            .where(CoverLetter.id == cover_letter_id, CoverLetter.user_id == current_user.id)
         )
     ).scalar_one_or_none()
     if row is None:

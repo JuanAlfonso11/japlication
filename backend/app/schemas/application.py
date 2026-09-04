@@ -21,6 +21,14 @@ class JobSummary(BaseModel):
 
 class DecisionRequest(BaseModel):
     decision: SwipeDecision
+    # Optional — set by the job-detail page's "Apply" button once the user
+    # has generated a tailored resume/cover letter there, so the resulting
+    # Application is created with those already attached instead of a bare
+    # decision. Swiping from Home's queue omits these; a right swipe on a
+    # job that requires a cover letter still gets one auto-generated (or
+    # reused) server-side — see swipe_decision in applications.py.
+    resume_version_id: Optional[UUID] = None
+    cover_letter_id: Optional[UUID] = None
 
 
 class ApplicationUpdate(BaseModel):

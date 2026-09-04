@@ -233,6 +233,7 @@ async def create_job(
         salary_max=payload.salary_max,
         salary_currency=payload.salary_currency,
         posted_at=payload.posted_at,
+        requires_cover_letter=payload.requires_cover_letter,
     )
     db.add(job)
     await db.commit()

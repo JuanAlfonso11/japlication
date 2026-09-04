@@ -109,6 +109,7 @@ CREATE TABLE jobs (
     salary_currency    TEXT,
     posted_at         TIMESTAMPTZ,
     raw_html          TEXT,
+    requires_cover_letter BOOLEAN NOT NULL DEFAULT FALSE,
     embedding         VECTOR(1536),
     search_vector     TSVECTOR GENERATED ALWAYS AS (
                           to_tsvector('spanish',
