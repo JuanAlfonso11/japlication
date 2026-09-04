@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
 
@@ -18,8 +19,12 @@ from app.schemas.application import ApplicationUpdate, DecisionRequest, JobSumma
 
 router = APIRouter(tags=["applications"])
 
+# A right swipe means "apply" — it goes straight to `applied` (with
+# `applied_at` stamped below) rather than parking at `saved`, since the
+# swipe itself is the user's application decision, not a bookmark step
+# that needs a separate manual "mark as applied" action afterward.
 DECISION_TO_STATUS = {
-    SwipeDecision.right: ApplicationStatus.saved,
+    SwipeDecision.right: ApplicationStatus.applied,
     SwipeDecision.left: ApplicationStatus.passed,
 }
 
@@ -58,6 +63,7 @@ async def swipe_decision(
     ).scalar_one_or_none()
 
     new_status = DECISION_TO_STATUS[payload.decision]
+    applied_at = datetime.now(timezone.utc) if new_status == ApplicationStatus.applied else None
 
     if existing is None:
         app_row = Application(
@@ -66,6 +72,7 @@ async def swipe_decision(
             status=new_status,
             decision=payload.decision,
             match_score=match_score,
+            applied_at=applied_at,
         )
         db.add(app_row)
     else:
@@ -73,6 +80,8 @@ async def swipe_decision(
         existing.status = new_status
         if match_score is not None:
             existing.match_score = match_score
+        if applied_at is not None and existing.applied_at is None:
+            existing.applied_at = applied_at
         app_row = existing
 
     await db.commit()
