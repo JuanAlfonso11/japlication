@@ -104,6 +104,28 @@ def _themuse_location(location: Optional[str], remote_type_filter: Optional[str]
     return None
 
 
+async def _ensure_match(job: Job, user_id: UUID, db: AsyncSession) -> None:
+    """Computes and persists a JobMatch for a freshly-added job, if the
+    user has a saved career profile to score it against. Without this,
+    GET /matches (an INNER JOIN against job_matches) would silently never
+    surface a job added via URL import, manual creation, or "add to
+    queue" from Discover — nothing else computes a match for it, unlike
+    the automatic sweep (run_auto_import_for_user), which always has.
+    A no-op (not an error) if there's no profile yet — same
+    graceful-degradation as everywhere else a career profile is optional."""
+    existing = await db.execute(
+        select(JobMatch.id).where(JobMatch.user_id == user_id, JobMatch.job_id == job.id)
+    )
+    if existing.scalar_one_or_none() is not None:
+        return
+    profile = (
+        await db.execute(select(CareerProfile).where(CareerProfile.user_id == user_id))
+    ).scalar_one_or_none()
+    if profile is None:
+        return
+    await compute_and_persist_match(profile, job, user_id, db)
+
+
 async def _attach_match(job: Job, user_id: UUID, db: AsyncSession) -> JobSchema:
     schema = JobSchema.model_validate(job)
     result = await db.execute(
@@ -124,6 +146,7 @@ async def import_job(
     existing = await db.execute(select(Job).where(Job.source_url == payload.url))
     existing_job = existing.scalar_one_or_none()
     if existing_job is not None:
+        await _ensure_match(existing_job, current_user.id, db)
         return await _attach_match(existing_job, current_user.id, db)
 
     parsed = await import_job_from_url(payload.url)
@@ -157,9 +180,11 @@ async def import_job(
         existing = await db.execute(select(Job).where(Job.source_url == payload.url))
         existing_job = existing.scalar_one_or_none()
         if existing_job is not None:
+            await _ensure_match(existing_job, current_user.id, db)
             return await _attach_match(existing_job, current_user.id, db)
         raise HTTPException(status_code=422, detail="could not parse job posting")
     await db.refresh(job)
+    await _ensure_match(job, current_user.id, db)
     return await _attach_match(job, current_user.id, db)
 
 
@@ -196,6 +221,7 @@ async def create_job(
     db.add(job)
     await db.commit()
     await db.refresh(job)
+    await _ensure_match(job, current_user.id, db)
     return await _attach_match(job, current_user.id, db)
 
 
@@ -573,6 +599,7 @@ async def import_external_job(
         job, _created = await _get_or_create_external_job(cached, payload.source, current_user.id, db)
     except Exception:
         raise HTTPException(status_code=409, detail="This job was already imported.")
+    await _ensure_match(job, current_user.id, db)
     return await _attach_match(job, current_user.id, db)
 
 

@@ -84,3 +84,44 @@ def test_search_maps_geo_param(monkeypatch):
 
     monkeypatch.setattr(jobicy.httpx, "AsyncClient", FakeAsyncClient)
     asyncio.run(jobicy.search_jobicy_jobs(location="USA"))
+
+
+def test_search_retries_without_geo_on_400(monkeypatch):
+    """Jobicy 400s on any geoSlug outside its own curated ~55-country list
+    (e.g. "dominican-republic", which Discover's location dropdown offers
+    but Jobicy simply has no coverage for) — must gracefully retry without
+    `geo` instead of surfacing that as a search error, same as every other
+    provider degrades on a location it doesn't recognize."""
+    calls = []
+
+    class FakeResponse:
+        def __init__(self, status_code, body):
+            self.status_code = status_code
+            self._body = body
+
+        def json(self):
+            return self._body
+
+    class FakeAsyncClient:
+        def __init__(self, *a, **k):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def get(self, url, params=None):
+            calls.append(dict(params or {}))
+            if "geo" in (params or {}):
+                return FakeResponse(400, {"success": False, "error": "Invalid 'geo' value."})
+            return FakeResponse(200, {"jobs": []})
+
+    monkeypatch.setattr(jobicy.httpx, "AsyncClient", FakeAsyncClient)
+    data = asyncio.run(jobicy.search_jobicy_jobs(location="Dominican Republic"))
+
+    assert data["results"] == []  # succeeded rather than raising
+    assert len(calls) == 2
+    assert calls[0]["geo"] == "dominican republic"
+    assert "geo" not in calls[1]

@@ -115,6 +115,16 @@ async def search_jobicy_jobs(
     try:
         async with httpx.AsyncClient(timeout=20.0) as client:
             resp = await client.get(ENDPOINT, params=params)
+            if resp.status_code == 400 and "geo" in params:
+                # Jobicy only recognizes a fixed, curated list of geoSlugs
+                # (~55 of them — no Dominican Republic, among others) and
+                # hard-400s on anything outside it, unlike every other
+                # provider here, which just ignores a location it doesn't
+                # understand. Retry once without `geo` rather than
+                # surfacing that as an error — same graceful "unfiltered
+                # results" degradation the other providers already give.
+                params = {k: v for k, v in params.items() if k != "geo"}
+                resp = await client.get(ENDPOINT, params=params)
     except httpx.HTTPError as exc:
         raise JobicyError("Could not reach Jobicy (network error).") from exc
 
