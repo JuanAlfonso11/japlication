@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -26,6 +27,16 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
         code = getattr(exc, "code", None)
         body = {"detail": exc.detail, "code": code}
     return JSONResponse(status_code=exc.status_code, content=body, headers=getattr(exc, "headers", None))
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    """FastAPI's default 422 body is {detail: [{msg, loc, ...}, ...]} — the
+    frontend expects {detail: string} like every other error (see
+    http_exception_handler above), so this flattens it to a single readable
+    message instead of the raw Pydantic error list."""
+    messages = [str(err.get("msg", "")).removeprefix("Value error, ") for err in exc.errors()]
+    return JSONResponse(status_code=422, content={"detail": "; ".join(messages) or "Invalid request."})
 
 
 @app.get("/health", tags=["health"])
