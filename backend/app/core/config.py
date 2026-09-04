@@ -73,11 +73,6 @@ class Settings(BaseSettings):
     USAJOBS_API_KEY: Optional[str] = None
     USAJOBS_USER_AGENT: Optional[str] = None
 
-    # France Travail (ex-Pôle Emploi, official French employment agency).
-    # Free self-serve OAuth2 client credentials at https://francetravail.io/.
-    FRANCE_TRAVAIL_CLIENT_ID: Optional[str] = None
-    FRANCE_TRAVAIL_CLIENT_SECRET: Optional[str] = None
-
     # SerpApi (Google Jobs — aggregates LinkedIn/Indeed/Glassdoor/
     # ZipRecruiter/etc. via Google's own public job-posting index, never
     # touching linkedin.com directly). Free self-serve key at

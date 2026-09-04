@@ -33,7 +33,6 @@ from app.services import (
     adzuna,
     arbeitnow,
     experience_level,
-    francetravail,
     getonbrd,
     hackernews,
     himalayas,
@@ -64,7 +63,7 @@ _NO_AUTH_PROVIDERS = {
 # aren't set in .env: its search_*_jobs() raises a clear *Error, which the
 # single-provider endpoint turns into a 502 and the aggregate fan-out turns
 # into a per-source error message — never a hard failure for the others.
-_KEYED_PROVIDERS = {"adzuna", "usajobs", "francetravail", "serpapi"}
+_KEYED_PROVIDERS = {"adzuna", "usajobs", "serpapi"}
 
 _SEARCH_PROVIDERS = _NO_AUTH_PROVIDERS | _KEYED_PROVIDERS
 
@@ -290,7 +289,7 @@ async def list_jobs(
 async def search_jobs(
     provider: str = Query(
         "himalayas",
-        pattern="^(himalayas|arbeitnow|remotive|jobicy|remotejobs_org|themuse|weworkremotely|hackernews|getonbrd|adzuna|usajobs|francetravail|serpapi)$",
+        pattern="^(himalayas|arbeitnow|remotive|jobicy|remotejobs_org|themuse|weworkremotely|hackernews|getonbrd|adzuna|usajobs|serpapi)$",
     ),
     q: Optional[str] = Query(None),
     location: Optional[str] = Query(None),
@@ -310,10 +309,10 @@ async def search_jobs(
     """Live-search one provider. Nothing is persisted — pick a
     result and call POST /jobs/search/import to add it to `jobs`.
 
-    See GET /jobs/search/aggregate to query all thirteen providers in one
-    call, which is what Discover uses by default. adzuna/usajobs/
-    francetravail/serpapi require their own API keys (see .env) — calling
-    them without keys configured returns a 502.
+    See GET /jobs/search/aggregate to query all twelve providers in one
+    call, which is what Discover uses by default. adzuna/usajobs/serpapi
+    require their own API keys (see .env) — calling them without keys
+    configured returns a 502.
     """
     if provider == "himalayas":
         try:
@@ -508,25 +507,6 @@ async def search_jobs(
             provider="usajobs", results=results, page=page + 1 if data["has_more"] else None, has_more=data["has_more"]
         )
 
-    if provider == "francetravail":
-        try:
-            data = await francetravail.search_francetravail_jobs(
-                q=q, location=location, experience_level_filter=experience_level_filter,
-                remote_type_filter=remote_type_filter, page=page,
-            )
-        except francetravail.FranceTravailError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
-        results = [
-            ExternalJobResult(
-                external_id=r["francetravail_job_id"], **{k: v for k, v in r.items() if k != "francetravail_job_id"}
-            )
-            for r in data["results"]
-            if r.get("francetravail_job_id")
-        ]
-        return ExternalJobsSearchResponse(
-            provider="francetravail", results=results, page=page + 1 if data["has_more"] else None, has_more=data["has_more"]
-        )
-
     # provider == "serpapi"
     try:
         data = await serpapi_jobs.search_serpapi_jobs(
@@ -626,12 +606,6 @@ async def _run_search_provider(
                 remote_type_filter=remote_type_filter,
             )
             id_key = "usajobs_job_id"
-        elif provider == "francetravail":
-            data = await francetravail.search_francetravail_jobs(
-                q=q, location=location, experience_level_filter=experience_level_filter,
-                remote_type_filter=remote_type_filter,
-            )
-            id_key = "francetravail_job_id"
         elif provider == "serpapi":
             data = await serpapi_jobs.search_serpapi_jobs(
                 q=q, location=location, experience_level_filter=experience_level_filter,
@@ -675,7 +649,7 @@ async def search_jobs_aggregate(
 ) -> AggregateSearchResponse:
     """Fans out to every job-search provider at once (Himalayas, Arbeitnow,
     Remotive, Jobicy, RemoteJobs.org, The Muse, We Work Remotely, Hacker
-    News, Get on Board, plus Adzuna/USAJobs/France Travail/SerpApi
+    News, Get on Board, plus Adzuna/USAJobs/SerpApi
     whenever their keys are set in .env) and merges the results into one
     list, newest first — this is what the Discover tab's "search all
     sources" action calls. A provider
@@ -774,7 +748,6 @@ async def import_external_job(
         "getonbrd": getonbrd.get_cached_result,
         "adzuna": adzuna.get_cached_result,
         "usajobs": usajobs.get_cached_result,
-        "francetravail": francetravail.get_cached_result,
         "serpapi": serpapi_jobs.get_cached_result,
     }[payload.source]
     cached = cache_lookup(payload.external_id)

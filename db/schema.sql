@@ -86,7 +86,7 @@ CREATE INDEX idx_career_profiles_search ON career_profiles USING gin (search_vec
 -- likely can't be — options for a personal project at all).
 CREATE TYPE job_source AS ENUM (
     'url_import', 'himalayas', 'arbeitnow', 'remotive', 'jobicy', 'remotejobs_org', 'themuse',
-    'weworkremotely', 'hackernews', 'adzuna', 'usajobs', 'francetravail', 'getonbrd', 'serpapi', 'manual'
+    'weworkremotely', 'hackernews', 'adzuna', 'usajobs', 'getonbrd', 'serpapi', 'manual'
 );
 
 CREATE TABLE jobs (

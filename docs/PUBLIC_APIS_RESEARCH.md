@@ -4,8 +4,9 @@ Criterio de inclusión original: **cero fricción de acceso** — sin API key, s
 obligatorio, sin credenciales de ningún tipo. Verificado contra la documentación oficial de cada
 plataforma (o, cuando no existe documentación oficial, contra el comportamiento real del endpoint) en
 2026-09. Ampliado en 2026-09 con una revisión de fiabilidad de las fuentes que sí requieren registro —
-de esa revisión, las tres más viables (Adzuna, USAJobs, France Travail) se integraron también; el resto
-quedó documentado como descartado, con el motivo.
+de esa revisión, Adzuna y USAJobs se integraron (France Travail también se integró y se probó, pero se
+quitó después por decisión explícita del usuario: solo cubre el mercado laboral francés y no habla
+francés); el resto quedó documentado como descartado, con el motivo.
 
 ## Resumen
 
@@ -19,11 +20,11 @@ quedó documentado como descartado, con el motivo.
 | 6 | The Muse | Opcional (funciona sin ella) | Sí |
 | 7 | We Work Remotely | Ninguna (RSS público) | Sí (2026-09) |
 | 8 | Hacker News — "Who is hiring?" | Ninguna (API Algolia oficial) | Sí (2026-09) |
-| 9 | Adzuna | API key gratis (registro instantáneo) | Sí (2026-09) — código listo, esperando claves |
-| 10 | USAJobs | API key gratis (registro instantáneo) | Sí (2026-09) — código listo, esperando claves |
-| 11 | France Travail (ex-Pôle Emploi) | OAuth2 client credentials (registro instantáneo) | Sí (2026-09) — código listo, esperando claves |
-| 12 | Get on Board | Ninguna (facet pública de su API) | Sí (2026-09) |
-| 13 | SerpApi (Google Jobs) | API key gratis (registro instantáneo) | Sí (2026-09) |
+| 9 | Adzuna | API key gratis (registro instantáneo) | Sí (2026-09) — activa, con clave real del usuario |
+| 10 | USAJobs | API key gratis (registro instantáneo) | Sí (2026-09) — activa, con clave real del usuario |
+| 11 | Get on Board | Ninguna (facet pública de su API) | Sí (2026-09) |
+| 12 | SerpApi (Google Jobs) | API key gratis (registro instantáneo) | Sí (2026-09) |
+| — | France Travail (ex-Pôle Emploi) | OAuth2 client credentials (registro instantáneo) | **No** — se integró y probó, pero se quitó (ver nota) |
 | — | RemoteOK | Ninguna en teoría | **No** — ver nota |
 | — | Reed.co.uk | API key gratis | **No** — ver nota |
 | — | JSearch (RapidAPI) | API key gratis (cuota mínima) | **No** — ver nota |
@@ -38,17 +39,25 @@ integrados como opciones separadas ("con credenciales") en una versión anterior
 quitaron por decisión explícita.** LinkedIn e Indeed se investigan a fondo en la sección siguiente porque
 el resultado no es un simple "pide key": ninguna de las dos ofrece siquiera una API de búsqueda.
 
-### Por qué se integraron Adzuna, USAJobs y France Travail
+### Por qué se integraron Adzuna y USAJobs (y por qué France Travail se quitó después)
 
-Las 8 fuentes sin registro ya cubren bien empleo remoto/tech global; estas tres suman justo lo que
-faltaba con fricción mínima: registro **instantáneo** (llave o credenciales al momento, sin aprobación
-manual), cuota gratuita real (no un tier de juguete), y cobertura que las otras 8 no tienen —
-Adzuna (agregador multi-país, roles no-tech incluidos), USAJobs (empleo federal de EE.UU., dato único),
-France Travail (todo el mercado laboral francés, oficial). El código para las tres ya está integrado y
-probado (`backend/app/services/adzuna.py`, `usajobs.py`, `francetravail.py`) — cada una se activa
-automáticamente en cuanto sus claves se agregan a `.env` (ver `.env.example`); sin claves, esa fuente
-simplemente no aparece en los resultados (mismo patrón de "degradación elegante" que SMTP/Claude/Firebase
-en el resto de la app), así que integrarlas ahora no rompe nada.
+Las 8 fuentes sin registro ya cubren bien empleo remoto/tech global; estas sumaban justo lo que faltaba
+con fricción mínima: registro **instantáneo** (llave al momento, sin aprobación manual), cuota gratuita
+real (no un tier de juguete), y cobertura que las otras 8 no tienen — Adzuna (agregador multi-país, roles
+no-tech incluidos), USAJobs (empleo federal de EE.UU., dato único). El código de ambas está integrado,
+probado con claves reales del usuario, y activo (`backend/app/services/adzuna.py`, `usajobs.py`) — cada
+una se activa automáticamente en cuanto sus claves se agregan a `.env` (ver `.env.example`); sin claves,
+esa fuente simplemente no aparece en los resultados (mismo patrón de "degradación elegante" que
+SMTP/Claude/Firebase en el resto de la app).
+
+**France Travail** siguió el mismo camino — se integró y se probó en vivo (con OAuth2 client credentials
+reales) — pero el usuario pidió quitarla después de que quedó configurada: solo cubre el mercado laboral
+**francés**, y no habla francés, así que no le servía de nada aunque funcionara perfecto técnicamente.
+Se quitó el código (`backend/app/services/francetravail.py` y su test ya no existen) — el valor del enum
+`job_source` en la base de datos ya migrada se dejó tal cual (Postgres no permite quitar un valor de ENUM
+sin recrear el tipo, y no hay ningún trabajo real que lo use, así que dejarlo ahí es inofensivo — mismo
+criterio que los valores legado `google_jobs`/`upwork`/`linkedin`/`indeed` de una versión anterior de la
+app).
 
 ### Por qué se descartaron las demás
 
@@ -222,17 +231,17 @@ verificarla en producción.
 - **Límites**: rate limit razonable por `User-Agent` registrado, sin costo — al ser una API de datos públicos del gobierno, es de las más estables/duraderas posibles
 - **Implementación**: `backend/app/services/usajobs.py` — **funciona en cuanto se agreguen `USAJOBS_API_KEY`/`USAJOBS_USER_AGENT` a `.env`**
 
-## 11. France Travail (ex-Pôle Emploi)
+## ~~France Travail (ex-Pôle Emploi)~~ — integrada, probada y luego quitada
 
-- **Endpoint**: `GET https://api.francetravail.io/partenaire/offresdemploi/v2/offres/search`
-- **Auth**: OAuth2 `client_credentials` contra `https://entreprise.francetravail.io/connexion/oauth2/access_token` — `client_id`/`client_secret` gratis, registro instantáneo en https://francetravail.io/ (se crea una "aplicación" y las credenciales quedan listas al momento, sin aprobación manual)
-- **Formato**: JSON — `resultats[]` con `intitule`, `entreprise.nom`, `lieuTravail.libelle`, `description`, `typeContrat` (CDI/CDD/...), `salaire.libelle` (texto libre, ej. "Annuel de 45000.0 Euros à 55000.0 Euros"), `dateCreation`, `origineOffre.urlOrigine`
-- **Ubicación/alcance**: **todo el mercado laboral francés**, todos los sectores (no solo tech) — la fuente oficial del gobierno de Francia, sin equivalente en las otras 10 fuentes
-- **Nivel de experiencia**: no expone campo directamente comparable a la taxonomía interna → heurística de texto; "télétravail"/"teletravail" en el texto se usa como señal de remoto
-- **Límites**: ~10 solicitudes/segundo — muy generoso; el token OAuth2 se cachea en memoria (~25 min) para no pedir uno nuevo en cada búsqueda
-- **Implementación**: `backend/app/services/francetravail.py` — **funciona en cuanto se agreguen `FRANCE_TRAVAIL_CLIENT_ID`/`FRANCE_TRAVAIL_CLIENT_SECRET` a `.env`**
+Se implementó y se probó en vivo con credenciales OAuth2 reales (`backend/app/services/francetravail.py`,
+ya no existe). Cubría **todo el mercado laboral francés** — pero solo francés, y el usuario no habla el
+idioma, así que la vacante quedaba inservible sin importar qué tan bien funcionara la integración. Se quitó
+por pedido explícito ("elimina la de France Travail, no hablo francés") una vez confirmado que el resto del
+pipeline (Adzuna, USAJobs, SerpApi) seguía funcionando sin ella. El valor `francetravail` sigue existiendo
+en el ENUM `job_source` de Postgres (no se puede quitar un valor de ENUM sin recrear el tipo) pero ningún
+código lo escribe ya — inofensivo, mismo caso que los valores legado de una versión anterior de la app.
 
-## 12. Get on Board
+## 11. Get on Board
 
 Agregada 2026-09 a partir de una lista de plataformas buenas para alguien buscando trabajo remoto desde
 República Dominicana (ver más abajo la nota completa sobre esa lista — Get on Board fue la única de esas
@@ -246,7 +255,7 @@ República Dominicana (ver más abajo la nota completa sobre esa lista — Get o
 - **Límites**: sin límite documentado públicamente; se cachea 15 min como el resto de fuentes sin auth
 - **Implementación**: `backend/app/services/getonbrd.py`
 
-## 13. SerpApi (Google Jobs)
+## 12. SerpApi (Google Jobs)
 
 Agregada 2026-09 como respuesta directa a "¿cómo consigo datos de LinkedIn sin arriesgar mi cuenta?" —
 ver la sección de LinkedIn más abajo para el porqué de fondo. SerpApi no es una fuente propia: es una capa
@@ -263,7 +272,7 @@ toca linkedin.com ni ninguna cuenta — la cuenta del usuario de JobPilot jamás
   tipo "3 days ago", `salary`, `schedule_type`, `work_from_home`), `job_highlights[]` (secciones
   "Qualifications"/"Responsibilities" ya estructuradas), `apply_options[]` y `source_link` (URL real del
   posting en el sitio de origen — se usa como `source_url`)
-- **Ubicación/alcance**: la cobertura más amplia de todas las 13 fuentes — agrega de facto varios boards
+- **Ubicación/alcance**: la cobertura más amplia de todas las 12 fuentes — agrega de facto varios boards
   grandes (incluido LinkedIn) en una sola búsqueda
 - **Nivel de experiencia**: no expone campo nativo → heurística de texto sobre título+descripción
 - **Límites**: sin paginación real (Google Jobs pagina con un `next_page_token` opaco en vez de un número
@@ -284,7 +293,7 @@ la misma forma que las 11 anteriores. El resultado:
 
 - **Get on Board**: única con API pública sin registro → integrada (arriba).
 - **Upwork**: sí tiene API (GraphQL), pero el registro exige verificación de negocio/identidad — no es
-  autoservicio instantáneo como Adzuna/USAJobs/France Travail, así que no se integró por ahora.
+  autoservicio instantáneo como Adzuna/USAJobs, así que no se integró por ahora.
 - **Todas las demás** (Workana, Fiverr, Computrabajo RD, Wellfound, Toptal, BairesDev, Turing, Crossover,
   Revelo, TECLA, Near, Torre.ai, Contra, Deel, LinkedIn, y los 4 portales locales dominicanos): sin
   API/RSS público, o son plataformas de "aplica con tu perfil" (agencias de staffing/freelance) en vez de
@@ -367,16 +376,16 @@ documentación oficial vigente (Microsoft Learn para LinkedIn, docs.indeed.com p
 
 ## Cómo se integran (resumen técnico — detalle completo en `backend/README.md`)
 
-- El endpoint **`GET /jobs/search/aggregate`** dispara las 13 fuentes **en paralelo**
+- El endpoint **`GET /jobs/search/aggregate`** dispara las 12 fuentes **en paralelo**
   (`asyncio.gather`) y devuelve un solo listado combinado — así es como Discover muestra "todos los
   resultados de todas las APIs integradas" en una sola búsqueda, sin que el usuario tenga que elegir
   proveedor uno por uno. Un proveedor que falla no tumba a los demás: se reporta por separado — esto
-  incluye a Adzuna/USAJobs/France Travail sin claves configuradas, que simplemente aparecen con 0
+  incluye a Adzuna/USAJobs/SerpApi sin claves configuradas, que simplemente aparecen con 0
   resultados y un mensaje "no configurado" en vez de un error duro.
 - **Nivel de experiencia**: taxonomía interna `internship | entry | mid | senior | lead`
   (`backend/app/services/experience_level.py`). Himalayas y The Muse lo mandan como parámetro nativo al
   proveedor; Jobicy lo trae en la respuesta (`jobLevel`) y se normaliza; Arbeitnow/Remotive/RemoteJobs.org
   no lo exponen, así que se infiere por heurística de texto sobre título+descripción (mismo enfoque que ya
-  usa `job_importer.py` para seniority) — mismo filtro, aplicado de forma uniforme sobre las 13 fuentes.
+  usa `job_importer.py` para seniority) — mismo filtro, aplicado de forma uniforme sobre las 12 fuentes.
 - **Ubicación por defecto**: el campo de ubicación en el formulario de Discover arranca con `"Remote"`
   precargado (no es una restricción dura — el usuario puede borrarlo o cambiarlo).
