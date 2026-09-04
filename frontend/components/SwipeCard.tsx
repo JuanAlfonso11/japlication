@@ -74,23 +74,25 @@ export default function SwipeCard({
 
   return (
     <motion.div
-      className="absolute inset-0"
+      // swipe-drag-surface (globals.css) forces touch-action: none on this
+      // element AND every descendant — touch-action isn't inherited by
+      // children, so setting it only here would still leave e.g. the job
+      // title/description text underneath at the default "auto". A touch
+      // starting on that text let the browser claim the gesture for its
+      // own native pan/navigation (confirmed via remote devtools: a
+      // pointercancel fired moments into the drag) before framer-motion's
+      // drag handler ever ran — a swipe that visually "moved the screen"
+      // but silently did nothing, since onDragEnd (-> the actual decide()
+      // call) never fired. The tradeoff: the card's own description text
+      // no longer scrolls via touch while it's the draggable top card —
+      // "View full details" still gets you the same content on its own
+      // (non-draggable) page.
+      className="absolute inset-0 swipe-drag-surface"
       // Once a decision is committed, this card is on its way out — it
       // must stop intercepting touches immediately (not just visually
       // fade), otherwise a still-mounted-but-invisible card can eat the
       // next tap on the ✓/✕ buttons or the card underneath during the
       // brief window before onAnimationComplete removes it from the queue.
-      //
-      // touchAction: "none" (not "pan-y") — "pan-y" tells the browser it's
-      // still allowed to natively handle the gesture (just restricted to
-      // vertical), and on the Android System WebView that meant the OS
-      // sometimes won the touch entirely: the whole page would pan instead
-      // of the card, so framer-motion's drag handler never fired and
-      // onDragEnd (-> the actual decide() call) never ran — a swipe that
-      // visually "moved the screen" but silently did nothing. "none" hands
-      // every touch on this element to JS, which is what a drag gesture
-      // needs; the card's own inner content div still scrolls fine since
-      // it's a separate scrollable element with its own default touch-action.
       style={{
         x,
         rotate,

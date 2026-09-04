@@ -28,3 +28,18 @@ select,
 textarea {
   font-size: 16px; /* prevent iOS auto-zoom on focus */
 }
+
+/* SwipeCard's drag surface: `touch-action` is NOT inherited by
+   descendants in CSS — setting it to "none" on the card's own wrapper
+   only governs touches that start exactly on that element, not on the
+   title/description/tags text inside it. Confirmed on-device via remote
+   devtools: a touch starting on the job title reported `touch-action:
+   auto` despite the wrapper's "none", and the browser fired a
+   `pointercancel` moments into the drag (handing it to native
+   scroll/navigation) instead of letting framer-motion's drag handler
+   ever see it — that's the actual reason one-finger swiping did
+   nothing. Forcing every descendant to "none" too closes that gap. */
+.swipe-drag-surface,
+.swipe-drag-surface * {
+  touch-action: none;
+}
