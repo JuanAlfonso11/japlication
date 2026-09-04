@@ -118,26 +118,45 @@ function ExternalResultCard({
   );
 }
 
+// A keyed provider (Adzuna/USAJobs/France Travail/SerpApi) without its key
+// in .env always fails with this exact message (see each service's
+// is_configured() check) — that's expected, not broken, so it gets a
+// neutral "sin clave" badge instead of the alarming red "error" one a
+// genuine network/parsing failure gets.
+function isNotConfigured(error: string): boolean {
+  return error.includes("is not configured");
+}
+
 function SourcesSummary({ sources }: { sources: AggregateSourceStatus[] }) {
-  const failed = sources.filter((s) => s.error);
+  const failed = sources.filter((s) => s.error && !isNotConfigured(s.error));
+  const unconfigured = sources.filter((s) => s.error && isNotConfigured(s.error));
   return (
     <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500">
-      {sources.map((s) => (
-        <span
-          key={s.provider}
-          className={`rounded-full px-2 py-0.5 ${
-            s.error
-              ? "bg-rose-50 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400"
-              : "bg-gray-50 text-gray-500 dark:bg-gray-800 dark:text-gray-400"
-          }`}
-          title={s.error ?? undefined}
-        >
-          {PROVIDER_LABELS[s.provider] ?? s.provider}: {s.error ? "error" : s.count}
-        </span>
-      ))}
+      {sources.map((s) => {
+        const notConfigured = s.error ? isNotConfigured(s.error) : false;
+        return (
+          <span
+            key={s.provider}
+            className={`rounded-full px-2 py-0.5 ${
+              s.error && !notConfigured
+                ? "bg-rose-50 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400"
+                : "bg-gray-50 text-gray-500 dark:bg-gray-800 dark:text-gray-400"
+            }`}
+            title={s.error ?? undefined}
+          >
+            {PROVIDER_LABELS[s.provider] ?? s.provider}: {notConfigured ? "sin clave" : s.error ? "error" : s.count}
+          </span>
+        );
+      })}
       {failed.length > 0 && (
         <span className="text-rose-500 dark:text-rose-400">
           {failed.length} fuente{failed.length > 1 ? "s" : ""} no respondió — el resto de resultados sigue completo.
+        </span>
+      )}
+      {failed.length === 0 && unconfigured.length > 0 && (
+        <span className="text-gray-400 dark:text-gray-500">
+          {unconfigured.length} fuente{unconfigured.length > 1 ? "s" : ""} sin clave configurada — el resto
+          está completo.
         </span>
       )}
     </div>
