@@ -20,6 +20,9 @@ npm-debug.log*
 # never committed
 backups/
 
+# Generated .ico for the desktop shortcut (scripts/install-desktop-shortcut.ps1)
+scripts/.icon/
+
 # OS
 .DS_Store
 
