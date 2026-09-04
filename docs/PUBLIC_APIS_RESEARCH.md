@@ -1,8 +1,11 @@
-# Investigación: APIs públicas de empleo sin autenticación
+# Investigación: APIs públicas de empleo
 
-Criterio de inclusión: **cero fricción de acceso** — sin API key, sin OAuth, sin registro obligatorio,
-sin credenciales de ningún tipo. Verificado contra la documentación oficial de cada plataforma (o, cuando
-no existe documentación oficial, contra el comportamiento real del endpoint) en 2026-09.
+Criterio de inclusión original: **cero fricción de acceso** — sin API key, sin OAuth, sin registro
+obligatorio, sin credenciales de ningún tipo. Verificado contra la documentación oficial de cada
+plataforma (o, cuando no existe documentación oficial, contra el comportamiento real del endpoint) en
+2026-09. Ampliado en 2026-09 con una revisión de fiabilidad de las fuentes que sí requieren registro —
+de esa revisión, las tres más viables (Adzuna, USAJobs, France Travail) se integraron también; el resto
+quedó documentado como descartado, con el motivo.
 
 ## Resumen
 
@@ -16,14 +19,53 @@ no existe documentación oficial, contra el comportamiento real del endpoint) en
 | 6 | The Muse | Opcional (funciona sin ella) | Sí |
 | 7 | We Work Remotely | Ninguna (RSS público) | Sí (2026-09) |
 | 8 | Hacker News — "Who is hiring?" | Ninguna (API Algolia oficial) | Sí (2026-09) |
+| 9 | Adzuna | API key gratis (registro instantáneo) | Sí (2026-09) — código listo, esperando claves |
+| 10 | USAJobs | API key gratis (registro instantáneo) | Sí (2026-09) — código listo, esperando claves |
+| 11 | France Travail (ex-Pôle Emploi) | OAuth2 client credentials (registro instantáneo) | Sí (2026-09) — código listo, esperando claves |
 | — | RemoteOK | Ninguna en teoría | **No** — ver nota |
+| — | Reed.co.uk | API key gratis | **No** — ver nota |
+| — | JSearch (RapidAPI) | API key gratis (cuota mínima) | **No** — ver nota |
+| — | Jooble | Aprobación manual | **No** — ver nota |
+| — | Findwork.dev | API key gratis | **No** — ver nota |
+| — | InfoJobs | OAuth2 + partnership | **No** — ver nota |
+| — | Seek | Revisión manual (hasta 10 días hábiles) | **No** — ver nota |
 
-Excluidas de raíz por requerir API key/OAuth/partnership: Adzuna, Reed.co.uk, USAJobs, Jooble,
-Findwork.dev, Careerjet (requiere `affid` registrado), Google Jobs (vía SerpApi), Upwork, LinkedIn e Indeed.
-**Google Jobs y Upwork ya estuvieron integrados como opciones separadas ("con credenciales") en una versión
-anterior de la app, pero se quitaron por decisión explícita** — la app hoy solo trabaja con las 8 fuentes
-sin autenticación de esta tabla. LinkedIn e Indeed se investigan a fondo en la sección siguiente porque el
-resultado no es un simple "pide key": ninguna de las dos ofrece siquiera una API de búsqueda.
+Excluidas de raíz (fuera del alcance de esta app, no por fiabilidad): Careerjet (requiere `affid`
+registrado), Google Jobs (vía SerpApi), Upwork, LinkedIn e Indeed. **Google Jobs y Upwork ya estuvieron
+integrados como opciones separadas ("con credenciales") en una versión anterior de la app, pero se
+quitaron por decisión explícita.** LinkedIn e Indeed se investigan a fondo en la sección siguiente porque
+el resultado no es un simple "pide key": ninguna de las dos ofrece siquiera una API de búsqueda.
+
+### Por qué se integraron Adzuna, USAJobs y France Travail
+
+Las 8 fuentes sin registro ya cubren bien empleo remoto/tech global; estas tres suman justo lo que
+faltaba con fricción mínima: registro **instantáneo** (llave o credenciales al momento, sin aprobación
+manual), cuota gratuita real (no un tier de juguete), y cobertura que las otras 8 no tienen —
+Adzuna (agregador multi-país, roles no-tech incluidos), USAJobs (empleo federal de EE.UU., dato único),
+France Travail (todo el mercado laboral francés, oficial). El código para las tres ya está integrado y
+probado (`backend/app/services/adzuna.py`, `usajobs.py`, `francetravail.py`) — cada una se activa
+automáticamente en cuanto sus claves se agregan a `.env` (ver `.env.example`); sin claves, esa fuente
+simplemente no aparece en los resultados (mismo patrón de "degradación elegante" que SMTP/Claude/Firebase
+en el resto de la app), así que integrarlas ahora no rompe nada.
+
+### Por qué se descartaron las demás
+
+- **Reed.co.uk**: buena cobertura de Reino Unido, pero los términos generales del sitio dicen que el uso
+  comercial "no está permitido" sin una excepción clara para la API — habría que confirmarlo por escrito
+  con Reed antes de depender de ella.
+- **JSearch (RapidAPI)**: la cobertura más amplia de todas (agrega LinkedIn, Indeed, Glassdoor,
+  ZipRecruiter, Google Jobs), pero el tier gratis es de ~200 solicitudes/mes — solo alcanza para probarla,
+  no para producción, y RapidAPI como plataforma tiene quejas de soporte.
+- **Jooble**: requiere aprobación manual (formulario revisado por Jooble) y la llave gratis reportada es
+  de ~500 solicitudes **de por vida**, no mensuales.
+- **Findwork.dev**: se solapa mucho con fuentes que ya están integradas directamente (Hacker News y
+  boards similares) y su página de límites devolvió 404 durante la revisión — señal débil de
+  mantenimiento.
+- **InfoJobs**: requiere un flujo OAuth2 completo pensado para partners de negocio establecidos, y solo
+  cubre España/Italia/Brasil — solo valdría la pena si ese mercado fuera prioridad explícita.
+- **Seek**: proceso de "Integration Request" con revisión manual por un Partner Manager que puede tardar
+  hasta 10 días hábiles — pensado para partners de reclutamiento, no para una app personal. Cobertura
+  limitada a Australia/Nueva Zelanda.
 
 **Nota sobre RemoteOK**: expone `https://remoteok.com/api` sin exigir key, pero su CDN (Cloudflare)
 bloquea agresivamente peticiones sin un `User-Agent` de navegador real y no tiene documentación oficial
@@ -157,6 +199,37 @@ verificarla en producción.
 - **Límites**: el hilo solo recibe comentarios nuevos los primeros días del mes, después queda estático — se cachea 6 horas
 - **Implementación**: `backend/app/services/hackernews.py`
 
+## 9. Adzuna
+
+- **Endpoint**: `GET https://api.adzuna.com/v1/api/jobs/{país}/search/{página}` — no existe un endpoint global; hay que pedir por país (`us`, `gb`, `es`, `mx`, `de`, `fr`, `au`, ... ~20 países soportados)
+- **Auth**: `app_id` + `app_key`, gratis, registro instantáneo (llegan por correo al momento) en https://developer.adzuna.com/
+- **Cuota gratis**: 1,000 llamadas/mes
+- **Formato**: JSON — `results[]` con `title`, `company.display_name`, `location.display_name`, `description`, `redirect_url`, `created`, `salary_min/max`, `contract_time` (full_time/part_time), `category.label`
+- **Ubicación**: no distingue remoto/presencial de forma nativa — se infiere heurísticamente del título/ubicación (igual que RemoteJobs.org)
+- **Nivel de experiencia**: no expone campo nativo → heurística de texto
+- **Límites de términos**: los términos de Adzuna prohíben redistribuir/revender los datos crudos en bloque — mostrar resultados de búsqueda dentro de la app (lo que hace JobPilot) es el uso normal y esperado
+- **Implementación**: `backend/app/services/adzuna.py` — **funciona en cuanto se agreguen `ADZUNA_APP_ID`/`ADZUNA_APP_KEY` a `.env`**
+
+## 10. USAJobs
+
+- **Endpoint**: `GET https://data.usajobs.gov/api/search`
+- **Auth**: `Authorization-Key` (llave gratis) + header `User-Agent` con el correo registrado — ambos exigidos en cada request, gratis, registro instantáneo en https://developer.usajobs.gov/
+- **Formato**: JSON — `SearchResult.SearchResultItems[].MatchedObjectDescriptor` con `PositionTitle`, `OrganizationName`, `PositionLocationDisplay`, `PositionURI`, `PositionRemuneration[]`, `PositionSchedule[].Name`, resumen del puesto en `UserArea.Details.JobSummary`
+- **Ubicación/alcance**: **solo empleo del gobierno federal de EE.UU.** — no es un agregador general, es la fuente oficial y única de este tipo de vacante; casi ninguna es remota, así que con el filtro por defecto de Discover (`remote_type=remote`) normalmente no aparece nada de USAJobs a menos que se busque explícitamente sin ese filtro
+- **Nivel de experiencia**: no expone campo nativo → heurística de texto
+- **Límites**: rate limit razonable por `User-Agent` registrado, sin costo — al ser una API de datos públicos del gobierno, es de las más estables/duraderas posibles
+- **Implementación**: `backend/app/services/usajobs.py` — **funciona en cuanto se agreguen `USAJOBS_API_KEY`/`USAJOBS_USER_AGENT` a `.env`**
+
+## 11. France Travail (ex-Pôle Emploi)
+
+- **Endpoint**: `GET https://api.francetravail.io/partenaire/offresdemploi/v2/offres/search`
+- **Auth**: OAuth2 `client_credentials` contra `https://entreprise.francetravail.io/connexion/oauth2/access_token` — `client_id`/`client_secret` gratis, registro instantáneo en https://francetravail.io/ (se crea una "aplicación" y las credenciales quedan listas al momento, sin aprobación manual)
+- **Formato**: JSON — `resultats[]` con `intitule`, `entreprise.nom`, `lieuTravail.libelle`, `description`, `typeContrat` (CDI/CDD/...), `salaire.libelle` (texto libre, ej. "Annuel de 45000.0 Euros à 55000.0 Euros"), `dateCreation`, `origineOffre.urlOrigine`
+- **Ubicación/alcance**: **todo el mercado laboral francés**, todos los sectores (no solo tech) — la fuente oficial del gobierno de Francia, sin equivalente en las otras 10 fuentes
+- **Nivel de experiencia**: no expone campo directamente comparable a la taxonomía interna → heurística de texto; "télétravail"/"teletravail" en el texto se usa como señal de remoto
+- **Límites**: ~10 solicitudes/segundo — muy generoso; el token OAuth2 se cachea en memoria (~25 min) para no pedir uno nuevo en cada búsqueda
+- **Implementación**: `backend/app/services/francetravail.py` — **funciona en cuanto se agreguen `FRANCE_TRAVAIL_CLIENT_ID`/`FRANCE_TRAVAIL_CLIENT_SECRET` a `.env`**
+
 ---
 
 ## Investigación adicional: ¿cómo se consigue acceso a las APIs de Indeed y LinkedIn?
@@ -219,14 +292,16 @@ documentación oficial vigente (Microsoft Learn para LinkedIn, docs.indeed.com p
 
 ## Cómo se integran (resumen técnico — detalle completo en `backend/README.md`)
 
-- El endpoint **`GET /jobs/search/aggregate`** dispara las 8 fuentes sin auth **en paralelo**
+- El endpoint **`GET /jobs/search/aggregate`** dispara las 11 fuentes **en paralelo**
   (`asyncio.gather`) y devuelve un solo listado combinado — así es como Discover muestra "todos los
   resultados de todas las APIs integradas" en una sola búsqueda, sin que el usuario tenga que elegir
-  proveedor uno por uno. Un proveedor que falla no tumba a los demás: se reporta por separado.
+  proveedor uno por uno. Un proveedor que falla no tumba a los demás: se reporta por separado — esto
+  incluye a Adzuna/USAJobs/France Travail sin claves configuradas, que simplemente aparecen con 0
+  resultados y un mensaje "no configurado" en vez de un error duro.
 - **Nivel de experiencia**: taxonomía interna `internship | entry | mid | senior | lead`
   (`backend/app/services/experience_level.py`). Himalayas y The Muse lo mandan como parámetro nativo al
   proveedor; Jobicy lo trae en la respuesta (`jobLevel`) y se normaliza; Arbeitnow/Remotive/RemoteJobs.org
   no lo exponen, así que se infiere por heurística de texto sobre título+descripción (mismo enfoque que ya
-  usa `job_importer.py` para seniority) — mismo filtro, aplicado de forma uniforme sobre las 8 fuentes.
+  usa `job_importer.py` para seniority) — mismo filtro, aplicado de forma uniforme sobre las 11 fuentes.
 - **Ubicación por defecto**: el campo de ubicación en el formulario de Discover arranca con `"Remote"`
   precargado (no es una restricción dura — el usuario puede borrarlo o cambiarlo).

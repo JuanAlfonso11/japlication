@@ -30,8 +30,10 @@ from app.schemas.job import (
 )
 from app.schemas.job_match import MatchResult
 from app.services import (
+    adzuna,
     arbeitnow,
     experience_level,
+    francetravail,
     hackernews,
     himalayas,
     jobicy,
@@ -39,6 +41,7 @@ from app.services import (
     remotejobs_org,
     remotive,
     themuse,
+    usajobs,
     weworkremotely,
 )
 from app.services.job_importer import import_job_from_url
@@ -47,14 +50,21 @@ from app.services.match_engine import compute_and_persist_match
 router = APIRouter(tags=["jobs"])
 
 # Every JobSource enum value that comes from a live search provider (as
-# opposed to url_import/manual). All of these are free, no-auth APIs — see
-# docs/PUBLIC_APIS_RESEARCH.md for what was investigated and why Google
-# Jobs/Upwork/LinkedIn/Indeed aren't (and, for LinkedIn/Indeed, can't be)
-# part of this list.
-_SEARCH_PROVIDERS = {
+# opposed to url_import/manual) — see docs/PUBLIC_APIS_RESEARCH.md for what
+# was investigated and why Google Jobs/Upwork/LinkedIn/Indeed aren't (and,
+# for LinkedIn/Indeed, can't be) part of this list.
+_NO_AUTH_PROVIDERS = {
     "himalayas", "arbeitnow", "remotive", "jobicy", "remotejobs_org", "themuse",
     "weworkremotely", "hackernews",
 }
+
+# Registration-required providers. Each degrades gracefully when its keys
+# aren't set in .env: its search_*_jobs() raises a clear *Error, which the
+# single-provider endpoint turns into a 502 and the aggregate fan-out turns
+# into a per-source error message — never a hard failure for the others.
+_KEYED_PROVIDERS = {"adzuna", "usajobs", "francetravail"}
+
+_SEARCH_PROVIDERS = _NO_AUTH_PROVIDERS | _KEYED_PROVIDERS
 
 # Best-effort mapping from the human-readable location names Discover's
 # dropdown sends to the geo slugs Himalayas' `country` and Jobicy's `geo`
@@ -277,7 +287,7 @@ async def list_jobs(
 async def search_jobs(
     provider: str = Query(
         "himalayas",
-        pattern="^(himalayas|arbeitnow|remotive|jobicy|remotejobs_org|themuse|weworkremotely|hackernews)$",
+        pattern="^(himalayas|arbeitnow|remotive|jobicy|remotejobs_org|themuse|weworkremotely|hackernews|adzuna|usajobs|francetravail)$",
     ),
     q: Optional[str] = Query(None),
     location: Optional[str] = Query(None),
@@ -294,11 +304,13 @@ async def search_jobs(
     page: int = Query(1, ge=1),
     current_user: User = Depends(get_current_user),
 ) -> ExternalJobsSearchResponse:
-    """Live-search one no-auth provider. Nothing is persisted — pick a
+    """Live-search one provider. Nothing is persisted — pick a
     result and call POST /jobs/search/import to add it to `jobs`.
 
-    See GET /jobs/search/aggregate to query all eight providers in one call,
-    which is what Discover uses by default.
+    See GET /jobs/search/aggregate to query all eleven providers in one
+    call, which is what Discover uses by default. adzuna/usajobs/
+    francetravail require their own API keys (see .env) — calling them
+    without keys configured returns a 502.
     """
     if provider == "himalayas":
         try:
@@ -427,23 +439,76 @@ async def search_jobs(
         ]
         return ExternalJobsSearchResponse(provider="weworkremotely", results=results, has_more=False)
 
-    # provider == "hackernews"
-    try:
-        data = await hackernews.search_hackernews_jobs(
-            q=q, location=location, experience_level_filter=experience_level_filter,
-            remote_type_filter=remote_type_filter,
+    if provider == "hackernews":
+        try:
+            data = await hackernews.search_hackernews_jobs(
+                q=q, location=location, experience_level_filter=experience_level_filter,
+                remote_type_filter=remote_type_filter,
+            )
+        except hackernews.HackerNewsError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        results = [
+            ExternalJobResult(external_id=r["hn_job_id"], **{k: v for k, v in r.items() if k != "hn_job_id"})
+            for r in data["results"]
+            if r.get("hn_job_id")
+        ]
+        return ExternalJobsSearchResponse(provider="hackernews", results=results, has_more=False)
+
+    if provider == "adzuna":
+        try:
+            data = await adzuna.search_adzuna_jobs(
+                q=q, location=location, experience_level_filter=experience_level_filter,
+                remote_type_filter=remote_type_filter, page=page,
+            )
+        except adzuna.AdzunaError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        results = [
+            ExternalJobResult(external_id=r["adzuna_job_id"], **{k: v for k, v in r.items() if k != "adzuna_job_id"})
+            for r in data["results"]
+            if r.get("adzuna_job_id")
+        ]
+        return ExternalJobsSearchResponse(
+            provider="adzuna", results=results, page=page + 1 if data["has_more"] else None, has_more=data["has_more"]
         )
-    except hackernews.HackerNewsError as exc:
+
+    if provider == "usajobs":
+        try:
+            data = await usajobs.search_usajobs_jobs(
+                q=q, location=location, experience_level_filter=experience_level_filter,
+                remote_type_filter=remote_type_filter, page=page,
+            )
+        except usajobs.USAJobsError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        results = [
+            ExternalJobResult(external_id=r["usajobs_job_id"], **{k: v for k, v in r.items() if k != "usajobs_job_id"})
+            for r in data["results"]
+            if r.get("usajobs_job_id")
+        ]
+        return ExternalJobsSearchResponse(
+            provider="usajobs", results=results, page=page + 1 if data["has_more"] else None, has_more=data["has_more"]
+        )
+
+    # provider == "francetravail"
+    try:
+        data = await francetravail.search_francetravail_jobs(
+            q=q, location=location, experience_level_filter=experience_level_filter,
+            remote_type_filter=remote_type_filter, page=page,
+        )
+    except francetravail.FranceTravailError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     results = [
-        ExternalJobResult(external_id=r["hn_job_id"], **{k: v for k, v in r.items() if k != "hn_job_id"})
+        ExternalJobResult(
+            external_id=r["francetravail_job_id"], **{k: v for k, v in r.items() if k != "francetravail_job_id"}
+        )
         for r in data["results"]
-        if r.get("hn_job_id")
+        if r.get("francetravail_job_id")
     ]
-    return ExternalJobsSearchResponse(provider="hackernews", results=results, has_more=False)
+    return ExternalJobsSearchResponse(
+        provider="francetravail", results=results, page=page + 1 if data["has_more"] else None, has_more=data["has_more"]
+    )
 
 
-async def _run_no_auth_provider(
+async def _run_search_provider(
     provider: str,
     q: Optional[str],
     location: Optional[str],
@@ -451,9 +516,10 @@ async def _run_no_auth_provider(
     remote_type_filter: Optional[str],
     category: Optional[str],
 ) -> tuple[str, list[ExternalJobResult], Optional[str]]:
-    """Runs one no-auth provider search and normalizes both its results and
-    any failure into a uniform (provider, results, error) tuple, so one
-    provider erroring never breaks the others in the aggregate fan-out."""
+    """Runs one provider search and normalizes both its results and any
+    failure into a uniform (provider, results, error) tuple, so one
+    provider erroring — including a keyed provider whose credentials
+    aren't configured — never breaks the others in the aggregate fan-out."""
     try:
         if provider == "himalayas":
             data = await himalayas.search_himalayas_jobs(
@@ -507,6 +573,24 @@ async def _run_no_auth_provider(
                 remote_type_filter=remote_type_filter,
             )
             id_key = "hn_job_id"
+        elif provider == "adzuna":
+            data = await adzuna.search_adzuna_jobs(
+                q=q, location=location, experience_level_filter=experience_level_filter,
+                remote_type_filter=remote_type_filter,
+            )
+            id_key = "adzuna_job_id"
+        elif provider == "usajobs":
+            data = await usajobs.search_usajobs_jobs(
+                q=q, location=location, experience_level_filter=experience_level_filter,
+                remote_type_filter=remote_type_filter,
+            )
+            id_key = "usajobs_job_id"
+        elif provider == "francetravail":
+            data = await francetravail.search_francetravail_jobs(
+                q=q, location=location, experience_level_filter=experience_level_filter,
+                remote_type_filter=remote_type_filter,
+            )
+            id_key = "francetravail_job_id"
         else:
             return provider, [], f"Unknown provider '{provider}'."
     except Exception as exc:  # noqa: BLE001 — any provider failure is reported, never raised
@@ -542,19 +626,21 @@ async def search_jobs_aggregate(
     category: Optional[str] = Query(None),
     current_user: User = Depends(get_current_user),
 ) -> AggregateSearchResponse:
-    """Fans out to every no-auth job-search provider at once
-    (Himalayas, Arbeitnow, Remotive, Jobicy, RemoteJobs.org, The Muse,
-    We Work Remotely, Hacker News) and merges the results into one list,
-    newest first — this is what the
-    Discover tab's "search all sources" action calls. A provider that
-    errors doesn't take the others down with it: its failure shows up
-    in `sources` instead of the result list. `location` is purely geographic
-    (e.g. "Mexico"); `remote_type` (remote/hybrid/onsite) is independent and
-    defaults to "remote" to preserve the historical default of showing only
-    remote-friendly postings when no filters are set."""
+    """Fans out to every job-search provider at once (Himalayas, Arbeitnow,
+    Remotive, Jobicy, RemoteJobs.org, The Muse, We Work Remotely, Hacker
+    News, plus Adzuna/USAJobs/France Travail whenever their keys are set
+    in .env) and merges the results into one list, newest first — this is
+    what the Discover tab's "search all sources" action calls. A provider
+    that errors — including a keyed provider with no credentials
+    configured — doesn't take the others down with it: its failure shows
+    up in `sources` instead of the result list. `location` is purely
+    geographic (e.g. "Mexico"); `remote_type` (remote/hybrid/onsite) is
+    independent and defaults to "remote" to preserve the historical
+    default of showing only remote-friendly postings when no filters are
+    set."""
     outcomes = await asyncio.gather(
         *[
-            _run_no_auth_provider(p, q, location, experience_level_filter, remote_type_filter, category)
+            _run_search_provider(p, q, location, experience_level_filter, remote_type_filter, category)
             for p in _SEARCH_PROVIDERS
         ]
     )
@@ -637,6 +723,9 @@ async def import_external_job(
         "themuse": themuse.get_cached_result,
         "weworkremotely": weworkremotely.get_cached_result,
         "hackernews": hackernews.get_cached_result,
+        "adzuna": adzuna.get_cached_result,
+        "usajobs": usajobs.get_cached_result,
+        "francetravail": francetravail.get_cached_result,
     }[payload.source]
     cached = cache_lookup(payload.external_id)
     if cached is None:
@@ -700,7 +789,7 @@ async def run_auto_import_for_user(user: User, db: AsyncSession) -> AutoImportRe
         )
 
     outcomes = await asyncio.gather(
-        *[_run_no_auth_provider(p, q, None, None, None, None) for p in _SEARCH_PROVIDERS]
+        *[_run_search_provider(p, q, None, None, None, None) for p in _SEARCH_PROVIDERS]
     )
 
     all_results: list[ExternalJobResult] = []

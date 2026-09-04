@@ -60,6 +60,24 @@ class Settings(BaseSettings):
     # as SMTP/Claude/every other optional external service.
     FIREBASE_CREDENTIALS_PATH: Optional[str] = None
 
+    # Adzuna (job search aggregator, ~12 countries). Free self-serve key at
+    # https://developer.adzuna.com/ — both must be set or the provider is
+    # skipped, same graceful-degradation pattern as above.
+    ADZUNA_APP_ID: Optional[str] = None
+    ADZUNA_APP_KEY: Optional[str] = None
+
+    # USAJobs (official US federal government jobs). Free self-serve key at
+    # https://developer.usajobs.gov/ — USAJOBS_USER_AGENT is the email
+    # address registered with the key (USAJobs requires it as a request
+    # header alongside the key itself).
+    USAJOBS_API_KEY: Optional[str] = None
+    USAJOBS_USER_AGENT: Optional[str] = None
+
+    # France Travail (ex-Pôle Emploi, official French employment agency).
+    # Free self-serve OAuth2 client credentials at https://francetravail.io/.
+    FRANCE_TRAVAIL_CLIENT_ID: Optional[str] = None
+    FRANCE_TRAVAIL_CLIENT_SECRET: Optional[str] = None
+
     # App metadata
     PROJECT_NAME: str = "JobFlow AI"
     API_V1_PREFIX: str = "/api/v1"
