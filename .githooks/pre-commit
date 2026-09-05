@@ -19,16 +19,30 @@ else
     echo "[pre-commit] Backend container isn't running — skipping backend tests."
 fi
 
-if [ -d frontend/node_modules ] && command -v npm >/dev/null 2>&1; then
-    echo "[pre-commit] Running frontend tests..."
-    if ! (cd frontend && npm test --silent); then
-        echo "[pre-commit] Frontend tests FAILED — commit blocked."
-        echo "[pre-commit] Fix the failure, or bypass with: git commit --no-verify"
-        exit 1
+if git diff --cached --name-only | grep -q '^frontend/'; then
+    if [ -d frontend/node_modules ] && command -v npm >/dev/null 2>&1; then
+        echo "[pre-commit] Running frontend tests (local)..."
+        if ! (cd frontend && npm test --silent); then
+            echo "[pre-commit] Frontend tests FAILED — commit blocked."
+            echo "[pre-commit] Fix the failure, or bypass with: git commit --no-verify"
+            exit 1
+        fi
+        echo "[pre-commit] Frontend tests passed."
     fi
-    echo "[pre-commit] Frontend tests passed."
+
+    if command -v docker >/dev/null 2>&1; then
+        echo "[pre-commit] Verifying frontend build (docker compose build frontend)..."
+        if ! docker compose build frontend; then
+            echo "[pre-commit] Frontend build FAILED (type-check/lint/build) — commit blocked."
+            echo "[pre-commit] Fix the failure, or bypass with: git commit --no-verify"
+            exit 1
+        fi
+        echo "[pre-commit] Frontend build passed."
+    else
+        echo "[pre-commit] WARNING: docker not available — frontend build/lint/type-check was NOT verified for this commit."
+    fi
 else
-    echo "[pre-commit] npm/frontend/node_modules not available — skipping frontend tests."
+    echo "[pre-commit] No frontend/ changes staged — skipping frontend build check."
 fi
 
 exit 0

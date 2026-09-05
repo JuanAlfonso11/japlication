@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.core.config import settings
+from app.core.rate_limit import limiter
 from app.db.session import get_db
 from app.models.career_profile import CareerProfile
 from app.models.user import User
@@ -52,7 +53,9 @@ async def upsert_profile(
 
 
 @router.post("/improve", response_model=ProfileImprovementResult)
+@limiter.limit("5/hour")
 async def improve_profile_endpoint(
+    request: Request,
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ) -> ProfileImprovementResult:
     """Rewrites the base profile's headline/summary/experience-bullet
@@ -85,7 +88,9 @@ async def get_profile_evaluation(
 
 
 @router.post("/import-cv", response_model=CVUploadResult)
+@limiter.limit("5/hour")
 async def import_cv(
+    request: Request,
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
 ) -> CVUploadResult:

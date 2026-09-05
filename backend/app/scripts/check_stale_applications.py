@@ -18,7 +18,7 @@ import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import selectinload
 
 from app.db.session import AsyncSessionLocal, engine
@@ -38,6 +38,8 @@ async def run() -> None:
         logger.info("Push notifications not configured — nothing to do.")
         await engine.dispose()
         return
+
+    from firebase_admin import messaging
 
     now = datetime.now(timezone.utc)
     stale_cutoff = now - timedelta(days=STALE_AFTER_DAYS)
@@ -73,12 +75,15 @@ async def run() -> None:
             job_title = app_row.job.title if app_row.job else "una vacante"
             company = f" en {app_row.job.company}" if app_row.job else ""
             for device_token in tokens:
-                push_notifications.send_push(
-                    device_token,
-                    "JobPilot",
-                    f"Aplicaste a {job_title}{company} hace {days_ago} días sin novedades — "
-                    "¿hiciste seguimiento?",
-                )
+                try:
+                    push_notifications.send_push(
+                        device_token,
+                        "JobPilot",
+                        f"Aplicaste a {job_title}{company} hace {days_ago} días sin novedades — "
+                        "¿hiciste seguimiento?",
+                    )
+                except messaging.UnregisteredError:
+                    await db.execute(delete(DeviceToken).where(DeviceToken.token == device_token))
 
             app_row.stale_notified_at = now
             notified += 1

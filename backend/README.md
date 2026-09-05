@@ -65,18 +65,40 @@ uvicorn app.main:app --reload
 pytest
 ```
 
-Tests are fully offline (no live network calls, no live database) — they
+Most tests are fully offline (no live network calls, no live database) — they
 exercise `match_engine.py` (skill overlap, experience-years extraction,
 weighted scoring), `job_importer.py` (JSON-LD parsing against a sample
 `JobPosting` HTML fixture, and heuristic fallback parsing against plain HTML
 with no JSON-LD), `experience_level.py` (keyword inference + native-value
 mapping for Himalayas/The Muse/Jobicy), `cv_upload.py` (PDF text extraction
 errors, heuristic contact/skills parsing, AI-vs-heuristic selection),
-`email.py` (SMTP-configured vs. logged-link fallback), and all six search
-integrations (`himalayas.py`, `arbeitnow.py`, `remotive.py`, `jobicy.py`,
-`remotejobs_org.py`, `themuse.py` — normalization, salary/date parsing, and
-cache expiry, all with `httpx` mocked; no live calls to any of those
-providers are made by the suite).
+`email.py` (SMTP-configured vs. logged-link fallback), and all search
+integrations (normalization, salary/date parsing, and cache expiry, all with
+`httpx` mocked; no live calls to any provider are made by the suite).
+
+**Router integration tests** (`test_jobs_router.py`, `test_applications_router.py`,
+`test_system_router.py`) are the exception — they make real HTTP requests
+(via `httpx.AsyncClient` + `ASGITransport`, no running server needed) against
+the actual FastAPI app and hit a real Postgres database, so they need a
+one-time isolated test database. This is **not** the same database the app
+itself uses — `tests/conftest.py` forces `DATABASE_URL` to point at
+`jobflow_test` before anything else imports the app, and truncates every
+table after each test, so running the suite is always safe even against a
+machine that also has real user data in the normal `jobflow` database.
+
+One-time setup (run once per Postgres instance, e.g. once per `docker
+compose` volume):
+```bash
+docker compose exec db psql -U jobflow -d jobflow -c "CREATE DATABASE jobflow_test;"
+docker compose exec db psql -U jobflow -d jobflow_test -f /docker-entrypoint-initdb.d/01_schema.sql
+```
+(On Git Bash/MSYS, prefix both commands with `MSYS_NO_PATHCONV=1` — otherwise
+the `/docker-entrypoint-initdb.d/...` path gets silently rewritten to a
+Windows path and `psql` fails with "No such file or directory".)
+
+Re-run the second command (schema load) any time `db/schema.sql` changes —
+`jobflow_test`'s schema is not migrated automatically, only applied once at
+setup time.
 
 ## Live job search
 

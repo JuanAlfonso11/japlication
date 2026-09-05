@@ -6,6 +6,7 @@ overall_score = 0.5 * technical_score + 0.3 * experience_score + 0.2 * semantic_
 
 from __future__ import annotations
 
+import asyncio
 import math
 import re
 from collections import Counter
@@ -17,6 +18,7 @@ from sqlalchemy import func
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.models.job_match import JobMatch
 from app.services.skills_taxonomy import canonical_skill_set, normalize_skill
 
@@ -27,6 +29,8 @@ if TYPE_CHECKING:
 TECHNICAL_WEIGHT = 0.5
 EXPERIENCE_WEIGHT = 0.3
 SEMANTIC_WEIGHT = 0.2
+
+ANTHROPIC_MODEL = "claude-sonnet-5"
 
 YEARS_RE = re.compile(
     r"(\d+)\s*\+?\s*(?:-|to|a)?\s*(\d+)?\s*\+?\s*(?:years?|yrs?|años|anos)",
@@ -220,6 +224,55 @@ def _cosine_similarity(vec_a: dict[str, float], vec_b: dict[str, float]) -> floa
     return dot / (norm_a * norm_b)
 
 
+def _try_anthropic_semantic_score(profile_text: str, job_text: str) -> Optional[float]:
+    """LLM-based semantic fit, used instead of the offline TF-IDF fallback
+    when ANTHROPIC_API_KEY is configured. The offline scorer computes
+    cosine similarity between exactly two documents, which degenerates to
+    near-literal keyword overlap — a profile and job describing the same
+    work in different words ("construyo APIs REST" vs. "desarrollo de
+    servicios backend") score low even though they're a strong match. An
+    LLM judges the underlying fit instead of surface wording. Same two-tier
+    pattern as every other optional-AI feature in this app (cv_evaluator,
+    profile_improver, resume_adapter): returns None (never raises) on any
+    failure — missing key, missing package, network error, or a reply that
+    doesn't parse as a plain number — so the caller always has the offline
+    fallback to lean on."""
+    if not settings.ANTHROPIC_API_KEY:
+        return None
+    try:
+        import anthropic
+    except ImportError:
+        return None
+
+    try:
+        client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+        response = client.messages.create(
+            model=ANTHROPIC_MODEL,
+            max_tokens=16,
+            messages=[
+                {
+                    "role": "user",
+                    "content": (
+                        "Rate 0-100 how well this candidate profile semantically fits this "
+                        "job posting. Judge the underlying fit of skills and responsibilities, "
+                        "not literal keyword overlap — treat synonyms and paraphrased skills "
+                        "(e.g. \"builds REST APIs\" and \"backend service development\") as "
+                        "equivalent. Reply with ONLY the number, nothing else.\n\n"
+                        f"CANDIDATE PROFILE:\n{profile_text[:3000]}\n\n"
+                        f"JOB POSTING:\n{job_text[:3000]}"
+                    ),
+                }
+            ],
+        )
+        raw = "".join(block.text for block in response.content if getattr(block, "type", None) == "text")
+        score = float(raw.strip())
+        return round(max(0.0, min(score, 100.0)), 2)
+    except Exception:
+        # Any AI failure (network, quota, unparsable reply) falls back to
+        # the deterministic offline scorer — see compute_match.
+        return None
+
+
 def compute_semantic_score(profile_text: str, job_text: str) -> float:
     """Offline TF-IDF cosine-similarity fallback (no external API key needed).
     Two "documents" (profile, job) -> IDF degenerates to a simple
@@ -306,9 +359,18 @@ def build_concerns(
 # ---------------------------------------------------------------------------
 
 
-def compute_match(profile, job) -> dict[str, Any]:
+def compute_match(profile, job, use_llm: bool = True) -> dict[str, Any]:
     """profile: CareerProfile ORM instance, job: Job ORM instance.
     Returns a dict ready to persist into job_matches / return as MatchResult.
+
+    use_llm=False forces the offline TF-IDF semantic scorer even when
+    ANTHROPIC_API_KEY is configured — set by callers that compute matches
+    for many jobs in a single request (e.g. run_auto_import_for_user's
+    per-job loop in jobs.py), since compute_match is a plain synchronous
+    function and each LLM call would block the event loop for the whole
+    request's duration, once per job, serially. Single-job call sites
+    (on-demand match refresh, a freshly imported/created job) keep the
+    default and get the higher-quality LLM score.
     """
     job_skill_map = _job_skill_map(job.skills_required or [])
     job_required_skill_set = {s for s, imp in job_skill_map.items() if imp == "required"} or set(job_skill_map)
@@ -326,7 +388,9 @@ def compute_match(profile, job) -> dict[str, Any]:
 
     profile_text = build_profile_text(profile)
     job_text = build_job_text(job)
-    semantic_score = compute_semantic_score(profile_text, job_text)
+    semantic_score = _try_anthropic_semantic_score(profile_text, job_text) if use_llm else None
+    if semantic_score is None:
+        semantic_score = compute_semantic_score(profile_text, job_text)
 
     overall = (
         TECHNICAL_WEIGHT * technical_score
@@ -350,13 +414,19 @@ def compute_match(profile, job) -> dict[str, Any]:
 
 
 async def compute_and_persist_match(
-    profile: "CareerProfile", job: "Job", user_id: UUID, db: AsyncSession
+    profile: "CareerProfile", job: "Job", user_id: UUID, db: AsyncSession, use_llm: bool = True
 ) -> JobMatch:
     """Computes a match score and upserts it as a `job_matches` row —
     shared by the on-demand GET /jobs/{id}/match route and the CV-upload
     auto-import flow, so a freshly imported job shows up in the Home swipe
-    queue (GET /matches only returns jobs that already have a match row)."""
-    result = compute_match(profile, job)
+    queue (GET /matches only returns jobs that already have a match row).
+
+    Runs compute_match in a worker thread (not awaited inline) because,
+    with use_llm=True, it makes a blocking (synchronous) Anthropic API
+    call — without to_thread, that call would block this whole process's
+    single event loop, stalling every other concurrent request for as long
+    as the LLM call takes."""
+    result = await asyncio.to_thread(compute_match, profile, job, use_llm)
     stmt = (
         pg_insert(JobMatch)
         .values(

@@ -139,13 +139,13 @@ export default function SwipeCard({
               style={{ opacity: rightOpacity }}
               className="pointer-events-none absolute right-5 top-5 z-20 rotate-6 rounded-lg border-4 border-emerald-500 px-3 py-1 text-xl font-extrabold text-emerald-500"
             >
-              SAVE
+              APLICAR
             </motion.div>
             <motion.div
               style={{ opacity: leftOpacity }}
               className="pointer-events-none absolute left-5 top-5 z-20 -rotate-6 rounded-lg border-4 border-rose-500 px-3 py-1 text-xl font-extrabold text-rose-500"
             >
-              PASS
+              PASAR
             </motion.div>
           </>
         )}
@@ -176,7 +176,7 @@ export default function SwipeCard({
           {job.requirements?.length > 0 && (
             <div className="mt-4">
               <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                Key requirements
+                Requisitos clave
               </p>
               <ul className="list-inside list-disc space-y-1 text-sm text-gray-700 dark:text-gray-300">
                 {job.requirements.slice(0, 5).map((r, i) => (
@@ -197,7 +197,7 @@ export default function SwipeCard({
             onPointerDown={(e) => e.stopPropagation()}
             className="mt-4 inline-block text-xs font-semibold text-brand-600 hover:text-brand-700"
           >
-            View full details →
+            Ver detalles completos →
           </Link>
         </div>
       </div>

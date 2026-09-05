@@ -207,7 +207,7 @@ class TestComputeMatch:
     def test_overall_score_is_weighted_average(self):
         profile = make_profile()
         job = make_job()
-        result = compute_match(profile, job)
+        result = compute_match(profile, job, use_llm=False)
 
         expected_overall = round(
             0.5 * result["technical_score"] + 0.3 * result["experience_score"] + 0.2 * result["semantic_score"],
@@ -222,6 +222,113 @@ class TestComputeMatch:
     def test_missing_skills_produce_concern(self):
         profile = make_profile(skills=[{"name": "Java"}], experience=[])
         job = make_job()
-        result = compute_match(profile, job)
+        result = compute_match(profile, job, use_llm=False)
         assert result["missing_skills"]
         assert any("habilidad" in c.lower() or "años" in c.lower() for c in result["concerns"])
+
+    def test_use_llm_false_never_touches_anthropic(self, monkeypatch):
+        import app.services.match_engine as mod
+
+        monkeypatch.setattr(mod.settings, "ANTHROPIC_API_KEY", "fake-key")
+
+        def _boom(*args, **kwargs):
+            raise AssertionError("compute_match(use_llm=False) must not call the LLM scorer")
+
+        monkeypatch.setattr(mod, "_try_anthropic_semantic_score", _boom)
+        result = compute_match(make_profile(), make_job(), use_llm=False)
+        assert 0 <= result["semantic_score"] <= 100
+
+    def test_use_llm_true_prefers_llm_score_when_available(self, monkeypatch):
+        import app.services.match_engine as mod
+
+        monkeypatch.setattr(mod, "_try_anthropic_semantic_score", lambda *a, **k: 42.0)
+        result = compute_match(make_profile(), make_job(), use_llm=True)
+        assert result["semantic_score"] == 42.0
+
+    def test_use_llm_true_falls_back_when_llm_returns_none(self, monkeypatch):
+        import app.services.match_engine as mod
+
+        monkeypatch.setattr(mod, "_try_anthropic_semantic_score", lambda *a, **k: None)
+        result = compute_match(make_profile(), make_job(), use_llm=True)
+        assert 0 <= result["semantic_score"] <= 100
+
+
+# ---------------------------------------------------------------------------
+# LLM-based semantic score (optional, requires ANTHROPIC_API_KEY)
+# ---------------------------------------------------------------------------
+
+
+class TestAnthropicSemanticScore:
+    def test_returns_none_without_api_key(self, monkeypatch):
+        import app.services.match_engine as mod
+
+        monkeypatch.setattr(mod.settings, "ANTHROPIC_API_KEY", None)
+        assert mod._try_anthropic_semantic_score("profile text", "job text") is None
+
+    def test_parses_a_well_formed_numeric_reply(self, monkeypatch):
+        import app.services.match_engine as mod
+
+        monkeypatch.setattr(mod.settings, "ANTHROPIC_API_KEY", "fake-key")
+
+        fake_block = SimpleNamespace(type="text", text="87")
+        fake_response = SimpleNamespace(content=[fake_block])
+
+        class FakeMessages:
+            def create(self, **kwargs):
+                return fake_response
+
+        class FakeAnthropic:
+            def __init__(self, api_key=None):
+                self.messages = FakeMessages()
+
+        import anthropic
+
+        monkeypatch.setattr(anthropic, "Anthropic", FakeAnthropic)
+        score = mod._try_anthropic_semantic_score("backend engineer", "backend role")
+        assert score == 87.0
+
+    def test_clamps_out_of_range_reply_to_0_100(self, monkeypatch):
+        import app.services.match_engine as mod
+
+        monkeypatch.setattr(mod.settings, "ANTHROPIC_API_KEY", "fake-key")
+
+        fake_response = SimpleNamespace(content=[SimpleNamespace(type="text", text="140")])
+
+        class FakeAnthropic:
+            def __init__(self, api_key=None):
+                self.messages = SimpleNamespace(create=lambda **kwargs: fake_response)
+
+        import anthropic
+
+        monkeypatch.setattr(anthropic, "Anthropic", FakeAnthropic)
+        assert mod._try_anthropic_semantic_score("a", "b") == 100.0
+
+    def test_returns_none_on_unparsable_reply(self, monkeypatch):
+        import app.services.match_engine as mod
+
+        monkeypatch.setattr(mod.settings, "ANTHROPIC_API_KEY", "fake-key")
+
+        fake_response = SimpleNamespace(content=[SimpleNamespace(type="text", text="not a number")])
+
+        class FakeAnthropic:
+            def __init__(self, api_key=None):
+                self.messages = SimpleNamespace(create=lambda **kwargs: fake_response)
+
+        import anthropic
+
+        monkeypatch.setattr(anthropic, "Anthropic", FakeAnthropic)
+        assert mod._try_anthropic_semantic_score("a", "b") is None
+
+    def test_returns_none_when_client_raises(self, monkeypatch):
+        import app.services.match_engine as mod
+
+        monkeypatch.setattr(mod.settings, "ANTHROPIC_API_KEY", "fake-key")
+
+        class FakeAnthropic:
+            def __init__(self, api_key=None):
+                raise RuntimeError("network unreachable")
+
+        import anthropic
+
+        monkeypatch.setattr(anthropic, "Anthropic", FakeAnthropic)
+        assert mod._try_anthropic_semantic_score("a", "b") is None

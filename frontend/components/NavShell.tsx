@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import VerificationBanner from "@/components/VerificationBanner";
 import ThemeToggle from "@/components/ThemeToggle";
+import { applicationsApi } from "@/lib/api";
 
 const NAV_ITEMS = [
   { href: "/", label: "Inicio", icon: HomeIcon },
@@ -14,9 +16,45 @@ const NAV_ITEMS = [
   { href: "/profile", label: "Perfil", icon: ProfileIcon },
 ];
 
+// How often to re-check the stale-applications count while the app stays
+// open — matches UpdateChecker.tsx's own recheck interval, no need for
+// this cosmetic badge to poll any more aggressively than that.
+const STALE_COUNT_RECHECK_MS = 30 * 60 * 1000;
+
+function NavBadge({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return (
+    <span className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold leading-none text-white">
+      {count > 9 ? "9+" : count}
+    </span>
+  );
+}
+
 export default function NavShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { user, token } = useAuth();
+  const [staleCount, setStaleCount] = useState(0);
+
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    function load() {
+      applicationsApi
+        .staleCount()
+        .then((res) => {
+          if (!cancelled) setStaleCount(res.count);
+        })
+        .catch(() => {
+          // Cosmetic feature — a failed fetch just means no badge shows.
+        });
+    }
+    load();
+    const interval = setInterval(load, STALE_COUNT_RECHECK_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [token]);
 
   // /verify-email included here too so the "check your email" gate right
   // after signup reads as a standalone step, not just another app page.
@@ -44,13 +82,14 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                  className={`relative rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                     active
                       ? "bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-300"
                       : "text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-100"
                   }`}
                 >
                   {item.label}
+                  {item.href === "/applications" && <NavBadge count={staleCount} />}
                 </Link>
               );
             })}
@@ -106,11 +145,12 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
                     the whole row, since there's no room for a label pill
                     in a 5-column bottom bar. */}
                 <span
-                  className={`flex items-center justify-center rounded-full px-3 py-1 transition-colors ${
+                  className={`relative flex items-center justify-center rounded-full px-3 py-1 transition-colors ${
                     active ? "bg-brand-50 dark:bg-brand-900/40" : ""
                   }`}
                 >
                   <Icon active={active} />
+                  {item.href === "/applications" && <NavBadge count={staleCount} />}
                 </span>
                 {item.label}
               </Link>

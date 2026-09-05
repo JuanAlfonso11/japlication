@@ -40,10 +40,19 @@ def _app():
 
 
 def send_push(token: str, title: str, body: str, data: Optional[dict[str, str]] = None) -> bool:
-    """Sends one push notification. Never raises — a bad/stale device token
-    or an unreachable FCM is not worth failing the caller's request over
-    (e.g. the auto-import flow that triggers this), so failures are just
-    logged. Returns whether the send actually succeeded."""
+    """Sends one push notification. Never raises for a transient failure —
+    an unreachable FCM is not worth failing the caller's request over (e.g.
+    the auto-import flow that triggers this), so those failures are just
+    logged and this returns False.
+
+    The one deliberate exception: `firebase_admin.messaging.UnregisteredError`
+    (the token is permanently dead — app uninstalled/reinstalled) propagates
+    instead of being swallowed, so callers that loop over this user's device
+    tokens can catch it specifically and delete the dead row from
+    `device_tokens`. Without that, a dead token sits there forever, silently
+    failing the exact same way on every future sweep. Every current caller
+    (jobs.py's auto-import notification, check_stale_applications.py's daily
+    reminder) already catches this — see those call sites."""
     if not is_configured():
         return False
 
@@ -58,6 +67,9 @@ def send_push(token: str, title: str, body: str, data: Optional[dict[str, str]] 
     try:
         messaging.send(message, app=_app())
         return True
+    except messaging.UnregisteredError:
+        logger.info("Device token %s... is unregistered — caller should prune it.", token[:12])
+        raise
     except FirebaseError as exc:
         logger.warning("Push notification failed for token %s...: %s", token[:12], exc)
         return False

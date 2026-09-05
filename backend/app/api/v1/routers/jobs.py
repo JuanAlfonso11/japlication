@@ -3,11 +3,12 @@ from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, select
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
+from app.core.rate_limit import limiter
 from app.db.session import get_db
 from app.models.application import Application
 from app.models.career_profile import CareerProfile
@@ -653,7 +654,9 @@ def _aggregate_sort_key(result: ExternalJobResult) -> datetime:
 
 
 @router.get("/jobs/search/aggregate", response_model=AggregateSearchResponse)
+@limiter.limit("10/minute")
 async def search_jobs_aggregate(
+    request: Request,
     q: Optional[str] = Query(None),
     location: Optional[str] = Query(None),
     experience_level_filter: Optional[str] = Query(
@@ -879,26 +882,45 @@ async def run_auto_import_for_user(user: User, db: AsyncSession) -> AutoImportRe
             continue
         if not created:
             continue
-        await compute_and_persist_match(profile, job, user.id, db)
+        # use_llm=False: this loop can run once per newly-discovered job in
+        # a single sweep — keep it on the free, offline semantic scorer
+        # rather than firing one Anthropic call per job serially. On-demand
+        # single-job matches (_ensure_match above, GET /jobs/{id}/match)
+        # keep the higher-quality LLM default.
+        await compute_and_persist_match(profile, job, user.id, db, use_llm=False)
         imported += 1
 
     if imported > 0 and push_notifications.is_configured():
+        from firebase_admin import messaging
+
         tokens = (
             await db.execute(select(DeviceToken.token).where(DeviceToken.user_id == user.id))
         ).scalars().all()
         plural = "s" if imported != 1 else ""
+        dead_tokens: list[str] = []
         for device_token in tokens:
-            push_notifications.send_push(
-                device_token,
-                "JobPilot",
-                f"Encontramos {imported} vacante{plural} nueva{plural} que hacen match — ya están en tu cola.",
-            )
+            try:
+                push_notifications.send_push(
+                    device_token,
+                    "JobPilot",
+                    f"Encontramos {imported} vacante{plural} nueva{plural} que hacen match — ya están en tu cola.",
+                )
+            except messaging.UnregisteredError:
+                dead_tokens.append(device_token)
+        if dead_tokens:
+            # A dead token failing here must never affect imported/matches
+            # already committed above — this cleanup is best-effort and
+            # isolated from the rest of the sweep's outcome.
+            await db.execute(delete(DeviceToken).where(DeviceToken.token.in_(dead_tokens)))
+            await db.commit()
 
     return AutoImportResponse(imported=imported, query=q, sources=sources)
 
 
 @router.post("/jobs/search/auto-import", response_model=AutoImportResponse)
+@limiter.limit("10/minute")
 async def auto_import_matching_jobs(
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> AutoImportResponse:

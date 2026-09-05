@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID
 
@@ -19,6 +19,7 @@ from app.models.resume_version import ResumeVersion
 from app.models.user import User
 from app.schemas.application import Application as ApplicationSchema
 from app.schemas.application import ApplicationListResponse, ApplicationUpdate, DecisionRequest, JobSummary
+from app.scripts.check_stale_applications import STALE_AFTER_DAYS
 from app.services.cover_letter_generator import generate_cover_letter
 
 router = APIRouter(tags=["applications"])
@@ -220,6 +221,31 @@ async def list_applications(
     )
     rows = (await db.execute(stmt)).scalars().all()
     return ApplicationListResponse(items=[_serialize(r) for r in rows], total=total)
+
+
+@router.get("/applications/stale-count")
+async def get_stale_application_count(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Count of the current user's `applied` applications with no status
+    change for STALE_AFTER_DAYS+ — same staleness definition as
+    check_stale_applications.py's daily push reminder (imports the same
+    constant so the two can never drift apart), surfaced here so the
+    Pipeline nav badge (NavShell.tsx) can show it even if the user missed
+    or dismissed that push notification."""
+    stale_cutoff = datetime.now(timezone.utc) - timedelta(days=STALE_AFTER_DAYS)
+    count = (
+        await db.execute(
+            select(func.count(Application.id)).where(
+                Application.user_id == current_user.id,
+                Application.status == ApplicationStatus.applied,
+                Application.applied_at.isnot(None),
+                Application.applied_at < stale_cutoff,
+            )
+        )
+    ).scalar_one()
+    return {"count": count}
 
 
 @router.get("/applications/{application_id}", response_model=ApplicationSchema)

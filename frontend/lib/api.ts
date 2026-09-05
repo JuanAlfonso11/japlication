@@ -435,6 +435,10 @@ export const applicationsApi = {
   // "Deshacer" — only valid while status is still "passed" (see the
   // backend's own guard); puts the job straight back in Home's queue.
   undo: (id: string) => request<void>(`/applications/${id}`, { method: "DELETE" }),
+  // Powers the red badge on the "Pipeline" nav icon (NavShell.tsx) — same
+  // staleness definition as the daily push reminder, in case the user
+  // missed or dismissed that notification.
+  staleCount: () => request<{ count: number }>("/applications/stale-count"),
 };
 
 // ---------- Resume / Cover letters ----------

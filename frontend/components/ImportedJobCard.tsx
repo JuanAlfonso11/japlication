@@ -9,7 +9,7 @@ export default function ImportedJobCard({ job }: { job: Job }) {
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-400">
-            Added to your queue
+            Agregado a tu cola
           </p>
           <h2 className="mt-1 text-xl font-bold text-gray-900 dark:text-gray-100">{job.title}</h2>
           <p className="text-sm text-gray-600 dark:text-gray-400">
@@ -31,7 +31,7 @@ export default function ImportedJobCard({ job }: { job: Job }) {
       {job.requirements?.length > 0 && (
         <div className="mt-4">
           <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
-            Requirements
+            Requisitos
           </p>
           <ul className="list-inside list-disc space-y-1 text-sm text-gray-700 dark:text-gray-300">
             {job.requirements.slice(0, 6).map((r, i) => (
@@ -46,14 +46,14 @@ export default function ImportedJobCard({ job }: { job: Job }) {
           href="/"
           className="inline-flex items-center gap-1 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
         >
-          Review in Home
+          Revisar en Inicio
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 5l7 7-7 7" /></svg>
         </Link>
         <Link
           href={`/jobs/${job.id}`}
           className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
         >
-          View details
+          Ver detalles
         </Link>
       </div>
     </div>
