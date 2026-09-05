@@ -3,7 +3,7 @@ from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -18,7 +18,7 @@ from app.models.job_match import JobMatch
 from app.models.resume_version import ResumeVersion
 from app.models.user import User
 from app.schemas.application import Application as ApplicationSchema
-from app.schemas.application import ApplicationUpdate, DecisionRequest, JobSummary
+from app.schemas.application import ApplicationListResponse, ApplicationUpdate, DecisionRequest, JobSummary
 from app.services.cover_letter_generator import generate_cover_letter
 
 router = APIRouter(tags=["applications"])
@@ -196,22 +196,30 @@ async def swipe_decision(
     return _serialize(app_row)
 
 
-@router.get("/applications", response_model=list[ApplicationSchema])
+@router.get("/applications", response_model=ApplicationListResponse)
 async def list_applications(
     status_filter: Optional[ApplicationStatus] = Query(None, alias="status"),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> list[ApplicationSchema]:
-    stmt = (
-        select(Application)
-        .options(selectinload(Application.job))
-        .where(Application.user_id == current_user.id)
-        .order_by(Application.updated_at.desc())
-    )
+) -> ApplicationListResponse:
+    stmt = select(Application).where(Application.user_id == current_user.id)
+    count_stmt = select(func.count(Application.id)).where(Application.user_id == current_user.id)
     if status_filter is not None:
         stmt = stmt.where(Application.status == status_filter)
+        count_stmt = count_stmt.where(Application.status == status_filter)
+
+    total = (await db.execute(count_stmt)).scalar_one()
+
+    stmt = (
+        stmt.options(selectinload(Application.job))
+        .order_by(Application.updated_at.desc())
+        .limit(limit)
+        .offset(offset)
+    )
     rows = (await db.execute(stmt)).scalars().all()
-    return [_serialize(r) for r in rows]
+    return ApplicationListResponse(items=[_serialize(r) for r in rows], total=total)
 
 
 @router.get("/applications/{application_id}", response_model=ApplicationSchema)

@@ -49,33 +49,33 @@ export default function ExperienceSection({
 
   return (
     <SectionCard
-      title="Experience"
-      description="Your work history, most recent first."
+      title="Experiencia"
+      description="Tu historial laboral, del más reciente al más antiguo."
       onAdd={add}
-      addLabel="Experience"
+      addLabel="Experiencia"
     >
       {experience.length === 0 && (
-        <p className="text-sm text-gray-400">No experience yet — add your first role.</p>
+        <p className="text-sm text-gray-400">Todavía no hay experiencia — agrega tu primer puesto.</p>
       )}
       <div className="space-y-4">
         {experience.map((entry, i) => (
           <EntryCard key={i} onRemove={() => remove(i)}>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <FormField label="Company">
+              <FormField label="Empresa">
                 <input
                   className={inputClass}
                   value={entry.company}
                   onChange={(e) => update(i, { company: e.target.value })}
                 />
               </FormField>
-              <FormField label="Title">
+              <FormField label="Puesto">
                 <input
                   className={inputClass}
                   value={entry.title}
                   onChange={(e) => update(i, { title: e.target.value })}
                 />
               </FormField>
-              <FormField label="Start date (YYYY-MM)">
+              <FormField label="Fecha de inicio (AAAA-MM)">
                 <input
                   className={inputClass}
                   value={entry.start_date}
@@ -83,7 +83,7 @@ export default function ExperienceSection({
                   placeholder="2021-01"
                 />
               </FormField>
-              <FormField label="End date (blank = present)">
+              <FormField label="Fecha de fin (vacío = actual)">
                 <input
                   className={inputClass}
                   value={entry.end_date ?? ""}
@@ -91,7 +91,7 @@ export default function ExperienceSection({
                   placeholder="2023-06"
                 />
               </FormField>
-              <FormField label="Location" className="sm:col-span-2">
+              <FormField label="Ubicación" className="sm:col-span-2">
                 <input
                   className={inputClass}
                   value={entry.location}
@@ -102,7 +102,7 @@ export default function ExperienceSection({
 
             <div className="mt-3">
               <span className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
-                Bullet points
+                Puntos destacados
               </span>
               <div className="space-y-2">
                 {entry.bullets.map((bullet, bi) => (
@@ -111,13 +111,13 @@ export default function ExperienceSection({
                       className={`${textareaClass} min-h-[42px] flex-1`}
                       value={bullet}
                       onChange={(e) => updateBullet(i, bi, e.target.value)}
-                      placeholder="Led migration of..."
+                      placeholder="Lideré la migración de..."
                       rows={1}
                     />
                     <button
                       type="button"
                       onClick={() => removeBullet(i, bi)}
-                      aria-label="Remove bullet"
+                      aria-label="Eliminar punto"
                       className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-rose-600 dark:text-gray-500 dark:hover:bg-gray-800 dark:hover:text-rose-400"
                     >
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
@@ -130,11 +130,11 @@ export default function ExperienceSection({
                 onClick={() => addBullet(i)}
                 className="mt-2 text-xs font-semibold text-brand-600 hover:text-brand-700"
               >
-                + Add bullet
+                + Agregar punto
               </button>
             </div>
 
-            <FormField label="Skills used (comma-separated)" className="mt-3">
+            <FormField label="Habilidades usadas (separadas por coma)" className="mt-3">
               <input
                 className={inputClass}
                 value={entry.skills_used.join(", ")}

@@ -13,7 +13,7 @@ import { ApiError, applicationsApi } from "@/lib/api";
 import type { Application, ApplicationStatus } from "@/lib/types";
 
 const FILTERS: { value: ApplicationStatus | "all"; label: string }[] = [
-  { value: "all", label: "All" },
+  { value: "all", label: "Todas" },
   { value: "queued", label: STATUS_LABELS.queued },
   { value: "saved", label: STATUS_LABELS.saved },
   { value: "passed", label: STATUS_LABELS.passed },
@@ -23,6 +23,8 @@ const FILTERS: { value: ApplicationStatus | "all"; label: string }[] = [
   { value: "rejected", label: STATUS_LABELS.rejected },
   { value: "withdrawn", label: STATUS_LABELS.withdrawn },
 ];
+
+const PAGE_SIZE = 50;
 
 const EDITABLE_STATUSES: ApplicationStatus[] = [
   "queued",
@@ -68,7 +70,7 @@ function ApplicationRow({
       const updated = await applicationsApi.update(application.id, { status });
       onUpdated(updated);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not update status.");
+      setError(err instanceof ApiError ? err.message : "No se pudo actualizar el estado.");
     } finally {
       setSaving(false);
     }
@@ -81,7 +83,7 @@ function ApplicationRow({
       const updated = await applicationsApi.update(application.id, { notes });
       onUpdated(updated);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not save notes.");
+      setError(err instanceof ApiError ? err.message : "No se pudieron guardar las notas.");
     } finally {
       setSaving(false);
     }
@@ -97,7 +99,7 @@ function ApplicationRow({
           onClick={() => setExpanded((v) => !v)}
           className="flex-1 text-left"
         >
-          <p className="font-semibold text-gray-900 dark:text-gray-100">{job?.title ?? "Untitled job"}</p>
+          <p className="font-semibold text-gray-900 dark:text-gray-100">{job?.title ?? "Trabajo sin título"}</p>
           <p className="text-sm text-gray-500 dark:text-gray-400">
             {job?.company}
             {job?.location ? ` · ${job.location}` : ""}
@@ -129,7 +131,7 @@ function ApplicationRow({
         <div className="mt-4 space-y-3 border-t border-gray-100 pt-4 dark:border-gray-800">
           <div className="flex flex-wrap items-center gap-2">
             <label className="text-xs font-medium text-gray-600 dark:text-gray-400" htmlFor={`status-${application.id}`}>
-              Status
+              Estado
             </label>
             <Select
               id={`status-${application.id}`}
@@ -149,14 +151,14 @@ function ApplicationRow({
                 href={`/jobs/${job.id}`}
                 className="ml-auto text-xs font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
               >
-                View job →
+                Ver trabajo →
               </Link>
             )}
           </div>
 
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" htmlFor={`notes-${application.id}`}>
-              Notes
+              Notas
             </label>
             <textarea
               id={`notes-${application.id}`}
@@ -165,11 +167,11 @@ function ApplicationRow({
               onBlur={() => {
                 if (notes !== (application.notes ?? "")) saveNotes();
               }}
-              placeholder="Interview prep notes, contacts, follow-ups…"
+              placeholder="Notas de la entrevista, contactos, seguimientos…"
               className="min-h-[70px] w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:focus:ring-brand-900/40"
             />
             <p className="mt-1 text-[11px] text-gray-400 dark:text-gray-500">
-              {saving ? "Saving…" : "Notes save automatically when you click away."}
+              {saving ? "Guardando…" : "Las notas se guardan solas al salir del campo."}
             </p>
           </div>
         </div>
@@ -184,21 +186,42 @@ function ApplicationsContent() {
 
   const [filter, setFilter] = useState<ApplicationStatus | "all">(initialStatus);
   const [applications, setApplications] = useState<Application[] | null>(null);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async (status: ApplicationStatus | "all") => {
     setLoading(true);
     setError(null);
     try {
-      const data = await applicationsApi.list(status === "all" ? undefined : status);
-      setApplications(data);
+      const data = await applicationsApi.list(status === "all" ? undefined : status, PAGE_SIZE, 0);
+      setApplications(data.items);
+      setTotal(data.total);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to load your applications.");
+      setError(err instanceof ApiError ? err.message : "No se pudieron cargar tus aplicaciones.");
     } finally {
       setLoading(false);
     }
   }, []);
+
+  async function loadMore() {
+    if (!applications) return;
+    setLoadingMore(true);
+    try {
+      const data = await applicationsApi.list(
+        filter === "all" ? undefined : filter,
+        PAGE_SIZE,
+        applications.length
+      );
+      setApplications((prev) => (prev ? [...prev, ...data.items] : data.items));
+      setTotal(data.total);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "No se pudieron cargar más aplicaciones.");
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   useEffect(() => {
     load(filter);
@@ -212,14 +235,15 @@ function ApplicationsContent() {
 
   function handleUndone(id: string) {
     setApplications((prev) => (prev ? prev.filter((a) => a.id !== id) : prev));
+    setTotal((prev) => Math.max(0, prev - 1));
   }
 
   return (
     <div className="space-y-5 pb-4 animate-fade-in">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Applications</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Aplicaciones</h1>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          Track every job through your pipeline, from saved to offer.
+          Sigue cada trabajo en tu pipeline, desde guardado hasta oferta.
         </p>
       </div>
 
@@ -243,12 +267,12 @@ function ApplicationsContent() {
         ))}
       </div>
 
-      {loading && <Spinner label="Loading applications…" />}
+      {loading && <Spinner label="Cargando aplicaciones…" />}
       {!loading && error && <ErrorNotice message={error} onRetry={() => load(filter)} />}
 
       {!loading && !error && applications && applications.length === 0 && (
         <div className="rounded-2xl border border-dashed border-gray-300 p-8 text-center text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">
-          No applications in this view yet.
+          Todavía no hay aplicaciones en esta vista.
         </div>
       )}
 
@@ -257,6 +281,18 @@ function ApplicationsContent() {
           {applications.map((app) => (
             <ApplicationRow key={app.id} application={app} onUpdated={handleUpdated} onUndone={handleUndone} />
           ))}
+          {applications.length < total && (
+            <div className="flex justify-center pt-2">
+              <button
+                type="button"
+                onClick={loadMore}
+                disabled={loadingMore}
+                className="rounded-lg bg-white px-4 py-2 text-sm font-semibold text-brand-600 shadow-sm ring-1 ring-gray-200 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-gray-900 dark:text-brand-400 dark:ring-gray-800 dark:hover:bg-gray-800"
+              >
+                {loadingMore ? "Cargando…" : `Cargar más (${total - applications.length} restantes)`}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -266,7 +302,7 @@ function ApplicationsContent() {
 export default function ApplicationsPage() {
   return (
     <RouteGuard>
-      <Suspense fallback={<Spinner label="Loading applications…" />}>
+      <Suspense fallback={<Spinner label="Cargando aplicaciones…" />}>
         <ApplicationsContent />
       </Suspense>
     </RouteGuard>

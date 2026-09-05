@@ -25,36 +25,36 @@ export default function EducationSection({
   }
 
   return (
-    <SectionCard title="Education" onAdd={add} addLabel="Education">
+    <SectionCard title="Educación" onAdd={add} addLabel="Educación">
       {education.length === 0 && (
-        <p className="text-sm text-gray-400">No education entries yet.</p>
+        <p className="text-sm text-gray-400">Todavía no hay estudios agregados.</p>
       )}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {education.map((entry, i) => (
           <EntryCard key={i} onRemove={() => remove(i)}>
             <div className="grid grid-cols-2 gap-2">
-              <FormField label="Institution" className="col-span-2">
+              <FormField label="Institución" className="col-span-2">
                 <input
                   className={inputClass}
                   value={entry.institution}
                   onChange={(e) => update(i, { institution: e.target.value })}
                 />
               </FormField>
-              <FormField label="Degree">
+              <FormField label="Título">
                 <input
                   className={inputClass}
                   value={entry.degree}
                   onChange={(e) => update(i, { degree: e.target.value })}
                 />
               </FormField>
-              <FormField label="Field of study">
+              <FormField label="Área de estudio">
                 <input
                   className={inputClass}
                   value={entry.field}
                   onChange={(e) => update(i, { field: e.target.value })}
                 />
               </FormField>
-              <FormField label="Start date">
+              <FormField label="Fecha de inicio">
                 <input
                   className={inputClass}
                   value={entry.start_date}
@@ -62,7 +62,7 @@ export default function EducationSection({
                   placeholder="2016-09"
                 />
               </FormField>
-              <FormField label="End date">
+              <FormField label="Fecha de fin">
                 <input
                   className={inputClass}
                   value={entry.end_date}

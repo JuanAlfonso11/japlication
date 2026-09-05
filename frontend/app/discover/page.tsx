@@ -61,7 +61,7 @@ function ExternalResultCard({
       await onImport(result);
       setImported(true);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not add this job.");
+      setError(err instanceof ApiError ? err.message : "No se pudo agregar este trabajo.");
     } finally {
       setLoading(false);
     }
@@ -103,7 +103,7 @@ function ExternalResultCard({
           disabled={loading || imported}
           className="shrink-0 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {imported ? "Added ✓" : loading ? "Adding…" : "Add to queue"}
+          {imported ? "Agregado ✓" : loading ? "Agregando…" : "Agregar a la cola"}
         </button>
       </div>
       {result.skills_required?.length > 0 && (
@@ -239,7 +239,7 @@ function DiscoverContent() {
       setSources(data.sources);
       setSearched(true);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Search failed.");
+      setError(err instanceof ApiError ? err.message : "Falló la búsqueda.");
     } finally {
       setLoading(false);
     }
@@ -262,7 +262,7 @@ function DiscoverContent() {
   return (
     <div className="space-y-6 pb-4 animate-fade-in">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Discover jobs</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Buscar trabajos</h1>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
           Busca a la vez en 12 fuentes (9 públicas sin login + Adzuna/USAJobs/Google Jobs si
           configuraste sus claves) y combina los resultados en una sola lista. Todo lo que agregues
@@ -343,7 +343,7 @@ function DiscoverContent() {
               disabled={loading}
               className="w-full rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
             >
-              {loading ? "Searching…" : "Search"}
+              {loading ? "Buscando…" : "Buscar"}
             </button>
           </form>
 

@@ -1,10 +1,10 @@
 import type { CVEvaluation, CVIssue, IssueSeverity } from "@/lib/types";
 
 const CATEGORY_LABELS: Record<string, string> = {
-  completeness: "Completeness",
-  impact: "Impact",
-  skills_breadth: "Skills breadth",
-  ats_safety: "ATS safety",
+  completeness: "Completitud",
+  impact: "Impacto",
+  skills_breadth: "Variedad de habilidades",
+  ats_safety: "Seguridad ATS",
 };
 
 const SEVERITY_STYLES: Record<IssueSeverity, { dot: string; text: string }> = {
@@ -64,10 +64,10 @@ export default function CVEvaluationCard({
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
           <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-            CV health check
+            Chequeo de salud del CV
           </div>
           <p className="mt-0.5 text-xs text-gray-400 dark:text-gray-500">
-            Independent of any job — this is about the CV itself.
+            Independiente de cualquier trabajo — esto trata sobre el CV en sí.
           </p>
         </div>
         {evaluation && (
@@ -82,10 +82,10 @@ export default function CVEvaluationCard({
         )}
       </div>
 
-      {loading && <p className="text-sm text-gray-400 dark:text-gray-500">Evaluating your CV…</p>}
+      {loading && <p className="text-sm text-gray-400 dark:text-gray-500">Evaluando tu CV…</p>}
       {error && <p className="text-sm text-rose-600 dark:text-rose-400">{error}</p>}
       {!loading && !error && !evaluation && (
-        <p className="text-sm text-gray-400 dark:text-gray-500">Save your profile below to see your CV health check.</p>
+        <p className="text-sm text-gray-400 dark:text-gray-500">Guarda tu perfil abajo para ver el chequeo de salud de tu CV.</p>
       )}
 
       {evaluation && (
@@ -100,7 +100,7 @@ export default function CVEvaluationCard({
             </span>
             {evaluation.summary_generated_by === "ai" && (
               <span className="text-[11px] font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">
-                AI summary
+                Resumen generado por IA
               </span>
             )}
           </div>
@@ -116,7 +116,7 @@ export default function CVEvaluationCard({
           {evaluation.top_issues.length > 0 && (
             <div>
               <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                What to fix first
+                Qué corregir primero
               </p>
               <ul className="space-y-1.5">
                 {evaluation.top_issues.map((issue, i) => (
@@ -129,7 +129,7 @@ export default function CVEvaluationCard({
           {evaluation.strengths.length > 0 && (
             <div>
               <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                Working well
+                Lo que funciona bien
               </p>
               <ul className="space-y-1.5">
                 {evaluation.strengths.map((s, i) => (

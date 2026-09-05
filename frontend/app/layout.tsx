@@ -5,7 +5,7 @@ import { THEME_NO_FLASH_SCRIPT } from "@/context/ThemeContext";
 
 export const metadata: Metadata = {
   title: "JobPilot",
-  description: "Your personal job-search and application assistant.",
+  description: "Tu asistente personal de búsqueda y aplicación a trabajos.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
@@ -31,7 +31,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="es" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_NO_FLASH_SCRIPT }} />
       </head>

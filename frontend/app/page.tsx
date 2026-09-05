@@ -176,12 +176,15 @@ function HomeContent() {
     try {
       const [matches, apps] = await Promise.all([
         jobsApi.matches({ limit: 50 }),
-        applicationsApi.list(),
+        // Home's stats row counts applications per status, so it needs the
+        // full set, not just a page — 200 is the endpoint's max page size,
+        // comfortably above what a single user racks up in practice.
+        applicationsApi.list(undefined, 200, 0),
       ]);
       setQueue(matches.items);
-      setApplications(apps);
+      setApplications(apps.items);
     } catch (err) {
-      setLoadError(err instanceof ApiError ? err.message : "Failed to load your recommendations.");
+      setLoadError(err instanceof ApiError ? err.message : "No se pudieron cargar tus recomendaciones.");
     } finally {
       setLoading(false);
     }
@@ -246,7 +249,7 @@ function HomeContent() {
         setJustPassed(decision === "left" ? { job: target, applicationId: application.id } : null);
       } catch (err) {
         setActionError(
-          err instanceof ApiError ? err.message : "Could not record your decision. Try again."
+          err instanceof ApiError ? err.message : "No se pudo registrar tu decisión. Intenta de nuevo."
         );
       } finally {
         setPending(false);
@@ -293,7 +296,7 @@ function HomeContent() {
     return () => window.removeEventListener("keydown", handleKey);
   }, [requestDecision]);
 
-  if (loading) return <Spinner label="Finding your best matches…" />;
+  if (loading) return <Spinner label="Buscando tus mejores coincidencias…" />;
   if (loadError) return <ErrorNotice message={loadError} onRetry={load} />;
 
   const hiddenByScope = (queue?.length ?? 0) > 0 && (filteredQueue?.length ?? 0) === 0;
@@ -303,7 +306,7 @@ function HomeContent() {
       <div className="flex flex-col items-center gap-3 pb-4 animate-fade-in">
       <div className="w-full max-w-md">
         <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">
-          Hi{user?.full_name ? `, ${user.full_name.split(" ")[0]}` : ""} 👋
+          Hola{user?.full_name ? `, ${user.full_name.split(" ")[0]}` : ""} 👋
         </h1>
       </div>
 
@@ -358,15 +361,15 @@ function HomeContent() {
         {!current && !hiddenByScope && (
           <div className="flex h-full flex-col items-center justify-center gap-3 rounded-3xl border-2 border-dashed border-gray-300 p-8 text-center dark:border-gray-700">
             <span className="text-4xl">🎉</span>
-            <p className="text-lg font-semibold text-gray-800 dark:text-gray-200">You&apos;re all caught up</p>
+            <p className="text-lg font-semibold text-gray-800 dark:text-gray-200">Ya estás al día</p>
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              No new recommendations right now. Discover more jobs to keep going.
+              No hay recomendaciones nuevas por ahora. Explora más vacantes en Discover para seguir.
             </p>
             <Link
               href="/discover"
               className="mt-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
             >
-              Discover jobs
+              Buscar vacantes
             </Link>
           </div>
         )}
@@ -389,7 +392,7 @@ function HomeContent() {
             type="button"
             onClick={() => requestDecision("left")}
             disabled={pending || !!pendingDecision}
-            aria-label="Pass"
+            aria-label="Pasar"
             className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-rose-500 shadow-md ring-1 ring-gray-200 transition-transform hover:scale-105 active:scale-95 disabled:opacity-50 dark:bg-gray-900 dark:ring-gray-700"
           >
             <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
@@ -398,7 +401,7 @@ function HomeContent() {
             type="button"
             onClick={() => requestDecision("right")}
             disabled={pending || !!pendingDecision}
-            aria-label="Save"
+            aria-label="Aplicar"
             className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500 text-white shadow-lg transition-transform hover:scale-105 active:scale-95 disabled:opacity-50"
           >
             <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
@@ -461,7 +464,7 @@ function HomeContent() {
       )}
 
       {filteredQueue && current && (
-        <p className="text-xs text-gray-400 dark:text-gray-500">{filteredQueue.length} left in your queue</p>
+        <p className="text-xs text-gray-400 dark:text-gray-500">Quedan {filteredQueue.length} en tu cola</p>
       )}
       </div>
     </PullToRefresh>

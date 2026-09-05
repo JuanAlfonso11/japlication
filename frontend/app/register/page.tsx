@@ -32,12 +32,12 @@ export default function RegisterPage() {
     setError(null);
 
     const missing: string[] = [];
-    if (password.length < 8) missing.push("at least 8 characters");
-    if (!/[A-Z]/.test(password)) missing.push("an uppercase letter");
-    if (!/\d/.test(password)) missing.push("a number");
-    if (!/[^A-Za-z0-9]/.test(password)) missing.push("a special character");
+    if (password.length < 8) missing.push("al menos 8 caracteres");
+    if (!/[A-Z]/.test(password)) missing.push("una mayúscula");
+    if (!/\d/.test(password)) missing.push("un número");
+    if (!/[^A-Za-z0-9]/.test(password)) missing.push("un carácter especial");
     if (missing.length > 0) {
-      setError(`Password must include ${missing.join(", ")}.`);
+      setError(`La contraseña debe incluir ${missing.join(", ")}.`);
       return;
     }
 
@@ -48,7 +48,7 @@ export default function RegisterPage() {
       router.replace("/verify-email?status=pending");
     } catch (err) {
       setError(
-        err instanceof ApiError ? err.message : "Could not create your account. Please try again."
+        err instanceof ApiError ? err.message : "No se pudo crear tu cuenta. Intenta de nuevo."
       );
     } finally {
       setSubmitting(false);
@@ -60,9 +60,9 @@ export default function RegisterPage() {
       <div className="w-full max-w-sm">
         <div className="mb-8 flex flex-col items-center gap-2 text-center">
           <img src="/icons/icon-192.png" alt="" className="h-12 w-12" />
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Create your account</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Crea tu cuenta</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            Build your profile, import jobs, and start swiping.
+            Arma tu perfil, importa trabajos, y empieza a buscar.
           </p>
         </div>
 
@@ -74,7 +74,7 @@ export default function RegisterPage() {
           )}
           <div>
             <label htmlFor="full_name" className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
-              Full name
+              Nombre completo
             </label>
             <input
               id="full_name"
@@ -89,7 +89,7 @@ export default function RegisterPage() {
           </div>
           <div>
             <label htmlFor="email" className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
-              Email
+              Correo
             </label>
             <input
               id="email"
@@ -104,7 +104,7 @@ export default function RegisterPage() {
           </div>
           <div>
             <label htmlFor="password" className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
-              Password
+              Contraseña
             </label>
             <input
               id="password"
@@ -115,10 +115,10 @@ export default function RegisterPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className={inputClass}
-              placeholder="At least 8 characters"
+              placeholder="Al menos 8 caracteres"
             />
             <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
-              8+ characters, with an uppercase letter, a number, and a special character.
+              8+ caracteres, con una mayúscula, un número, y un carácter especial.
             </p>
           </div>
           <button
@@ -126,14 +126,14 @@ export default function RegisterPage() {
             disabled={submitting}
             className="w-full rounded-lg bg-brand-600 px-4 py-2.5 font-semibold text-white transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {submitting ? "Creating account…" : "Create account"}
+            {submitting ? "Creando cuenta…" : "Crear cuenta"}
           </button>
         </form>
 
         <p className="mt-5 text-center text-sm text-gray-500 dark:text-gray-400">
-          Already have an account?{" "}
+          ¿Ya tienes una cuenta?{" "}
           <Link href="/login" className="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">
-            Log in
+            Iniciar sesión
           </Link>
         </p>
       </div>

@@ -12,14 +12,14 @@ const STATUS_STYLES: Record<string, string> = {
 };
 
 export const STATUS_LABELS: Record<string, string> = {
-  queued: "Queued",
-  saved: "Saved",
-  passed: "Passed",
-  applied: "Applied",
-  interviewing: "Interviewing",
-  offer: "Offer",
-  rejected: "Rejected",
-  withdrawn: "Withdrawn",
+  queued: "En cola",
+  saved: "Guardado",
+  passed: "Pasado",
+  applied: "Aplicado",
+  interviewing: "Entrevistando",
+  offer: "Oferta",
+  rejected: "Rechazado",
+  withdrawn: "Retirado",
 };
 
 export default function StatusBadge({ status }: { status: ApplicationStatus | string }) {

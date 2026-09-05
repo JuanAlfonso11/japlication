@@ -48,8 +48,10 @@ services:
       ANDROID_LATEST_VERSION_NAME: ${ANDROID_LATEST_VERSION_NAME:-}
       ANDROID_UPDATE_APK_URL: ${ANDROID_UPDATE_APK_URL:-}
       ANDROID_UPDATE_NOTES: ${ANDROID_UPDATE_NOTES:-}
+      SYSTEM_HEARTBEAT_SECRET: ${SYSTEM_HEARTBEAT_SECRET:-}
     volumes:
       - ./backend/secrets:/app/secrets:ro
+      - ./backend/runtime:/app/runtime
     ports:
       - "8000:8000"
 

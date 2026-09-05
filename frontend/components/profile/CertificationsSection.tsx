@@ -22,29 +22,29 @@ export default function CertificationsSection({
   }
 
   return (
-    <SectionCard title="Certifications" onAdd={add} addLabel="Certification">
+    <SectionCard title="Certificaciones" onAdd={add} addLabel="Certificación">
       {certifications.length === 0 && (
-        <p className="text-sm text-gray-400">No certifications yet.</p>
+        <p className="text-sm text-gray-400">Todavía no hay certificaciones.</p>
       )}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {certifications.map((entry, i) => (
           <EntryCard key={i} onRemove={() => remove(i)}>
             <div className="grid grid-cols-2 gap-2">
-              <FormField label="Name" className="col-span-2">
+              <FormField label="Nombre" className="col-span-2">
                 <input
                   className={inputClass}
                   value={entry.name}
                   onChange={(e) => update(i, { name: e.target.value })}
                 />
               </FormField>
-              <FormField label="Issuer">
+              <FormField label="Emisor">
                 <input
                   className={inputClass}
                   value={entry.issuer}
                   onChange={(e) => update(i, { issuer: e.target.value })}
                 />
               </FormField>
-              <FormField label="Date">
+              <FormField label="Fecha">
                 <input
                   className={inputClass}
                   value={entry.date}

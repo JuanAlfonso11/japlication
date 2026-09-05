@@ -366,6 +366,11 @@ export interface JobListResponse {
   total: number;
 }
 
+export interface ApplicationListResponse {
+  items: Application[];
+  total: number;
+}
+
 // ---------- CV Evaluator (profile quality, independent of any job) ----------
 
 export type IssueSeverity = "error" | "warning" | "info";

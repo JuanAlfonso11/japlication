@@ -29,7 +29,7 @@ export default function LoginPage() {
       await login({ email, password });
       router.replace("/");
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not log in. Please try again.");
+      setError(err instanceof ApiError ? err.message : "No se pudo iniciar sesión. Intenta de nuevo.");
     } finally {
       setSubmitting(false);
     }
@@ -40,8 +40,8 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         <div className="mb-8 flex flex-col items-center gap-2 text-center">
           <img src="/icons/icon-192.png" alt="" className="h-12 w-12" />
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Welcome back</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400">Log in to JobPilot to keep swiping.</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Bienvenido de vuelta</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Inicia sesión en JobPilot para seguir buscando.</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-100 dark:bg-gray-900 dark:ring-gray-800">
@@ -52,7 +52,7 @@ export default function LoginPage() {
           )}
           <div>
             <label htmlFor="email" className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
-              Email
+              Correo
             </label>
             <input
               id="email"
@@ -67,7 +67,7 @@ export default function LoginPage() {
           </div>
           <div>
             <label htmlFor="password" className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
-              Password
+              Contraseña
             </label>
             <input
               id="password"
@@ -85,14 +85,14 @@ export default function LoginPage() {
             disabled={submitting}
             className="w-full rounded-lg bg-brand-600 px-4 py-2.5 font-semibold text-white transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {submitting ? "Logging in…" : "Log in"}
+            {submitting ? "Iniciando sesión…" : "Iniciar sesión"}
           </button>
         </form>
 
         <p className="mt-5 text-center text-sm text-gray-500 dark:text-gray-400">
-          New to JobPilot?{" "}
+          ¿Nuevo en JobPilot?{" "}
           <Link href="/register" className="font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">
-            Create an account
+            Crear una cuenta
           </Link>
         </p>
       </div>

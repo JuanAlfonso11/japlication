@@ -19,7 +19,7 @@ export default function VerificationBanner() {
       const res = await authApi.resendVerification();
       setMessage(res.detail);
     } catch (err) {
-      setMessage(err instanceof ApiError ? err.message : "Could not resend the email.");
+      setMessage(err instanceof ApiError ? err.message : "No se pudo reenviar el correo.");
     } finally {
       setSending(false);
     }

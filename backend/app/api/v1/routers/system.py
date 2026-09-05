@@ -24,7 +24,10 @@ router = APIRouter(prefix="/system", tags=["system"])
 
 
 def _check_heartbeat_secret(x_heartbeat_secret: Optional[str]) -> None:
-    if settings.SYSTEM_HEARTBEAT_SECRET and x_heartbeat_secret != settings.SYSTEM_HEARTBEAT_SECRET:
+    # settings.SYSTEM_HEARTBEAT_SECRET is always populated by get_settings()
+    # (env var if set, otherwise an auto-generated + persisted one) — so
+    # this endpoint never silently accepts an unauthenticated caller.
+    if x_heartbeat_secret != settings.SYSTEM_HEARTBEAT_SECRET:
         raise HTTPException(status_code=401, detail="Invalid heartbeat secret.")
 
 

@@ -281,7 +281,25 @@ async def list_jobs(
     base = base.order_by(Job.created_at.desc()).limit(limit).offset(offset)
     jobs = (await db.execute(base)).scalars().all()
 
-    items = [await _attach_match(job, current_user.id, db) for job in jobs]
+    matches_by_job_id: dict[UUID, JobMatch] = {}
+    if jobs:
+        match_rows = (
+            await db.execute(
+                select(JobMatch).where(
+                    JobMatch.user_id == current_user.id,
+                    JobMatch.job_id.in_([job.id for job in jobs]),
+                )
+            )
+        ).scalars().all()
+        matches_by_job_id = {m.job_id: m for m in match_rows}
+
+    items = []
+    for job in jobs:
+        schema = JobSchema.model_validate(job)
+        match = matches_by_job_id.get(job.id)
+        if match is not None:
+            schema.match = MatchResult.model_validate(match)
+        items.append(schema)
     return JobListResponse(items=items, total=total)
 
 

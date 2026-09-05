@@ -3,6 +3,12 @@ import SectionCard, { EntryCard } from "./SectionCard";
 import { FormField, inputClass, Select } from "./FormField";
 
 const LEVELS = ["beginner", "intermediate", "advanced", "expert"];
+const LEVEL_LABELS: Record<string, string> = {
+  beginner: "Principiante",
+  intermediate: "Intermedio",
+  advanced: "Avanzado",
+  expert: "Experto",
+};
 
 export default function SkillsSection({
   skills,
@@ -28,47 +34,47 @@ export default function SkillsSection({
 
   return (
     <SectionCard
-      title="Skills"
-      description="Technical and soft skills used for match scoring."
+      title="Habilidades"
+      description="Habilidades técnicas y blandas usadas para calcular el match."
       onAdd={add}
-      addLabel="Skill"
+      addLabel="Habilidad"
     >
       {skills.length === 0 && (
-        <p className="text-sm text-gray-400">No skills yet — add your first one.</p>
+        <p className="text-sm text-gray-400">Todavía no hay habilidades — agrega la primera.</p>
       )}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {skills.map((skill, i) => (
           <EntryCard key={i} onRemove={() => remove(i)}>
             <div className="grid grid-cols-2 gap-2">
-              <FormField label="Name" className="col-span-2">
+              <FormField label="Nombre" className="col-span-2">
                 <input
                   className={inputClass}
                   value={skill.name}
                   onChange={(e) => update(i, { name: e.target.value })}
-                  placeholder="e.g. TypeScript"
+                  placeholder="ej. TypeScript"
                 />
               </FormField>
-              <FormField label="Category">
+              <FormField label="Categoría">
                 <input
                   className={inputClass}
                   value={skill.category}
                   onChange={(e) => update(i, { category: e.target.value })}
-                  placeholder="language, tool…"
+                  placeholder="lenguaje, herramienta…"
                 />
               </FormField>
-              <FormField label="Level">
+              <FormField label="Nivel">
                 <Select
                   value={skill.level}
                   onChange={(e) => update(i, { level: e.target.value })}
                 >
                   {LEVELS.map((l) => (
                     <option key={l} value={l}>
-                      {l}
+                      {LEVEL_LABELS[l]}
                     </option>
                   ))}
                 </Select>
               </FormField>
-              <FormField label="Years of experience" className="col-span-2">
+              <FormField label="Años de experiencia" className="col-span-2">
                 <input
                   type="number"
                   min={0}

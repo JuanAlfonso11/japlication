@@ -2,6 +2,7 @@ import type {
   AggregateSearchResponse,
   ApiErrorShape,
   Application,
+  ApplicationListResponse,
   ApplicationUpdatePayload,
   AutoImportResponse,
   AuthResponse,
@@ -426,8 +427,8 @@ export const jobsApi = {
 // ---------- Applications ----------
 
 export const applicationsApi = {
-  list: (status?: string) =>
-    request<Application[]>("/applications", { query: { status } }),
+  list: (status?: string, limit?: number, offset?: number) =>
+    request<ApplicationListResponse>("/applications", { query: { status, limit, offset } }),
   get: (id: string) => request<Application>(`/applications/${id}`),
   update: (id: string, payload: ApplicationUpdatePayload) =>
     request<Application>(`/applications/${id}`, { method: "PATCH", body: payload }),

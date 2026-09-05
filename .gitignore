@@ -20,6 +20,10 @@ npm-debug.log*
 # Firebase project, never committed (same treatment as .env)
 backend/secrets/
 
+# Auto-generated at container startup (SYSTEM_HEARTBEAT_SECRET) — never
+# committed, same treatment as .env
+backend/runtime/
+
 # Local DB backups (scripts/backup-db.ps1) — contain real user data,
 # never committed
 backups/

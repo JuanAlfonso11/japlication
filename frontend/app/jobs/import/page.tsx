@@ -24,7 +24,7 @@ function ImportByUrl({ onImported }: { onImported: (job: Job) => void }) {
       setUrl("");
     } catch (err) {
       setError(
-        err instanceof ApiError ? err.message : "Could not import that job posting."
+        err instanceof ApiError ? err.message : "No se pudo importar esa vacante."
       );
     } finally {
       setLoading(false);
@@ -35,13 +35,13 @@ function ImportByUrl({ onImported }: { onImported: (job: Job) => void }) {
     <form onSubmit={handleSubmit} className="space-y-3">
       {error && <ErrorNotice message={error} />}
       <label className="block">
-        <span className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">Job posting URL</span>
+        <span className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">URL de la vacante</span>
         <input
           type="url"
           required
           value={url}
           onChange={(e) => setUrl(e.target.value)}
-          placeholder="https://company.com/careers/senior-engineer"
+          placeholder="https://empresa.com/careers/senior-engineer"
           className={inputClass}
         />
       </label>
@@ -50,7 +50,7 @@ function ImportByUrl({ onImported }: { onImported: (job: Job) => void }) {
         disabled={loading}
         className="w-full rounded-lg bg-brand-600 px-4 py-2.5 font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
       >
-        {loading ? "Importing…" : "Import job"}
+        {loading ? "Importando…" : "Importar trabajo"}
       </button>
     </form>
   );
@@ -97,7 +97,7 @@ function ManualJobForm({ onImported }: { onImported: (job: Job) => void }) {
       setSkills("");
       setRequiresCoverLetter(false);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not save that job.");
+      setError(err instanceof ApiError ? err.message : "No se pudo guardar ese trabajo.");
     } finally {
       setLoading(false);
     }
@@ -108,42 +108,42 @@ function ManualJobForm({ onImported }: { onImported: (job: Job) => void }) {
       {error && <ErrorNotice message={error} />}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <label className="block">
-          <span className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">Title</span>
+          <span className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">Título</span>
           <input required className={inputClass} value={title} onChange={(e) => setTitle(e.target.value)} />
         </label>
         <label className="block">
-          <span className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">Company</span>
+          <span className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">Empresa</span>
           <input required className={inputClass} value={company} onChange={(e) => setCompany(e.target.value)} />
         </label>
         <label className="block sm:col-span-2">
-          <span className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">Location</span>
+          <span className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">Ubicación</span>
           <input className={inputClass} value={location} onChange={(e) => setLocation(e.target.value)} />
         </label>
       </div>
       <label className="block">
-        <span className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">Full description</span>
+        <span className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">Descripción completa</span>
         <textarea
           required
           className={`${textareaClass} min-h-[120px]`}
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          placeholder="Paste the full job description text here…"
+          placeholder="Pega aquí el texto completo de la descripción…"
         />
       </label>
       <label className="block">
         <span className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
-          Requirements (one per line)
+          Requisitos (uno por línea)
         </span>
         <textarea
           className={`${textareaClass} min-h-[90px]`}
           value={requirements}
           onChange={(e) => setRequirements(e.target.value)}
-          placeholder={"5+ years of backend development\nExperience with distributed systems"}
+          placeholder={"5+ años de experiencia en backend\nExperiencia con sistemas distribuidos"}
         />
       </label>
       <label className="block">
         <span className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
-          Skills (comma-separated)
+          Habilidades (separadas por coma)
         </span>
         <input
           className={inputClass}
@@ -166,7 +166,7 @@ function ManualJobForm({ onImported }: { onImported: (job: Job) => void }) {
         disabled={loading}
         className="w-full rounded-lg bg-brand-600 px-4 py-2.5 font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
       >
-        {loading ? "Saving…" : "Add job"}
+        {loading ? "Guardando…" : "Agregar trabajo"}
       </button>
     </form>
   );
@@ -179,11 +179,11 @@ function ImportContent() {
   return (
     <div className="space-y-6 pb-4 animate-fade-in">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Add a specific job</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Agregar una vacante específica</h1>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          Already found a posting elsewhere? Paste its URL or the description text — JobPilot
-          parses it into a structured job and matches it against your profile. Looking for new
-          jobs instead? Try{" "}
+          ¿Ya encontraste una vacante en otro lado? Pega su URL o el texto de la descripción —
+          JobPilot la convierte en un trabajo estructurado y la compara contra tu perfil. ¿Buscas
+          vacantes nuevas en cambio? Prueba{" "}
           <a href="/discover" className="font-medium text-brand-600 hover:underline dark:text-brand-400">
             Discover
           </a>
@@ -202,7 +202,7 @@ function ImportContent() {
                 : "text-gray-500 dark:text-gray-400"
             }`}
           >
-            From URL
+            Desde URL
           </button>
           <button
             type="button"
@@ -213,7 +213,7 @@ function ImportContent() {
                 : "text-gray-500 dark:text-gray-400"
             }`}
           >
-            Paste manually
+            Pegar manualmente
           </button>
         </div>
 

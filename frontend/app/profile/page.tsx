@@ -103,7 +103,7 @@ function ProfileContent() {
       if (err instanceof ApiError && err.status === 404) {
         setEvaluation(null);
       } else {
-        setEvalError(err instanceof ApiError ? err.message : "Could not evaluate your CV.");
+        setEvalError(err instanceof ApiError ? err.message : "No se pudo evaluar tu CV.");
       }
     } finally {
       setEvalLoading(false);
@@ -122,7 +122,7 @@ function ProfileContent() {
         setProfile(EMPTY_PROFILE);
       } else {
         setLoadError(
-          err instanceof ApiError ? err.message : "Failed to load your career profile."
+          err instanceof ApiError ? err.message : "No se pudo cargar tu perfil profesional."
         );
       }
     } finally {
@@ -188,7 +188,7 @@ function ProfileContent() {
         }
       }
     } catch (err) {
-      setSaveError(err instanceof ApiError ? err.message : "Failed to save your profile.");
+      setSaveError(err instanceof ApiError ? err.message : "No se pudo guardar tu perfil.");
     } finally {
       setSaving(false);
     }
@@ -208,7 +208,7 @@ function ProfileContent() {
       setCvImportedPendingSave(true);
       setUploadNotice({ warnings: result.warnings, generatedBy: result.generated_by });
     } catch (err) {
-      setUploadError(err instanceof ApiError ? err.message : "Could not read that PDF.");
+      setUploadError(err instanceof ApiError ? err.message : "No se pudo leer ese PDF.");
     } finally {
       setUploadingCv(false);
     }
@@ -240,7 +240,7 @@ function ProfileContent() {
     }
   }
 
-  if (loading) return <Spinner label="Loading your profile…" />;
+  if (loading) return <Spinner label="Cargando tu perfil…" />;
   if (loadError) return <ErrorNotice message={loadError} onRetry={load} />;
   if (!profile) return null;
 
@@ -250,8 +250,8 @@ function ProfileContent() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">CV Maestro</h1>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Keep your career profile up to date — it powers matching, tailored resumes, and
-            cover letters.
+            Mantén tu perfil profesional actualizado — de ahí salen el match, los CVs a medida y
+            las cartas de presentación.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -261,17 +261,17 @@ function ProfileContent() {
             }`}
           >
             {dirty
-              ? "Unsaved changes"
+              ? "Cambios sin guardar"
               : lastSavedAt
-              ? `Saved ${lastSavedAt.toLocaleTimeString()}`
-              : "Up to date"}
+              ? `Guardado ${lastSavedAt.toLocaleTimeString()}`
+              : "Al día"}
           </span>
           <button
             type="submit"
             disabled={saving || !dirty}
             className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {saving ? "Saving…" : "Save profile"}
+            {saving ? "Guardando…" : "Guardar perfil"}
           </button>
         </div>
       </div>
@@ -294,14 +294,14 @@ function ProfileContent() {
       <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-100 dark:bg-gray-900 dark:ring-gray-800">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">Import from a PDF résumé</p>
+            <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">Importar desde un CV en PDF</p>
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              We pre-fill the fields below from your PDF — nothing is added to your saved profile
-              until you review it and click Save.
+              Rellenamos los campos de abajo con tu PDF — nada se agrega a tu perfil guardado
+              hasta que lo revises y le des a Guardar.
             </p>
           </div>
           <label className="shrink-0 cursor-pointer rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 aria-disabled:cursor-not-allowed aria-disabled:opacity-60">
-            {uploadingCv ? "Reading…" : "Upload PDF"}
+            {uploadingCv ? "Leyendo…" : "Subir PDF"}
             <input
               type="file"
               accept="application/pdf"
@@ -320,8 +320,8 @@ function ProfileContent() {
           <div className="mt-3 rounded-lg bg-amber-50 p-3 text-xs text-amber-800 ring-1 ring-inset ring-amber-600/20 dark:bg-amber-900/20 dark:text-amber-300 dark:ring-amber-400/30">
             <p className="font-semibold">
               {uploadNotice.generatedBy === "ai"
-                ? "Parsed with AI — review the pre-filled fields below and click Save."
-                : "Parsed with basic text matching (no ANTHROPIC_API_KEY configured) — review carefully before saving."}
+                ? "Analizado con IA — revisa los campos rellenados abajo y dale a Guardar."
+                : "Analizado con coincidencia básica de texto (no hay ANTHROPIC_API_KEY configurada) — revisa con cuidado antes de guardar."}
             </p>
             {uploadNotice.warnings.map((w, i) => (
               <p key={i} className="mt-1">
@@ -340,7 +340,7 @@ function ProfileContent() {
               Reescribe tu titular, resumen y logros para que se lean mejor — mismos hechos, mejor
               redacción. No toca habilidades, educación ni certificaciones, y no afecta los CVs a medida
               que ya generaste para vacantes específicas. Nada se guarda hasta que revises y le des a
-              Save profile.
+              Guardar perfil.
             </p>
           </div>
           <button
@@ -361,7 +361,7 @@ function ProfileContent() {
           <div className="mt-3 rounded-lg bg-amber-50 p-3 text-xs text-amber-800 ring-1 ring-inset ring-amber-600/20 dark:bg-amber-900/20 dark:text-amber-300 dark:ring-amber-400/30">
             <p className="font-semibold">
               {improveNotice.generatedBy === "ai"
-                ? "Reescrito con IA — revisa los campos abajo (Overview y Experience) y dale a Save profile."
+                ? "Reescrito con IA — revisa los campos abajo (Resumen y Experiencia) y dale a Guardar perfil."
                 : "Reescrito con reglas básicas (no hay ANTHROPIC_API_KEY configurada) — revisa antes de guardar."}
             </p>
             {improveNotice.changeLog.map((line, i) => (
@@ -389,28 +389,28 @@ function ProfileContent() {
 
       <SystemStatusPanel />
 
-      <SectionCard title="Overview" description="How recruiters see you at a glance.">
-        <FormField label="Headline">
+      <SectionCard title="Resumen general" description="Cómo te ven los reclutadores de un vistazo.">
+        <FormField label="Titular">
           <input
             className={inputClass}
             value={profile.headline}
             onChange={(e) => patch({ headline: e.target.value })}
-            placeholder="Senior Backend Engineer"
+            placeholder="Ingeniero Backend Senior"
           />
         </FormField>
-        <FormField label="Summary">
+        <FormField label="Resumen">
           <textarea
             className={textareaClass}
             value={profile.summary}
             onChange={(e) => patch({ summary: e.target.value })}
-            placeholder="A short professional summary…"
+            placeholder="Un breve resumen profesional…"
           />
         </FormField>
       </SectionCard>
 
-      <SectionCard title="Contact info">
+      <SectionCard title="Información de contacto">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <FormField label="Phone">
+          <FormField label="Teléfono">
             <input
               className={inputClass}
               value={profile.contact_info.phone}
@@ -419,7 +419,7 @@ function ProfileContent() {
               }
             />
           </FormField>
-          <FormField label="City">
+          <FormField label="Ciudad">
             <input
               className={inputClass}
               value={profile.contact_info.city}
@@ -428,7 +428,7 @@ function ProfileContent() {
               }
             />
           </FormField>
-          <FormField label="Country">
+          <FormField label="País">
             <input
               className={inputClass}
               value={profile.contact_info.country}
@@ -455,7 +455,7 @@ function ProfileContent() {
               }
             />
           </FormField>
-          <FormField label="Portfolio">
+          <FormField label="Portafolio">
             <input
               className={inputClass}
               value={profile.contact_info.portfolio}
@@ -491,7 +491,7 @@ function ProfileContent() {
           disabled={saving || !dirty}
           className="rounded-full bg-brand-600 px-5 py-3 text-sm font-semibold text-white shadow-lg hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {saving ? "Saving…" : dirty ? "Save changes" : "Saved"}
+          {saving ? "Guardando…" : dirty ? "Guardar cambios" : "Guardado"}
         </button>
       </div>
     </form>

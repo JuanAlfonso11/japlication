@@ -54,7 +54,7 @@ function CopyButton({ text }: { text: string }) {
       onClick={handleCopy}
       className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
     >
-      {copied ? "Copied!" : "Copy to clipboard"}
+      {copied ? "¡Copiado!" : "Copiar al portapapeles"}
     </button>
   );
 }
@@ -108,7 +108,7 @@ function JobDetailContent() {
         // Reuse suggestion is a nice-to-have — never blocks the page.
       }
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to load this job.");
+      setError(err instanceof ApiError ? err.message : "No se pudo cargar este trabajo.");
     } finally {
       setLoading(false);
     }
@@ -183,7 +183,7 @@ function JobDetailContent() {
       });
       setApplied(true);
     } catch (err) {
-      setApplyError(err instanceof ApiError ? err.message : "Could not send the application.");
+      setApplyError(err instanceof ApiError ? err.message : "No se pudo enviar la aplicación.");
     } finally {
       setApplying(false);
     }
@@ -197,7 +197,7 @@ function JobDetailContent() {
       setResume(res);
     } catch (err) {
       setResumeError(
-        err instanceof ApiError ? err.message : "Could not generate a tailored resume."
+        err instanceof ApiError ? err.message : "No se pudo generar un CV a medida."
       );
     } finally {
       setResumeLoading(false);
@@ -214,14 +214,14 @@ function JobDetailContent() {
       setCoverLetter(res);
     } catch (err) {
       setCoverError(
-        err instanceof ApiError ? err.message : "Could not generate a cover letter."
+        err instanceof ApiError ? err.message : "No se pudo generar la carta de presentación."
       );
     } finally {
       setCoverLoading(false);
     }
   }
 
-  if (loading) return <Spinner label="Loading job…" />;
+  if (loading) return <Spinner label="Cargando trabajo…" />;
   if (error) return <ErrorNotice message={error} onRetry={load} />;
   if (!job) return null;
 
@@ -291,13 +291,13 @@ function JobDetailContent() {
 
       {match && (
         <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-100 dark:bg-gray-900 dark:ring-gray-800">
-          <h2 className="mb-3 font-semibold text-gray-900 dark:text-gray-100">Match breakdown</h2>
+          <h2 className="mb-3 font-semibold text-gray-900 dark:text-gray-100">Desglose del match</h2>
           <MatchBreakdown match={match} />
         </div>
       )}
 
       <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-100 dark:bg-gray-900 dark:ring-gray-800">
-        <h2 className="mb-2 font-semibold text-gray-900 dark:text-gray-100">Description</h2>
+        <h2 className="mb-2 font-semibold text-gray-900 dark:text-gray-100">Descripción</h2>
         <p className="whitespace-pre-line text-sm leading-relaxed text-gray-700 dark:text-gray-300">
           {job.description}
         </p>
@@ -305,7 +305,7 @@ function JobDetailContent() {
 
       {job.requirements?.length > 0 && (
         <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-100 dark:bg-gray-900 dark:ring-gray-800">
-          <h2 className="mb-2 font-semibold text-gray-900 dark:text-gray-100">Requirements</h2>
+          <h2 className="mb-2 font-semibold text-gray-900 dark:text-gray-100">Requisitos</h2>
           <ul className="list-inside list-disc space-y-1 text-sm text-gray-700 dark:text-gray-300">
             {job.requirements.map((r, i) => (
               <li key={i}>{r}</li>
@@ -316,7 +316,7 @@ function JobDetailContent() {
 
       {job.responsibilities && job.responsibilities.length > 0 && (
         <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-100 dark:bg-gray-900 dark:ring-gray-800">
-          <h2 className="mb-2 font-semibold text-gray-900 dark:text-gray-100">Responsibilities</h2>
+          <h2 className="mb-2 font-semibold text-gray-900 dark:text-gray-100">Responsabilidades</h2>
           <ul className="list-inside list-disc space-y-1 text-sm text-gray-700 dark:text-gray-300">
             {job.responsibilities.map((r, i) => (
               <li key={i}>{r}</li>
@@ -327,14 +327,14 @@ function JobDetailContent() {
 
       <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-100 dark:bg-gray-900 dark:ring-gray-800">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="font-semibold text-gray-900 dark:text-gray-100">Tailored resume</h2>
+          <h2 className="font-semibold text-gray-900 dark:text-gray-100">CV a medida</h2>
           <button
             type="button"
             onClick={handleGenerateResume}
             disabled={resumeLoading}
             className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {resumeLoading ? "Generating…" : resume ? "Regenerate" : "Generate resume"}
+            {resumeLoading ? "Generando…" : resume ? "Regenerar" : "Generar CV"}
           </button>
         </div>
         {resumeError && <ErrorNotice message={resumeError} />}
@@ -387,7 +387,7 @@ function JobDetailContent() {
             {resume.content.skills.length > 0 && (
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                  Skills
+                  Habilidades
                 </p>
                 <div className="mt-1 flex flex-wrap gap-1.5">
                   {resume.content.skills.map((skill) => (
@@ -413,7 +413,7 @@ function JobDetailContent() {
             {resume.change_log.length > 0 && (
               <div className="border-t border-gray-200 pt-2 dark:border-gray-700">
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                  What changed
+                  Qué cambió
                 </p>
                 <ul className="mt-1 list-inside list-disc space-y-0.5 text-xs text-gray-500 dark:text-gray-400">
                   {resume.change_log.map((line, i) => (
@@ -428,14 +428,14 @@ function JobDetailContent() {
 
       <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-100 dark:bg-gray-900 dark:ring-gray-800">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="font-semibold text-gray-900 dark:text-gray-100">Cover letter</h2>
+          <h2 className="font-semibold text-gray-900 dark:text-gray-100">Carta de presentación</h2>
           <button
             type="button"
             onClick={handleGenerateCoverLetter}
             disabled={coverLoading}
             className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {coverLoading ? "Generating…" : coverLetter ? "Regenerate" : "Generate cover letter"}
+            {coverLoading ? "Generando…" : coverLetter ? "Regenerar" : "Generar carta"}
           </button>
         </div>
         {coverError && <ErrorNotice message={coverError} />}

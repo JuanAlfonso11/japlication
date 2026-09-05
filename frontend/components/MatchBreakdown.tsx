@@ -21,15 +21,15 @@ export default function MatchBreakdown({ match }: { match: MatchResult }) {
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <ScoreBar label="Technical" value={match.technical_score} />
-        <ScoreBar label="Experience" value={match.experience_score} />
-        <ScoreBar label="Semantic fit" value={match.semantic_score} />
+        <ScoreBar label="Técnico" value={match.technical_score} />
+        <ScoreBar label="Experiencia" value={match.experience_score} />
+        <ScoreBar label="Afinidad semántica" value={match.semantic_score} />
       </div>
 
       {match.matched_skills.length > 0 && (
         <div>
           <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
-            Matched skills
+            Habilidades que coinciden
           </p>
           <div className="flex flex-wrap gap-1.5">
             {match.matched_skills.map((s) => (
@@ -47,7 +47,7 @@ export default function MatchBreakdown({ match }: { match: MatchResult }) {
       {match.missing_skills.length > 0 && (
         <div>
           <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
-            Missing skills
+            Habilidades que faltan
           </p>
           <div className="flex flex-wrap gap-1.5">
             {match.missing_skills.map((s) => (
@@ -65,7 +65,7 @@ export default function MatchBreakdown({ match }: { match: MatchResult }) {
       {match.concerns.length > 0 && (
         <div>
           <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
-            Concerns
+            Puntos a considerar
           </p>
           <ul className="list-inside list-disc space-y-0.5 text-sm text-gray-600 dark:text-gray-400">
             {match.concerns.map((c, i) => (

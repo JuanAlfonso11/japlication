@@ -4,6 +4,20 @@
 # powers Profile's "Estado del sistema" panel. Always wrapped in try/catch
 # by design: a heartbeat POST failing (e.g. backend briefly down) must
 # never turn into a failure of the actual scheduled job that called it.
+#
+# The backend auto-generates SYSTEM_HEARTBEAT_SECRET on first startup and
+# persists it to backend/runtime/heartbeat_secret (bind-mounted into the
+# container at /app/runtime) — read that same file here so every scheduled
+# script agrees with the backend without any manual secret setup.
+function Get-HeartbeatSecret {
+    $repoDir = Split-Path -Parent $PSScriptRoot
+    $secretFile = Join-Path $repoDir "backend\runtime\heartbeat_secret"
+    if (Test-Path $secretFile) {
+        return (Get-Content $secretFile -Raw).Trim()
+    }
+    return $null
+}
+
 function Send-Heartbeat {
     param(
         [Parameter(Mandatory)] [string]$JobName,
@@ -12,8 +26,11 @@ function Send-Heartbeat {
     )
     try {
         $body = @{ job_name = $JobName; status = $Status; detail = $Detail } | ConvertTo-Json
+        $headers = @{}
+        $secret = Get-HeartbeatSecret
+        if ($secret) { $headers["X-Heartbeat-Secret"] = $secret }
         Invoke-RestMethod -Uri "http://localhost:8000/api/v1/system/heartbeat" `
-            -Method Post -Body $body -ContentType "application/json" -TimeoutSec 5 | Out-Null
+            -Method Post -Body $body -ContentType "application/json" -Headers $headers -TimeoutSec 5 | Out-Null
     } catch {
         # Non-fatal — see comment above.
     }

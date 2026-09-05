@@ -1,7 +1,15 @@
+import secrets
 from functools import lru_cache
+from pathlib import Path
 from typing import Optional
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Persisted across container restarts via the bind-mounted ./backend/runtime
+# volume (see docker-compose.yml) — so an auto-generated heartbeat secret
+# survives `docker compose restart backend` instead of invalidating every
+# scheduled script's next call.
+_HEARTBEAT_SECRET_FILE = Path("/app/runtime/heartbeat_secret")
 
 
 class Settings(BaseSettings):
@@ -92,10 +100,12 @@ class Settings(BaseSettings):
     ANDROID_UPDATE_NOTES: Optional[str] = None
 
     # Shared secret the scheduled scripts (scripts/*.ps1, all running on
-    # this same machine) send when POSTing to /system/heartbeat. Unset
-    # means the endpoint accepts any caller — fine since it's only ever
-    # reachable on the private tailnet this app already trusts, but set
-    # it if that assumption ever changes.
+    # this same machine) send when POSTing to /system/heartbeat. If unset
+    # here, get_settings() below auto-generates one and persists it to
+    # _HEARTBEAT_SECRET_FILE so every caller — including the standalone
+    # PowerShell scripts, which read that same file — agrees on it without
+    # requiring manual setup, and the endpoint is never left accepting
+    # unauthenticated callers by default.
     SYSTEM_HEARTBEAT_SECRET: Optional[str] = None
 
     # App metadata
@@ -109,9 +119,29 @@ class Settings(BaseSettings):
         return origins
 
 
+def _load_or_create_heartbeat_secret() -> str:
+    try:
+        if _HEARTBEAT_SECRET_FILE.exists():
+            existing = _HEARTBEAT_SECRET_FILE.read_text().strip()
+            if existing:
+                return existing
+        generated = secrets.token_urlsafe(32)
+        _HEARTBEAT_SECRET_FILE.parent.mkdir(parents=True, exist_ok=True)
+        _HEARTBEAT_SECRET_FILE.write_text(generated)
+        return generated
+    except OSError:
+        # No writable /app/runtime mount (e.g. running outside the compose
+        # setup, such as in tests) — fall back to a per-process secret so
+        # the endpoint still requires one, it just won't survive a restart.
+        return secrets.token_urlsafe(32)
+
+
 @lru_cache
 def get_settings() -> Settings:
-    return Settings()
+    settings = Settings()
+    if not settings.SYSTEM_HEARTBEAT_SECRET:
+        settings.SYSTEM_HEARTBEAT_SECRET = _load_or_create_heartbeat_secret()
+    return settings
 
 
 settings = get_settings()

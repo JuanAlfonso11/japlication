@@ -73,7 +73,7 @@ export default function UsedResumesSection() {
       {resumes && resumes.length === 0 && (
         <p className="text-xs text-gray-400 dark:text-gray-500">
           Todavía no has generado ningún CV a medida — hazlo desde la descripción de una vacante con el
-          botón &quot;Generate resume&quot;.
+          botón &quot;Generar CV&quot;.
         </p>
       )}
       {resumes && resumes.length > 0 && (

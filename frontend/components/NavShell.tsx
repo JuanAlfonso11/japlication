@@ -7,11 +7,11 @@ import VerificationBanner from "@/components/VerificationBanner";
 import ThemeToggle from "@/components/ThemeToggle";
 
 const NAV_ITEMS = [
-  { href: "/", label: "Home", icon: HomeIcon },
-  { href: "/discover", label: "Discover", icon: DiscoverIcon },
-  { href: "/jobs/import", label: "Import", icon: ImportIcon },
+  { href: "/", label: "Inicio", icon: HomeIcon },
+  { href: "/discover", label: "Buscar", icon: DiscoverIcon },
+  { href: "/jobs/import", label: "Importar", icon: ImportIcon },
   { href: "/applications", label: "Pipeline", icon: PipelineIcon },
-  { href: "/profile", label: "Profile", icon: ProfileIcon },
+  { href: "/profile", label: "Perfil", icon: ProfileIcon },
 ];
 
 export default function NavShell({ children }: { children: React.ReactNode }) {

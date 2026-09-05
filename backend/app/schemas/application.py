@@ -53,3 +53,8 @@ class Application(BaseModel):
     created_at: datetime
     updated_at: datetime
     job: Optional[JobSummary] = None
+
+
+class ApplicationListResponse(BaseModel):
+    items: list[Application]
+    total: int

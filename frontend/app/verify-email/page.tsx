@@ -48,7 +48,7 @@ function VerifyEmailContent() {
       const res = await authApi.resendVerification();
       setResendMessage(res.detail);
     } catch (err) {
-      setResendMessage(err instanceof ApiError ? err.message : "Could not resend the email.");
+      setResendMessage(err instanceof ApiError ? err.message : "No se pudo reenviar el correo.");
     } finally {
       setResending(false);
     }

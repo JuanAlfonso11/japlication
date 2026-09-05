@@ -22,26 +22,26 @@ export default function LanguagesSection({
   }
 
   return (
-    <SectionCard title="Languages" onAdd={add} addLabel="Language">
-      {languages.length === 0 && <p className="text-sm text-gray-400">No languages yet.</p>}
+    <SectionCard title="Idiomas" onAdd={add} addLabel="Idioma">
+      {languages.length === 0 && <p className="text-sm text-gray-400">Todavía no hay idiomas.</p>}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {languages.map((entry, i) => (
           <EntryCard key={i} onRemove={() => remove(i)}>
             <div className="grid grid-cols-2 gap-2">
-              <FormField label="Language">
+              <FormField label="Idioma">
                 <input
                   className={inputClass}
                   value={entry.name}
                   onChange={(e) => update(i, { name: e.target.value })}
-                  placeholder="English"
+                  placeholder="Inglés"
                 />
               </FormField>
-              <FormField label="Level">
+              <FormField label="Nivel">
                 <input
                   className={inputClass}
                   value={entry.level}
                   onChange={(e) => update(i, { level: e.target.value })}
-                  placeholder="C1, Native…"
+                  placeholder="C1, Nativo…"
                 />
               </FormField>
             </div>
