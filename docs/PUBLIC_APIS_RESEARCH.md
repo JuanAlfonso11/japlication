@@ -30,7 +30,7 @@ francés); el resto quedó documentado como descartado, con el motivo.
 | — | JSearch (RapidAPI) | API key gratis (cuota mínima) | **No** — ver nota |
 | — | Jooble | Aprobación manual | **No** — ver nota |
 | — | Findwork.dev | API key gratis | **No** — ver nota |
-| — | InfoJobs | OAuth2 + partnership | **No** — ver nota |
+| — | InfoJobs | Basic Auth (client_id/secret) | **No** — registro de apps nuevas cerrado por InfoJobs (2026-09), ver nota |
 | — | Seek | Revisión manual (hasta 10 días hábiles) | **No** — ver nota |
 
 Excluidas de raíz (fuera del alcance de esta app, no por fiabilidad): Careerjet (requiere `affid`
@@ -72,8 +72,13 @@ app).
 - **Findwork.dev**: se solapa mucho con fuentes que ya están integradas directamente (Hacker News y
   boards similares) y su página de límites devolvió 404 durante la revisión — señal débil de
   mantenimiento.
-- **InfoJobs**: requiere un flujo OAuth2 completo pensado para partners de negocio establecidos, y solo
-  cubre España/Italia/Brasil — solo valdría la pena si ese mercado fuera prioridad explícita.
+- **InfoJobs**: la investigación inicial decía que requería un flujo OAuth2 completo pensado para
+  partners de negocio establecidos — al revisarlo mejor, la auth real es solo HTTP Basic Auth con
+  `client_id`/`client_secret` (nada de OAuth2 completo, tan simple como Adzuna/USAJobs). Pero al intentar
+  registrar una app en https://developer.infojobs.net/ (2026-09), su panel "Manage Apps" muestra: *"The
+  registration of new apps is currently unavailable. We hope to offer it again in shortly."* — registro de
+  apps nuevas cerrado del lado de InfoJobs, nada que se pueda resolver de este lado. Reintentar más
+  adelante si se necesita cobertura de España/Italia/Brasil.
 - **Seek**: proceso de "Integration Request" con revisión manual por un Partner Manager que puede tardar
   hasta 10 días hábiles — pensado para partners de reclutamiento, no para una app personal. Cobertura
   limitada a Australia/Nueva Zelanda.
