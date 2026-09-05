@@ -221,6 +221,20 @@ CREATE TABLE system_heartbeats (
     detail          TEXT
 );
 
+-- =========================================================
+-- api_call_budgets — one row per (provider, calendar day), tracks how many
+-- times a monthly-quota external API (Adzuna, SerpApi) has been called
+-- today. app.services.api_budget enforces a daily cap from this so an
+-- unattended background sweep can never silently blow through a monthly
+-- quota (see docs/PUBLIC_APIS_RESEARCH.md for each provider's real limit).
+-- =========================================================
+CREATE TABLE api_call_budgets (
+    provider        TEXT NOT NULL,
+    call_date       DATE NOT NULL,
+    call_count      INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (provider, call_date)
+);
+
 -- Back-fill FKs on applications now that the referenced tables exist
 ALTER TABLE applications
     ADD CONSTRAINT fk_applications_resume_version

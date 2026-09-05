@@ -41,6 +41,7 @@ _TABLES_TO_CLEAN = [
     "device_tokens",
     "refresh_tokens",
     "system_heartbeats",
+    "api_call_budgets",
     "jobs",
     "career_profiles",
     "users",

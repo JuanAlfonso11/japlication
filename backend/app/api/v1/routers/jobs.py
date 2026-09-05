@@ -32,6 +32,7 @@ from app.schemas.job import (
 from app.schemas.job_match import MatchResult
 from app.services import (
     adzuna,
+    api_budget,
     arbeitnow,
     experience_level,
     getonbrd,
@@ -67,6 +68,17 @@ _NO_AUTH_PROVIDERS = {
 _KEYED_PROVIDERS = {"adzuna", "usajobs", "serpapi"}
 
 _SEARCH_PROVIDERS = _NO_AUTH_PROVIDERS | _KEYED_PROVIDERS
+
+# Adzuna and SerpApi both have a monthly call quota (1,000/month and
+# 250/month respectively — docs/PUBLIC_APIS_RESEARCH.md #9 and #12); an
+# unattended 2-hour sweep alone would be 12 calls/day (~360/month) to each,
+# already over SerpApi's quota before counting a single manual Discover
+# search. app.services.api_budget caps every quota-limited provider at
+# DAILY_CALL_BUDGET (8) calls/day — 240/month, safely under both quotas —
+# enforced once, inside _run_search_provider below, so it applies
+# uniformly everywhere a provider gets called: the scheduled sweep, pull-
+# to-refresh, and Discover's explicit search all share the same daily
+# budget rather than each needing their own carve-out.
 
 # Best-effort mapping from the human-readable location names Discover's
 # dropdown sends to the geo slugs Himalayas' `country` and Jobicy's `geo`
@@ -553,7 +565,14 @@ async def _run_search_provider(
     """Runs one provider search and normalizes both its results and any
     failure into a uniform (provider, results, error) tuple, so one
     provider erroring — including a keyed provider whose credentials
-    aren't configured — never breaks the others in the aggregate fan-out."""
+    aren't configured — never breaks the others in the aggregate fan-out.
+
+    For a quota-limited provider (see app.services.api_budget), this first
+    checks/consumes today's call budget — once the daily cap is hit, it
+    returns an empty result with an explanatory error instead of ever
+    reaching the network, same shape as any other provider failure."""
+    if not await api_budget.try_consume_budget(provider):
+        return provider, [], "Límite diario de llamadas alcanzado para proteger la cuota mensual — se reintenta mañana."
     try:
         if provider == "himalayas":
             data = await himalayas.search_himalayas_jobs(
@@ -873,7 +892,16 @@ async def run_auto_import_for_user(user: User, db: AsyncSession) -> AutoImportRe
     all_results.sort(key=_aggregate_sort_key, reverse=True)
 
     imported = 0
-    for result in all_results[:import_limit]:
+    # Walk the FULL sorted list (not a pre-sliced all_results[:import_limit])
+    # and stop once import_limit NEW jobs are actually in — slicing first
+    # was the bug: across repeated 2-hour sweeps against the same
+    # profile-based query, the newest-first top of the list is dominated by
+    # postings already imported in earlier sweeps, so a pre-slice mostly
+    # re-examined duplicates and imported far fewer than import_limit even
+    # though plenty of never-seen postings existed further down the list.
+    for result in all_results:
+        if imported >= import_limit:
+            break
         try:
             job, created = await _get_or_create_external_job(
                 result.model_dump(), result.source, user.id, db
