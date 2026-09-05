@@ -6,12 +6,18 @@ import { App } from "@capacitor/app";
 import { appUpdateApi } from "@/lib/api";
 import type { AndroidUpdateInfo } from "@/lib/types";
 
-/** Checks once per app launch whether a newer native build than the one
- * installed is available, and shows a dismissible banner with a direct
- * download link if so — the whole point being no cable needed. Only does
- * anything inside the native Android app (a no-op in a regular browser
- * tab, same guard as BackButtonHandler), and only ever needs the backend
- * reachable, not any prior login.
+// Re-checks periodically while the app stays open (not just at launch) —
+// a session left open for hours would otherwise never notice a build
+// shipped in the meantime until the next cold start.
+const RECHECK_INTERVAL_MS = 30 * 60 * 1000;
+
+/** Checks whether a newer native build than the one installed is
+ * available (at launch, then every 30 minutes while the app stays open),
+ * and shows a dismissible banner with a direct download link if so — the
+ * whole point being no cable needed. Only does anything inside the
+ * native Android app (a no-op in a regular browser tab, same guard as
+ * BackButtonHandler), and only ever needs the backend reachable, not any
+ * prior login.
  *
  * The APK still can't install itself — Android requires an explicit tap
  * on the "Install" screen no app can skip — but everything up to that
@@ -27,9 +33,12 @@ export default function UpdateChecker() {
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
 
-    (async () => {
+    let cancelled = false;
+
+    async function checkForUpdate() {
       try {
         const [info, current] = await Promise.all([appUpdateApi.check(), App.getInfo()]);
+        if (cancelled) return;
         const latestCode = info.version_code;
         const currentCode = parseInt(current.build, 10);
         if (latestCode != null && info.apk_url && !Number.isNaN(currentCode) && latestCode > currentCode) {
@@ -38,7 +47,14 @@ export default function UpdateChecker() {
       } catch {
         // Never block app usage over a failed/unreachable update check.
       }
-    })();
+    }
+
+    checkForUpdate();
+    const interval = setInterval(checkForUpdate, RECHECK_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, []);
 
   if (!update || dismissed || !update.apk_url) return null;

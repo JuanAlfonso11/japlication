@@ -25,6 +25,7 @@ import type {
   CVUploadResult,
   ResendVerificationResponse,
   AndroidUpdateInfo,
+  HeartbeatInfo,
   ProfileImprovementResult,
   ResumeGeneratePayload,
   ResumeVersion,
@@ -430,6 +431,9 @@ export const applicationsApi = {
   get: (id: string) => request<Application>(`/applications/${id}`),
   update: (id: string, payload: ApplicationUpdatePayload) =>
     request<Application>(`/applications/${id}`, { method: "PATCH", body: payload }),
+  // "Deshacer" — only valid while status is still "passed" (see the
+  // backend's own guard); puts the job straight back in Home's queue.
+  undo: (id: string) => request<void>(`/applications/${id}`, { method: "DELETE" }),
 };
 
 // ---------- Resume / Cover letters ----------
@@ -443,6 +447,7 @@ export const resumeApi = {
 export const coverLetterApi = {
   get: (id: string) => request<CoverLetter>(`/cover-letters/${id}`),
   list: () => request<CoverLetter[]>("/cover-letters"),
+  downloadPdf: (id: string, filename: string) => downloadFile(`/cover-letters/${id}/export/pdf`, filename),
 };
 
 // ---------- Push notifications ----------
@@ -460,4 +465,10 @@ export const appUpdateApi = {
   // Unauthenticated — this is what UpdateChecker.tsx polls on every app
   // launch, before there's necessarily a session to be authenticated with.
   check: () => request<AndroidUpdateInfo>("/app/android-update", { auth: false }),
+};
+
+// ---------- System status (background job heartbeats) ----------
+
+export const systemApi = {
+  status: () => request<HeartbeatInfo[]>("/system/status"),
 };

@@ -230,6 +230,8 @@ function HomeContent() {
   // animation finishes, so this stays null in that path.
   const [pendingDecision, setPendingDecision] = useState<"left" | "right" | null>(null);
   const [justApplied, setJustApplied] = useState<Job | null>(null);
+  const [justPassed, setJustPassed] = useState<{ job: Job; applicationId: string } | null>(null);
+  const [undoing, setUndoing] = useState(false);
 
   const decide = useCallback(
     async (decision: "left" | "right") => {
@@ -238,9 +240,10 @@ function HomeContent() {
       setPending(true);
       setActionError(null);
       try {
-        await jobsApi.decide(target.id, { decision });
+        const application = await jobsApi.decide(target.id, { decision });
         setQueue((prev) => (prev ? prev.filter((j) => j.id !== target.id) : prev));
         setJustApplied(decision === "right" ? target : null);
+        setJustPassed(decision === "left" ? { job: target, applicationId: application.id } : null);
       } catch (err) {
         setActionError(
           err instanceof ApiError ? err.message : "Could not record your decision. Try again."
@@ -252,6 +255,26 @@ function HomeContent() {
     },
     [current, pending]
   );
+
+  const handleUndoPass = useCallback(async () => {
+    if (!justPassed || undoing) return;
+    setUndoing(true);
+    try {
+      await applicationsApi.undo(justPassed.applicationId);
+      setQueue((prev) => (prev ? [justPassed.job, ...prev] : [justPassed.job]));
+      setJustPassed(null);
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : "No se pudo deshacer.");
+    } finally {
+      setUndoing(false);
+    }
+  }, [justPassed, undoing]);
+
+  useEffect(() => {
+    if (!justPassed) return;
+    const timer = setTimeout(() => setJustPassed(null), 8000);
+    return () => clearTimeout(timer);
+  }, [justPassed]);
 
   const requestDecision = useCallback(
     (decision: "left" | "right") => {
@@ -416,6 +439,24 @@ function HomeContent() {
               Ver detalles del trabajo →
             </Link>
           )}
+        </div>
+      )}
+
+      {justPassed && (
+        <div className="w-full max-w-md rounded-xl bg-gray-100 p-3 dark:bg-gray-800">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs text-gray-600 dark:text-gray-400">
+              Pasaste <strong>{justPassed.job.title}</strong>.
+            </p>
+            <button
+              type="button"
+              onClick={handleUndoPass}
+              disabled={undoing}
+              className="shrink-0 rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 shadow-sm ring-1 ring-gray-200 hover:bg-gray-50 disabled:opacity-60 dark:bg-gray-900 dark:text-gray-200 dark:ring-gray-700"
+            >
+              {undoing ? "Deshaciendo…" : "Deshacer"}
+            </button>
+          </div>
         </div>
       )}
 

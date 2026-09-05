@@ -261,3 +261,32 @@ async def update_application(
         )
     ).scalar_one()
     return _serialize(row)
+
+
+@router.delete("/applications/{application_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def undo_application(
+    application_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    """"Deshacer" for a left swipe — only ever removes a `passed` decision,
+    putting the job straight back in Home's queue (its JobMatch row was
+    never touched, and GET /matches excludes only jobs with an existing
+    Application). Deliberately does NOT allow undoing an `applied`
+    decision this way: that already has real-world consequences (a cover
+    letter may have been sent, it's tracked in the pipeline) and should go
+    through PATCH (e.g. to `withdrawn`) instead of disappearing outright."""
+    row = (
+        await db.execute(
+            select(Application).where(Application.id == application_id, Application.user_id == current_user.id)
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Application not found.")
+    if row.status != ApplicationStatus.passed:
+        raise HTTPException(
+            status_code=400,
+            detail="Only a passed job can be undone this way — update its status instead for an active application.",
+        )
+    await db.delete(row)
+    await db.commit()

@@ -16,6 +16,7 @@ const FILTERS: { value: ApplicationStatus | "all"; label: string }[] = [
   { value: "all", label: "All" },
   { value: "queued", label: STATUS_LABELS.queued },
   { value: "saved", label: STATUS_LABELS.saved },
+  { value: "passed", label: STATUS_LABELS.passed },
   { value: "applied", label: STATUS_LABELS.applied },
   { value: "interviewing", label: STATUS_LABELS.interviewing },
   { value: "offer", label: STATUS_LABELS.offer },
@@ -36,14 +37,29 @@ const EDITABLE_STATUSES: ApplicationStatus[] = [
 function ApplicationRow({
   application,
   onUpdated,
+  onUndone,
 }: {
   application: Application;
   onUpdated: (app: Application) => void;
+  onUndone: (id: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [notes, setNotes] = useState(application.notes ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [undoing, setUndoing] = useState(false);
+
+  async function handleUndo() {
+    setUndoing(true);
+    setError(null);
+    try {
+      await applicationsApi.undo(application.id);
+      onUndone(application.id);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "No se pudo deshacer.");
+      setUndoing(false);
+    }
+  }
 
   async function updateStatus(status: ApplicationStatus) {
     setSaving(true);
@@ -90,12 +106,27 @@ function ApplicationRow({
         <div className="flex flex-col items-end gap-1.5">
           {job?.match && <ScoreBadge score={job.match.overall_score} size="sm" />}
           <StatusBadge status={application.status} />
+          {application.status === "passed" && (
+            <button
+              type="button"
+              onClick={handleUndo}
+              disabled={undoing}
+              className="text-[11px] font-semibold text-brand-600 hover:underline disabled:opacity-60 dark:text-brand-400"
+            >
+              {undoing ? "Deshaciendo…" : "Deshacer"}
+            </button>
+          )}
         </div>
       </div>
 
+      {error && (
+        <div className="mt-2">
+          <ErrorNotice message={error} />
+        </div>
+      )}
+
       {expanded && (
         <div className="mt-4 space-y-3 border-t border-gray-100 pt-4 dark:border-gray-800">
-          {error && <ErrorNotice message={error} />}
           <div className="flex flex-wrap items-center gap-2">
             <label className="text-xs font-medium text-gray-600 dark:text-gray-400" htmlFor={`status-${application.id}`}>
               Status
@@ -179,6 +210,10 @@ function ApplicationsContent() {
     );
   }
 
+  function handleUndone(id: string) {
+    setApplications((prev) => (prev ? prev.filter((a) => a.id !== id) : prev));
+  }
+
   return (
     <div className="space-y-5 pb-4 animate-fade-in">
       <div>
@@ -220,7 +255,7 @@ function ApplicationsContent() {
       {!loading && !error && applications && applications.length > 0 && (
         <div className="space-y-3">
           {applications.map((app) => (
-            <ApplicationRow key={app.id} application={app} onUpdated={handleUpdated} />
+            <ApplicationRow key={app.id} application={app} onUpdated={handleUpdated} onUndone={handleUndone} />
           ))}
         </div>
       )}

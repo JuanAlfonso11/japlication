@@ -8,7 +8,7 @@ import ErrorNotice from "@/components/ErrorNotice";
 import MatchBreakdown from "@/components/MatchBreakdown";
 import ScoreBadge from "@/components/ScoreBadge";
 import SkillTag from "@/components/SkillTag";
-import { ApiError, jobsApi, resumeApi } from "@/lib/api";
+import { ApiError, coverLetterApi, jobsApi, resumeApi } from "@/lib/api";
 import type { CoverLetter, Job, MatchResult, ResumeVersion, ReusableResumeSuggestion } from "@/lib/types";
 
 function resumeToPlainText(resume: ResumeVersion): string {
@@ -74,6 +74,8 @@ function JobDetailContent() {
   const [reusable, setReusable] = useState<ReusableResumeSuggestion | null>(null);
   const [pdfDownloading, setPdfDownloading] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
+  const [coverPdfDownloading, setCoverPdfDownloading] = useState(false);
+  const [coverPdfError, setCoverPdfError] = useState<string | null>(null);
 
   const [coverLetter, setCoverLetter] = useState<CoverLetter | null>(null);
   const [coverLoading, setCoverLoading] = useState(false);
@@ -126,6 +128,22 @@ function JobDetailContent() {
       setPdfError(err instanceof ApiError ? err.message : "No se pudo descargar el PDF.");
     } finally {
       setPdfDownloading(false);
+    }
+  }
+
+  async function handleDownloadCoverLetterPdf() {
+    if (!coverLetter) return;
+    setCoverPdfDownloading(true);
+    setCoverPdfError(null);
+    try {
+      await coverLetterApi.downloadPdf(
+        coverLetter.id,
+        `Cover letter - ${job?.title ?? "job"}.pdf`.replace(/[/\\?%*:|"<>]/g, "-")
+      );
+    } catch (err) {
+      setCoverPdfError(err instanceof ApiError ? err.message : "No se pudo descargar el PDF.");
+    } finally {
+      setCoverPdfDownloading(false);
     }
   }
 
@@ -423,9 +441,18 @@ function JobDetailContent() {
         {coverError && <ErrorNotice message={coverError} />}
         {coverLetter && (
           <div className="mt-2 space-y-3 rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-gray-800 dark:bg-gray-800/50">
-            <div className="flex justify-end">
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={handleDownloadCoverLetterPdf}
+                disabled={coverPdfDownloading}
+                className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {coverPdfDownloading ? "Generando…" : "Descargar PDF"}
+              </button>
               <CopyButton text={coverLetter.content} />
             </div>
+            {coverPdfError && <p className="text-xs text-rose-600 dark:text-rose-400">{coverPdfError}</p>}
             <p className="whitespace-pre-line text-sm leading-relaxed text-gray-700 dark:text-gray-300">
               {coverLetter.content}
             </p>

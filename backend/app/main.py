@@ -4,7 +4,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
 
-from app.api.v1.routers import app_update, applications, auth, cover_letters, jobs, match, notifications, profile, resumes
+from app.api.v1.routers import (
+    app_update,
+    applications,
+    auth,
+    cover_letters,
+    jobs,
+    match,
+    notifications,
+    profile,
+    resumes,
+    system,
+)
 from app.core.config import settings
 from app.core.rate_limit import limiter
 
@@ -65,3 +76,4 @@ app.include_router(resumes.router, prefix=api_router_prefix)
 app.include_router(cover_letters.router, prefix=api_router_prefix)
 app.include_router(notifications.router, prefix=api_router_prefix)
 app.include_router(app_update.router, prefix=api_router_prefix)
+app.include_router(system.router, prefix=api_router_prefix)

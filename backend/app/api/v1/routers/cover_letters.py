@@ -1,6 +1,7 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -17,6 +18,7 @@ from app.models.user import User
 from app.schemas.cover_letter import CoverLetter as CoverLetterSchema
 from app.schemas.cover_letter import CoverLetterGenerateRequest
 from app.services.cover_letter_generator import generate_cover_letter
+from app.services.cover_letter_pdf import render_cover_letter_pdf
 
 router = APIRouter(tags=["cover-letters"])
 
@@ -118,3 +120,35 @@ async def get_cover_letter(
     if row is None:
         raise HTTPException(status_code=404, detail="Cover letter not found.")
     return CoverLetterSchema.model_validate(row)
+
+
+@router.get("/cover-letters/{cover_letter_id}/export/pdf")
+async def export_cover_letter_pdf(
+    cover_letter_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    row = (
+        await db.execute(
+            select(CoverLetter).where(
+                CoverLetter.id == cover_letter_id, CoverLetter.user_id == current_user.id
+            )
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Cover letter not found.")
+
+    profile = (
+        await db.execute(select(CareerProfile).where(CareerProfile.user_id == current_user.id))
+    ).scalar_one_or_none()
+    contact_info = profile.contact_info if profile is not None else {}
+
+    pdf_bytes = render_cover_letter_pdf(
+        full_name=current_user.full_name, contact_info=contact_info, content=row.content
+    )
+    filename = f"cover-letter-{row.id}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

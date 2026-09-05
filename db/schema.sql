@@ -163,6 +163,7 @@ CREATE TABLE applications (
     cover_letter_id     UUID,   -- FK added below after cover_letters exists
     notes               TEXT,
     applied_at          TIMESTAMPTZ,
+    stale_notified_at   TIMESTAMPTZ,
     created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (user_id, job_id)
@@ -206,6 +207,19 @@ CREATE TABLE cover_letters (
 
 CREATE INDEX idx_cover_letters_user ON cover_letters (user_id);
 CREATE INDEX idx_cover_letters_job ON cover_letters (job_id);
+
+-- =========================================================
+-- system_heartbeats — one row per scheduled background job
+-- (job_sweep / stale_check / backup / watchdog), POSTed by each
+-- scripts/*.ps1 right after it runs, so Profile's "Estado del sistema"
+-- panel can show whether the machinery behind the app is alive.
+-- =========================================================
+CREATE TABLE system_heartbeats (
+    job_name        TEXT PRIMARY KEY,
+    last_run_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+    last_status     TEXT NOT NULL DEFAULT 'ok',
+    detail          TEXT
+);
 
 -- Back-fill FKs on applications now that the referenced tables exist
 ALTER TABLE applications

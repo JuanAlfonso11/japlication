@@ -7,6 +7,7 @@ import ErrorNotice from "@/components/ErrorNotice";
 import CVEvaluationCard from "@/components/CVEvaluationCard";
 import SettingsPanel from "@/components/profile/SettingsPanel";
 import UsedResumesSection from "@/components/profile/UsedResumesSection";
+import SystemStatusPanel from "@/components/profile/SystemStatusPanel";
 import { FormField, inputClass, textareaClass } from "@/components/ui/Field";
 import SectionCard from "@/components/profile/SectionCard";
 import SkillsSection from "@/components/profile/SkillsSection";
@@ -81,7 +82,14 @@ function ProfileContent() {
 
   const [improving, setImproving] = useState(false);
   const [improveError, setImproveError] = useState<string | null>(null);
-  const [improveNotice, setImproveNotice] = useState<{ changeLog: string[]; generatedBy: string } | null>(null);
+  const [improveNotice, setImproveNotice] = useState<{
+    changeLog: string[];
+    generatedBy: string;
+    scoreBefore: number | null;
+    scoreAfter: number | null;
+  } | null>(null);
+  const [improvePendingSave, setImprovePendingSave] = useState(false);
+  const [preImproveScore, setPreImproveScore] = useState<number | null>(null);
 
   const loadEvaluation = useCallback(async () => {
     setEvalLoading(true);
@@ -142,7 +150,21 @@ function ProfileContent() {
       setProfile(saved);
       setDirty(false);
       setLastSavedAt(new Date());
-      loadEvaluation();
+
+      if (improvePendingSave) {
+        setImprovePendingSave(false);
+        try {
+          const newEvaluation = await profileApi.evaluation();
+          setEvaluation(newEvaluation);
+          setImproveNotice((prev) =>
+            prev ? { ...prev, scoreBefore: preImproveScore, scoreAfter: newEvaluation.overall_score } : prev
+          );
+        } catch {
+          // Non-fatal — the improved profile still saved fine.
+        }
+      } else {
+        loadEvaluation();
+      }
 
       if (cvImportedPendingSave) {
         setCvImportedPendingSave(false);
@@ -196,6 +218,7 @@ function ProfileContent() {
     setImproving(true);
     setImproveError(null);
     setImproveNotice(null);
+    setPreImproveScore(evaluation?.overall_score ?? null);
     try {
       const result = await profileApi.improve();
       patch({
@@ -203,7 +226,13 @@ function ProfileContent() {
         summary: result.profile.summary,
         experience: result.profile.experience,
       });
-      setImproveNotice({ changeLog: result.change_log, generatedBy: result.generated_by });
+      setImprovePendingSave(true);
+      setImproveNotice({
+        changeLog: result.change_log,
+        generatedBy: result.generated_by,
+        scoreBefore: null,
+        scoreAfter: null,
+      });
     } catch (err) {
       setImproveError(err instanceof ApiError ? err.message : "No se pudo mejorar el CV.");
     } finally {
@@ -340,6 +369,16 @@ function ProfileContent() {
                 {line}
               </p>
             ))}
+            {improveNotice.scoreAfter != null && (
+              <p className="mt-2 font-semibold">
+                Puntaje del CV:{" "}
+                {improveNotice.scoreBefore != null ? `${Math.round(improveNotice.scoreBefore)} → ` : ""}
+                {Math.round(improveNotice.scoreAfter)}
+                {improveNotice.scoreBefore != null &&
+                  improveNotice.scoreAfter > improveNotice.scoreBefore &&
+                  ` (+${Math.round(improveNotice.scoreAfter - improveNotice.scoreBefore)})`}
+              </p>
+            )}
           </div>
         )}
       </div>
@@ -347,6 +386,8 @@ function ProfileContent() {
       <CVEvaluationCard evaluation={evaluation} loading={evalLoading} error={evalError} />
 
       <UsedResumesSection />
+
+      <SystemStatusPanel />
 
       <SectionCard title="Overview" description="How recruiters see you at a glance.">
         <FormField label="Headline">

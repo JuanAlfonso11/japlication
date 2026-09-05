@@ -8,6 +8,7 @@ $ErrorActionPreference = "Stop"
 $RetentionDays = 30
 
 $repoDir = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot "Send-Heartbeat.ps1")
 $backupDir = Join-Path $repoDir "backups"
 if (-not (Test-Path $backupDir)) {
     New-Item -ItemType Directory -Path $backupDir | Out-Null
@@ -22,12 +23,14 @@ Write-Host "[JobPilot backup] Dumping database..."
 docker compose exec -T db pg_dump -U jobflow -d jobflow --no-owner --no-privileges > $backupFile
 
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path $backupFile) -or (Get-Item $backupFile).Length -eq 0) {
+    Send-Heartbeat -JobName "backup" -Status "error" -Detail "pg_dump failed or produced an empty file"
     Write-Error "[JobPilot backup] pg_dump failed or produced an empty file."
     if (Test-Path $backupFile) { Remove-Item $backupFile -Force }
     exit 1
 }
 
 $sizeKB = [math]::Round((Get-Item $backupFile).Length / 1KB, 1)
+Send-Heartbeat -JobName "backup" -Status "ok" -Detail "$sizeKB KB"
 Write-Host "[JobPilot backup] Saved $backupFile ($sizeKB KB)"
 
 $cutoff = (Get-Date).AddDays(-$RetentionDays)

@@ -17,6 +17,7 @@
 $ErrorActionPreference = "Stop"
 
 $RepoDir = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot "Send-Heartbeat.ps1")
 $DockerDesktop = "$env:ProgramFiles\Docker\Docker\Docker Desktop.exe"
 $LogDir = Join-Path $RepoDir "logs"
 $LogFile = Join-Path $LogDir "watchdog.log"
@@ -62,6 +63,7 @@ function Show-Notification([string]$Text) {
 Set-Location $RepoDir
 
 if (Test-AllServicesRunning) {
+    Send-Heartbeat -JobName "watchdog" -Status "ok"
     exit 0
 }
 
@@ -90,6 +92,7 @@ Start-Sleep -Seconds 10
 
 if (Test-AllServicesRunning) {
     Write-Log "Recovery succeeded - all services back up."
+    Send-Heartbeat -JobName "watchdog" -Status "ok" -Detail "recovered automatically"
     exit 0
 }
 

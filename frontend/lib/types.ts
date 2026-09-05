@@ -525,3 +525,12 @@ export interface AndroidUpdateInfo {
   apk_url: string | null;
   notes: string | null;
 }
+
+// ---------- System status (background job heartbeats) ----------
+
+export interface HeartbeatInfo {
+  job_name: string;
+  last_run_at: string;
+  last_status: string;
+  detail: string | null;
+}

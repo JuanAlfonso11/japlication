@@ -13,6 +13,7 @@ $ErrorActionPreference = "Stop"
 
 $repoDir = Split-Path -Parent $PSScriptRoot
 Set-Location $repoDir
+. (Join-Path $PSScriptRoot "Send-Heartbeat.ps1")
 
 if (-not (docker compose ps --status running --services 2>$null | Select-String -Pattern "^backend$" -Quiet)) {
     Write-Host "[JobPilot sweep] Backend container isn't running - skipping."
@@ -23,8 +24,10 @@ Write-Host "[JobPilot sweep] Running daily job-search sweep..."
 docker compose exec -T backend python -m app.scripts.run_daily_sweep
 
 if ($LASTEXITCODE -ne 0) {
+    Send-Heartbeat -JobName "job_sweep" -Status "error" -Detail "run_daily_sweep exited non-zero"
     Write-Error "[JobPilot sweep] Sweep script exited with an error - see output above."
     exit 1
 }
 
+Send-Heartbeat -JobName "job_sweep" -Status "ok"
 Write-Host "[JobPilot sweep] Done."

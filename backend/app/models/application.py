@@ -47,6 +47,10 @@ class Application(Base):
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     applied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Last time check_stale_applications.py pushed a "no movement in a
+    # while" reminder for this application — lets the daily check re-remind
+    # every STALE_RENOTIFY_DAYS instead of spamming once per run forever.
+    stale_notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

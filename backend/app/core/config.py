@@ -91,6 +91,13 @@ class Settings(BaseSettings):
     ANDROID_UPDATE_APK_URL: Optional[str] = None
     ANDROID_UPDATE_NOTES: Optional[str] = None
 
+    # Shared secret the scheduled scripts (scripts/*.ps1, all running on
+    # this same machine) send when POSTing to /system/heartbeat. Unset
+    # means the endpoint accepts any caller — fine since it's only ever
+    # reachable on the private tailnet this app already trusts, but set
+    # it if that assumption ever changes.
+    SYSTEM_HEARTBEAT_SECRET: Optional[str] = None
+
     # App metadata
     PROJECT_NAME: str = "JobFlow AI"
     API_V1_PREFIX: str = "/api/v1"

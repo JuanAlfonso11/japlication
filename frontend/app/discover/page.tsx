@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import RouteGuard from "@/components/RouteGuard";
 import ErrorNotice from "@/components/ErrorNotice";
 import ImportedJobCard from "@/components/ImportedJobCard";
@@ -215,6 +215,7 @@ function DiscoverContent() {
   const [location, setLocation] = useState("");
   const [remoteType, setRemoteType] = useState<RemoteType | "">("remote");
   const [experienceLevelFilter, setExperienceLevelFilter] = useState<ExperienceLevel | "">("");
+  const [minSalary, setMinSalary] = useState("");
   const [results, setResults] = useState<ExternalJobResult[]>([]);
   const [sources, setSources] = useState<AggregateSourceStatus[]>([]);
   const [loading, setLoading] = useState(false);
@@ -243,6 +244,15 @@ function DiscoverContent() {
       setLoading(false);
     }
   }
+
+  const minSalaryValue = minSalary ? Number(minSalary) : null;
+  const filteredResults = useMemo(() => {
+    if (!minSalaryValue) return results;
+    return results.filter((r) => {
+      const best = r.salary_max ?? r.salary_min;
+      return best != null && best >= minSalaryValue;
+    });
+  }, [results, minSalaryValue]);
 
   async function handleImport(result: ExternalJobResult) {
     const job = await jobsApi.importExternal({ source: result.source, external_id: result.external_id });
@@ -316,6 +326,17 @@ function DiscoverContent() {
                   </option>
                 ))}
               </Select>
+              <input
+                type="number"
+                min={0}
+                step={1000}
+                inputMode="numeric"
+                value={minSalary}
+                onChange={(e) => setMinSalary(e.target.value)}
+                placeholder="Salario mínimo (USD)"
+                title="Filtra los resultados ya cargados — no cambia la búsqueda en sí"
+                className="col-span-2 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 sm:col-span-1 sm:min-w-[160px] sm:flex-1"
+              />
             </div>
             <button
               type="submit"
@@ -330,11 +351,24 @@ function DiscoverContent() {
 
           {sources.length > 0 && <SourcesSummary sources={sources} />}
 
+          {minSalaryValue && results.length > 0 && (
+            <p className="text-xs text-gray-400 dark:text-gray-500">
+              {filteredResults.length} de {results.length} muestran ${minSalaryValue.toLocaleString()}+ de
+              salario (se ocultan los que no publican salario).
+            </p>
+          )}
+
           <div className="space-y-3">
-            {results.map((r) => (
+            {filteredResults.map((r) => (
               <ExternalResultCard key={`${r.source}:${r.external_id}`} result={r} onImport={handleImport} />
             ))}
           </div>
+
+          {!loading && searched && results.length > 0 && filteredResults.length === 0 && !error && (
+            <p className="py-6 text-center text-sm text-gray-400 dark:text-gray-500">
+              Nada cumple ese salario mínimo — prueba bajarlo.
+            </p>
+          )}
 
           {!loading && searched && results.length === 0 && !error && (
             <p className="py-6 text-center text-sm text-gray-400 dark:text-gray-500">
