@@ -12,6 +12,28 @@ class ResumeGenerateRequest(BaseModel):
     tone: Optional[str] = None
 
 
+class ResumeContentUpdate(BaseModel):
+    """The editable parts of a generated resume.
+
+    Only the prose the generator wrote is editable — summary, the skill
+    list, and each role's bullets. Company names, titles and dates are not:
+    those are facts that live in the career profile, and letting them drift
+    per-version is how a CV quietly stops matching the profile it claims to
+    be derived from.
+    """
+
+    summary: Optional[str] = Field(default=None, max_length=4000)
+    skills: Optional[list[str]] = None
+    #: Bullets keyed by the experience entry's index in `content.experience`,
+    #: so the client can send only what changed.
+    experience_bullets: Optional[dict[int, list[str]]] = None
+
+
+class ResumeVersionUpdate(BaseModel):
+    title: Optional[str] = Field(default=None, min_length=1, max_length=300)
+    content: Optional[ResumeContentUpdate] = None
+
+
 class ResumeVersion(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -23,6 +45,9 @@ class ResumeVersion(BaseModel):
     content: dict[str, Any]
     change_log: list[Any] = Field(default_factory=list)
     generated_by: GenerationSource
+    #: Null until the user corrects it. Present in the response so the UI can
+    #: show "editado por ti" and so reuse can prefer these.
+    edited_at: Optional[datetime] = None
     created_at: datetime
     job: Optional[JobSummary] = None
 

@@ -36,6 +36,10 @@ class ResumeVersion(Base):
     generated_by: Mapped[GenerationSource] = mapped_column(
         generation_source_enum, nullable=False, default=GenerationSource.ai
     )
+    #: Set the first time the user corrects a generated version. Also what
+    #: makes this version preferred when a later, similar job looks for a
+    #: resume to reuse — see _find_reusable_resume.
+    edited_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     career_profile = relationship("CareerProfile", back_populates="resume_versions")

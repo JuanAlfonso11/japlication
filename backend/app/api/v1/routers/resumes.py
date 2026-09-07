@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
 
@@ -17,6 +18,7 @@ from app.models.user import User
 from app.schemas.resume_version import ReusableResumeSuggestion
 from app.schemas.resume_version import ResumeGenerateRequest
 from app.schemas.resume_version import ResumeVersion as ResumeVersionSchema
+from app.schemas.resume_version import ResumeVersionUpdate
 from app.services.resume_adapter import adapt_resume
 from app.services.resume_pdf import render_resume_pdf
 from app.services.skills_taxonomy import canonical_skill_set
@@ -56,6 +58,7 @@ async def _find_reusable_resume(
     ).all()
 
     best: Optional[ResumeVersion] = None
+    best_rank: tuple[int, float] = (0, 0.0)
     best_score = 0.0
     best_job: Optional[Job] = None
     for resume_version, source_job in rows:
@@ -64,10 +67,19 @@ async def _find_reusable_resume(
             continue
         union = target_skills | source_skills
         score = len(target_skills & source_skills) / len(union) if union else 0.0
-        if score > best_score:
-            best, best_score, best_job = resume_version, score, source_job
+        if score < _REUSE_SIMILARITY_THRESHOLD:
+            continue
 
-    if best is not None and best_score >= _REUSE_SIMILARITY_THRESHOLD:
+        # Among versions that all clear the threshold, one the user actually
+        # corrected beats a purely generated one even at somewhat lower skill
+        # overlap: it carries their own wording, which is the whole point of
+        # having edited it. Similarity still decides within each group, and a
+        # version below the threshold is never offered either way.
+        rank = (1 if resume_version.edited_at is not None else 0, score)
+        if rank > best_rank:
+            best, best_rank, best_score, best_job = resume_version, rank, score, source_job
+
+    if best is not None:
         return best, best_score, best_job
     return None, 0.0, None
 
@@ -167,6 +179,65 @@ async def get_resume_version(
     ).scalar_one_or_none()
     if row is None:
         raise HTTPException(status_code=404, detail="Resume version not found.")
+    return ResumeVersionSchema.model_validate(row)
+
+
+@router.patch("/resume-versions/{resume_version_id}", response_model=ResumeVersionSchema)
+async def update_resume_version(
+    resume_version_id: UUID,
+    payload: ResumeVersionUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> ResumeVersionSchema:
+    """Lets the user correct a generated resume before exporting it.
+
+    Generated versions used to be read-only, so a bullet the adapter got
+    wrong could only be fixed by editing the PDF afterwards — outside the
+    app, and lost for next time. Editing here also stamps `edited_at`, which
+    is what makes this version the preferred starting point when a later,
+    similar posting looks for a resume to reuse: the correction is made once
+    and carries forward.
+    """
+    row = (
+        await db.execute(
+            select(ResumeVersion)
+            .options(selectinload(ResumeVersion.job))
+            .where(ResumeVersion.id == resume_version_id, ResumeVersion.user_id == current_user.id)
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Resume version not found.")
+
+    if payload.title is not None:
+        row.title = payload.title
+
+    if payload.content is not None:
+        # Copied, not mutated in place: SQLAlchemy tracks JSONB columns by
+        # identity, so editing the existing dict would leave the change
+        # invisible to the session and silently never persist.
+        content = dict(row.content or {})
+
+        if payload.content.summary is not None:
+            content["summary"] = payload.content.summary
+        if payload.content.skills is not None:
+            content["skills"] = [s.strip() for s in payload.content.skills if s and s.strip()]
+
+        if payload.content.experience_bullets is not None:
+            experience = [dict(entry) for entry in (content.get("experience") or [])]
+            for index, bullets in payload.content.experience_bullets.items():
+                if index < 0 or index >= len(experience):
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"No existe la experiencia en la posición {index}.",
+                    )
+                experience[index]["bullets"] = [b.strip() for b in bullets if b and b.strip()]
+            content["experience"] = experience
+
+        row.content = content
+
+    row.edited_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(row)
     return ResumeVersionSchema.model_validate(row)
 
 

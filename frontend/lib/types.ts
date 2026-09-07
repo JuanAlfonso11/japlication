@@ -439,6 +439,24 @@ export interface MatchResult {
   concerns: string[];
 }
 
+// ---------- Interview prep ----------
+
+export type InterviewQuestionCategory = "tecnica" | "brecha" | "requisito" | "empresa";
+
+export interface InterviewQuestion {
+  question: string;
+  category: InterviewQuestionCategory | string;
+  why: string;
+  /** Grounded in the profile's own bullets. For a gap these are honest
+   * framings rather than answers — the system never invents experience. */
+  talking_points: string[];
+}
+
+export interface InterviewPrepResponse {
+  questions: InterviewQuestion[];
+  generated_by: "ai" | "manual";
+}
+
 /** One skill that keeps costing points across the jobs the user wanted. */
 export interface SkillGap {
   skill: string;
@@ -523,8 +541,21 @@ export interface ResumeVersion {
   content: ResumeContent;
   change_log: string[];
   generated_by: "manual" | "ai";
+  /** Null until the user corrects it. An edited version is preferred when a
+   * later, similar job looks for a resume to reuse. */
+  edited_at?: string | null;
   created_at: string;
   job?: Job | null;
+}
+
+export interface ResumeVersionUpdatePayload {
+  title?: string;
+  content?: {
+    summary?: string;
+    skills?: string[];
+    /** Keyed by the entry's index in `content.experience`. */
+    experience_bullets?: Record<number, string[]>;
+  };
 }
 
 export interface ResumeGeneratePayload {

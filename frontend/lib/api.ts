@@ -21,6 +21,7 @@ import type {
   JobImportPayload,
   JobListResponse,
   LoginPayload,
+  InterviewPrepResponse,
   MatchResult,
   SkillGapsResponse,
   RegisterPayload,
@@ -31,6 +32,7 @@ import type {
   ProfileImprovementResult,
   ResumeGeneratePayload,
   ResumeVersion,
+  ResumeVersionUpdatePayload,
   ReusableResumeSuggestion,
   User,
 } from "./types";
@@ -393,6 +395,8 @@ export const jobsApi = {
     request<{ items: Job[]; total: number }>("/matches", { query: params }),
   skillGaps: (limit?: number) =>
     request<SkillGapsResponse>("/match/skill-gaps", { query: { limit } }),
+  interviewPrep: (id: string) =>
+    request<InterviewPrepResponse>(`/jobs/${id}/interview-prep`, { method: "POST" }),
   decide: (id: string, payload: DecisionPayload) =>
     request<Application>(`/jobs/${id}/decision`, { method: "POST", body: payload }),
   generateResume: (id: string, payload?: ResumeGeneratePayload) =>
@@ -449,6 +453,8 @@ export const applicationsApi = {
 export const resumeApi = {
   get: (id: string) => request<ResumeVersion>(`/resume-versions/${id}`),
   list: () => request<ResumeVersion[]>("/resume-versions"),
+  update: (id: string, payload: ResumeVersionUpdatePayload) =>
+    request<ResumeVersion>(`/resume-versions/${id}`, { method: "PATCH", body: payload }),
   downloadPdf: (id: string, filename: string) => downloadFile(`/resume-versions/${id}/export/pdf`, filename),
 };
 

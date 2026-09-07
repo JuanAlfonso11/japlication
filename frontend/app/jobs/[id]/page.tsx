@@ -9,6 +9,8 @@ import MatchBreakdown from "@/components/MatchBreakdown";
 import ScoreBadge from "@/components/ScoreBadge";
 import SkillTag from "@/components/SkillTag";
 import ApplicationKit from "@/components/ApplicationKit";
+import ResumeEditor from "@/components/ResumeEditor";
+import InterviewPrepCard from "@/components/InterviewPrepCard";
 import { ApiError, coverLetterApi, jobsApi, resumeApi } from "@/lib/api";
 import type { CoverLetter, Job, MatchResult, ResumeVersion, ReusableResumeSuggestion } from "@/lib/types";
 
@@ -72,6 +74,7 @@ function JobDetailContent() {
   const [resume, setResume] = useState<ResumeVersion | null>(null);
   const [resumeLoading, setResumeLoading] = useState(false);
   const [resumeError, setResumeError] = useState<string | null>(null);
+  const [editingResume, setEditingResume] = useState(false);
   const [reusable, setReusable] = useState<ReusableResumeSuggestion | null>(null);
   const [pdfDownloading, setPdfDownloading] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
@@ -305,6 +308,10 @@ function JobDetailContent() {
           this is the panel they'll be tabbing back to. */}
       <ApplicationKit job={job} />
 
+      {/* After the application kit: applying comes first, and the prep sheet
+          is what you come back for once someone replies. */}
+      <InterviewPrepCard jobId={job.id} />
+
       {match && (
         <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-100 dark:bg-gray-900 dark:ring-gray-800">
           <h2 className="mb-3 font-semibold text-gray-900 dark:text-gray-100">Desglose del match</h2>
@@ -381,7 +388,14 @@ function JobDetailContent() {
                 )}
               </div>
               <div className="flex shrink-0 flex-col items-end gap-1.5">
-                <div className="flex gap-2">
+                <div className="flex flex-wrap justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditingResume((v) => !v)}
+                    className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+                  >
+                    {editingResume ? "Ver" : "Editar"}
+                  </button>
                   <button
                     type="button"
                     onClick={handleDownloadPdf}
@@ -392,6 +406,11 @@ function JobDetailContent() {
                   </button>
                   <CopyButton text={resumeToPlainText(resume)} />
                 </div>
+                {resume.edited_at && (
+                  <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
+                    Editado por ti
+                  </span>
+                )}
                 {pdfError && <p className="text-xs text-rose-600 dark:text-rose-400">{pdfError}</p>}
               </div>
             </div>
@@ -400,7 +419,18 @@ function JobDetailContent() {
               el &quot;autocompletar desde CV&quot; de la mayoría de formularios de aplicación lo lea bien.
             </p>
 
-            {resume.content.skills.length > 0 && (
+            {editingResume && (
+              <ResumeEditor
+                resume={resume}
+                onSaved={(updated) => {
+                  setResume(updated);
+                  setEditingResume(false);
+                }}
+                onCancel={() => setEditingResume(false)}
+              />
+            )}
+
+            {!editingResume && resume.content.skills.length > 0 && (
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                   Habilidades
@@ -413,7 +443,7 @@ function JobDetailContent() {
               </div>
             )}
 
-            {resume.content.experience.map((entry, i) => (
+            {!editingResume && resume.content.experience.map((entry, i) => (
               <div key={i}>
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                   {entry.title} — {entry.company}

@@ -113,6 +113,22 @@ en tu nombre, lo que implica inventar cosas que nunca declaraste — justo lo qu
 evita. Acá el texto lo escribiste tú; lo único que se automatiza es no volver a escribirlo. (Además
 el auto-apply es frágil: Perplexity lo lanzó y lo retiró a las pocas semanas.)
 
+## Después de aplicar
+
+- **Editar el CV generado** (`PATCH /resume-versions/{id}`): las versiones generadas eran de solo
+  lectura, así que una viñeta mal redactada solo se arreglaba editando el PDF por fuera — y esa
+  corrección se perdía. Ahora se edita en la app, y la versión editada queda marcada
+  (`edited_at`), lo que además la vuelve la preferida cuando una vacante parecida busca un CV para
+  reutilizar: la corrección se hace una vez y se propaga.
+- **Qué te falta para subir el score** (`GET /match/skill-gaps`): agrega los `missing_skills` que el
+  match engine ya guardaba, sobre las vacantes que el usuario *quiso* (guardadas, aplicadas,
+  entrevistando, oferta, rechazadas). Responde "qué me sigue costando puntos", que es distinto de
+  "por qué esta vacante puntuó 68".
+- **Preparación de entrevista** (`POST /jobs/{id}/interview-prep`): las preguntas que esa vacante va
+  a producir, con puntos de apoyo sacados de las viñetas del propio perfil. Una skill que el usuario
+  *no* tiene se presenta como brecha a preparar con honestidad, nunca como una respuesta que fingir.
+  Funciona sin `ANTHROPIC_API_KEY` (el generador basado en reglas es el default).
+
 ## Notas de seguridad y veracidad
 
 - La adaptación de CV, las cover letters y la importación de CV en PDF se generan **solo a partir de lo que ya existe** (el perfil maestro, o el propio PDF) — reformulan/enfatizan lenguaje existente, nunca inventan experiencia o habilidades no declaradas.

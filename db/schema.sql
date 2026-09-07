@@ -191,6 +191,13 @@ CREATE TABLE resume_versions (
     content             JSONB NOT NULL,   -- rendered ATS-safe sections: {summary, skills[], experience[], education[]}
     change_log          JSONB NOT NULL DEFAULT '[]'::jsonb,  -- diffs vs. career_profile for transparency/audit
     generated_by        generation_source NOT NULL DEFAULT 'ai',
+    -- Set the first time the user edits a generated version. Two jobs: it
+    -- marks the text as carrying the user's own corrections rather than only
+    -- the generator's wording, and that makes it the better starting point
+    -- when a later, similar posting looks for a resume to reuse (see
+    -- _find_reusable_resume). Their edits therefore carry forward instead of
+    -- being re-made every time.
+    edited_at           TIMESTAMPTZ,
     created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

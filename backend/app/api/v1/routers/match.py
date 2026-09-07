@@ -1,11 +1,12 @@
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
+from app.core.rate_limit import limiter
 from app.db.session import get_db
 from app.models.application import Application
 from app.models.career_profile import CareerProfile
@@ -15,7 +16,9 @@ from app.models.user import User
 from app.schemas.job import Job as JobSchema
 from app.schemas.job import JobListResponse
 from app.models.enums import ApplicationStatus
+from app.schemas.interview_prep import InterviewPrepResponse
 from app.schemas.job_match import MatchResult, SkillGapsResponse
+from app.services.interview_prep import build_interview_prep
 from app.services.match_engine import compute_and_persist_match
 from app.services.skill_gaps import aggregate_skill_gaps, summarize
 
@@ -168,3 +171,48 @@ async def get_skill_gaps(
         based_on_all_matches=based_on_all,
         summary=summarize(gaps, jobs_considered) if not based_on_all else None,
     )
+
+
+@router.post("/jobs/{job_id}/interview-prep", response_model=InterviewPrepResponse)
+@limiter.limit("20/hour")
+async def get_interview_prep(
+    request: Request,
+    job_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> InterviewPrepResponse:
+    """The questions this specific posting is likely to produce, and what in
+    the user's own history answers them.
+
+    The app already finds the job, scores it, tailors the CV and drafts the
+    letter — and then stopped right where the hard part starts. Grounded in
+    the profile and the cached match: talking points come from bullets the
+    user actually wrote, and a skill they lack is presented as a gap to
+    prepare for honestly rather than an answer to fake.
+
+    Rate-limited because the AI path costs money; the rule-based fallback
+    below it needs no key and is the default.
+    """
+    job = (await db.execute(select(Job).where(Job.id == job_id))).scalar_one_or_none()
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found.")
+
+    profile = await _get_profile_or_400(current_user.id, db)
+
+    # Reuse the cached match rather than recomputing: it already knows which
+    # skills line up and which don't, which is the entire input here.
+    match_row = (
+        await db.execute(
+            select(JobMatch).where(JobMatch.user_id == current_user.id, JobMatch.job_id == job_id)
+        )
+    ).scalar_one_or_none()
+    if match_row is None:
+        match_row = await compute_and_persist_match(profile, job, current_user.id, db)
+
+    prep = build_interview_prep(
+        profile,
+        job,
+        list(match_row.matched_skills or []),
+        list(match_row.missing_skills or []),
+    )
+    return InterviewPrepResponse(**prep)
