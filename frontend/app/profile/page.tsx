@@ -6,6 +6,7 @@ import Spinner from "@/components/Spinner";
 import ErrorNotice from "@/components/ErrorNotice";
 import CVEvaluationCard from "@/components/CVEvaluationCard";
 import SkillGapsCard from "@/components/SkillGapsCard";
+import SegmentedTabs from "@/components/ui/SegmentedTabs";
 import SettingsPanel from "@/components/profile/SettingsPanel";
 import UsedResumesSection from "@/components/profile/UsedResumesSection";
 import SystemStatusPanel from "@/components/profile/SystemStatusPanel";
@@ -63,7 +64,32 @@ const EMPTY_PROFILE: CareerProfile = {
   screening_answers: [],
 };
 
+type ProfileTab = "cv" | "answers" | "insights";
+
+const TAB_STORAGE_KEY = "jobflow_profile_tab";
+
 function ProfileContent() {
+  // Remembered across visits: coming back to Perfil to keep filling in the
+  // answer bank and landing on the CV form every time is a small, repeated
+  // annoyance. Read in an effect rather than in the initial state so the
+  // server-rendered markup and the first client render agree.
+  const [tab, setTab] = useState<ProfileTab>("cv");
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(TAB_STORAGE_KEY);
+      if (stored === "cv" || stored === "answers" || stored === "insights") setTab(stored);
+    } catch {
+      // localStorage unavailable (private mode) — the default tab is fine.
+    }
+  }, []);
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(TAB_STORAGE_KEY, tab);
+    } catch {
+      // Non-fatal: the choice just won't persist.
+    }
+  }, [tab]);
+
   const [profile, setProfile] = useState<CareerProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -281,7 +307,21 @@ function ProfileContent() {
         </div>
       </div>
 
-      <SettingsPanel />
+      <SegmentedTabs
+        tabs={[
+          { id: "cv", label: "Mi CV" },
+          {
+            id: "answers",
+            label: "Respuestas",
+            // Answered ones only: the badge is meant to show what's ready to
+            // paste into a form, not how many blank prompts are sitting there.
+            badge: (profile.screening_answers ?? []).filter((a) => a.answer.trim()).length,
+          },
+          { id: "insights", label: "Análisis" },
+        ]}
+        value={tab}
+        onChange={setTab}
+      />
 
       {saveError && <ErrorNotice message={saveError} />}
 
@@ -296,6 +336,7 @@ function ProfileContent() {
         </div>
       )}
 
+      {tab === "cv" && (
       <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-100 dark:bg-gray-900 dark:ring-gray-800">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -336,7 +377,9 @@ function ProfileContent() {
           </div>
         )}
       </div>
+      )}
 
+      {tab === "cv" && (
       <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-100 dark:bg-gray-900 dark:ring-gray-800">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -387,18 +430,26 @@ function ProfileContent() {
           </div>
         )}
       </div>
+      )}
 
-      <CVEvaluationCard evaluation={evaluation} loading={evalLoading} error={evalError} />
+      {tab === "insights" && (
+        <>
+          <CVEvaluationCard evaluation={evaluation} loading={evalLoading} error={evalError} />
 
-      {/* Right after the CV evaluation, which grades the profile in the
-          abstract — this is the same question answered against the jobs the
-          user actually wants, so the two belong together. */}
-      <SkillGapsCard />
+          {/* Right after the CV evaluation, which grades the profile in the
+              abstract — this is the same question answered against the jobs
+              the user actually wants, so the two belong together. */}
+          <SkillGapsCard />
 
-      <UsedResumesSection />
+          <UsedResumesSection />
 
-      <SystemStatusPanel />
+          <SettingsPanel />
 
+          <SystemStatusPanel />
+        </>
+      )}
+
+      {tab === "cv" && (
       <SectionCard title="Resumen general" description="Cómo te ven los reclutadores de un vistazo.">
         <FormField label="Titular">
           <input
@@ -417,7 +468,9 @@ function ProfileContent() {
           />
         </FormField>
       </SectionCard>
+      )}
 
+      {tab === "cv" && (
       <SectionCard title="Información de contacto">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <FormField label="Teléfono">
@@ -476,38 +529,52 @@ function ProfileContent() {
           </FormField>
         </div>
       </SectionCard>
+      )}
 
-      <SkillsSection skills={profile.skills} onChange={(skills) => patch({ skills })} />
-      <ExperienceSection
-        experience={profile.experience}
-        onChange={(experience) => patch({ experience })}
-      />
-      <EducationSection
-        education={profile.education}
-        onChange={(education) => patch({ education })}
-      />
-      <CertificationsSection
-        certifications={profile.certifications}
-        onChange={(certifications) => patch({ certifications })}
-      />
-      <LanguagesSection
-        languages={profile.languages}
-        onChange={(languages) => patch({ languages })}
-      />
-      <ScreeningAnswersSection
-        answers={profile.screening_answers ?? []}
-        onChange={(screening_answers) => patch({ screening_answers })}
-      />
+      {tab === "cv" && (
+        <>
+          <SkillsSection skills={profile.skills} onChange={(skills) => patch({ skills })} />
+          <ExperienceSection
+            experience={profile.experience}
+            onChange={(experience) => patch({ experience })}
+          />
+          <EducationSection
+            education={profile.education}
+            onChange={(education) => patch({ education })}
+          />
+          <CertificationsSection
+            certifications={profile.certifications}
+            onChange={(certifications) => patch({ certifications })}
+          />
+          <LanguagesSection
+            languages={profile.languages}
+            onChange={(languages) => patch({ languages })}
+          />
+        </>
+      )}
 
-      <div className="sticky bottom-16 flex justify-end md:bottom-0">
-        <button
-          type="submit"
-          disabled={saving || !dirty}
-          className="rounded-full bg-brand-600 px-5 py-3 text-sm font-semibold text-white shadow-lg hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {saving ? "Guardando…" : dirty ? "Guardar cambios" : "Guardado"}
-        </button>
-      </div>
+      {tab === "answers" && (
+        <ScreeningAnswersSection
+          answers={profile.screening_answers ?? []}
+          onChange={(screening_answers) => patch({ screening_answers })}
+        />
+      )}
+
+      {/* Hidden on Análisis, which has nothing to save — but it stays
+          mounted (and the form state with it), so edits made on another tab
+          are never lost by switching. The header above still reports
+          "Cambios sin guardar" from anywhere. */}
+      {tab !== "insights" && (
+        <div className="sticky bottom-16 flex justify-end md:bottom-0">
+          <button
+            type="submit"
+            disabled={saving || !dirty}
+            className="rounded-full bg-brand-600 px-5 py-3 text-sm font-semibold text-white shadow-lg hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {saving ? "Guardando…" : dirty ? "Guardar cambios" : "Guardado"}
+          </button>
+        </div>
+      )}
     </form>
   );
 }
