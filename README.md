@@ -42,6 +42,30 @@ docker compose up --build
 
 El esquema (`db/schema.sql`) se aplica automáticamente al crear el volumen de Postgres la primera vez.
 
+### Migraciones
+
+El backend lleva el esquema al día **solo, al arrancar** (`backend/entrypoint.sh` →
+`app/scripts/migrate.py`), antes de aceptar la primera petición. Si una migración falla, el
+contenedor no arranca: es preferible a servir datos contra un esquema en estado desconocido.
+
+Conviven dos formas de crear el esquema y el script las distingue:
+
+| Estado de la base | Qué hace |
+|---|---|
+| Con historial de Alembic | `alembic upgrade head` |
+| Con esquema pero sin historial (nació de `schema.sql`) | `alembic stamp head` — ya está al día |
+| Vacía | `alembic upgrade head` desde cero (la revisión 0001 reproduce `schema.sql`) |
+
+**La regla que sostiene esto:** `db/schema.sql` es la fuente de verdad y se mantiene en sync con el
+historial de migraciones. Agregar una migración sin actualizar `schema.sql` haría que una base nueva
+se estampe sin esa columna.
+
+La base de tests (`jobflow_test`) es separada y persistente, así que se migra aparte:
+
+```bash
+docker compose run --rm backend python -m app.scripts.migrate --database jobflow_test
+```
+
 ## Desarrollo local sin Docker
 
 ### 1. Base de datos
