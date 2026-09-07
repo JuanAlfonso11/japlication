@@ -87,6 +87,31 @@ export interface LanguageEntry {
   level: string;
 }
 
+/** One reusable answer to a question application forms keep asking
+ * (work authorization, notice period, salary expectation, ...). Written
+ * once in the profile, surfaced per-job in the application kit with a copy
+ * button — the repetitive half of applying, which is exactly what the
+ * auto-apply products sell, minus any bot answering on your behalf. */
+export interface ScreeningAnswer {
+  question: string;
+  answer: string;
+}
+
+/** Seeds for a brand-new answer bank. These are the questions that showed
+ * up on essentially every application form reviewed while building this —
+ * pre-filling the *questions* (never the answers) means the user is
+ * completing a short form instead of facing an empty list and having to
+ * remember what gets asked. */
+export const COMMON_SCREENING_QUESTIONS: string[] = [
+  "¿Tienes autorización para trabajar en el país de la vacante?",
+  "¿Requieres patrocinio de visa ahora o en el futuro?",
+  "¿Cuál es tu expectativa salarial?",
+  "¿Cuál es tu disponibilidad para comenzar / periodo de preaviso?",
+  "¿Estás dispuesto a trabajar de forma remota / híbrida / presencial?",
+  "¿Cuántos años de experiencia tienes en tu rol principal?",
+  "¿Por qué te interesa esta empresa?",
+];
+
 export interface CareerProfile {
   id?: string;
   user_id?: string;
@@ -98,6 +123,7 @@ export interface CareerProfile {
   education: EducationEntry[];
   certifications: CertificationEntry[];
   languages: LanguageEntry[];
+  screening_answers: ScreeningAnswer[];
   updated_at?: string;
 }
 

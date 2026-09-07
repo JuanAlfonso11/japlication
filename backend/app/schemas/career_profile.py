@@ -62,6 +62,20 @@ class Language(BaseModel):
     level: Optional[str] = None
 
 
+class ScreeningAnswer(BaseModel):
+    """One reusable answer to a question application forms keep asking.
+
+    Deliberately free-form (`question` is a string, not an enum): every job
+    board words these differently, and the point is that the user can paste
+    whatever a given form actually asked and keep the answer for next time.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    question: str = Field(min_length=1, max_length=300)
+    answer: str = Field(default="", max_length=2000)
+
+
 class CareerProfileUpsert(BaseModel):
     headline: Optional[str] = None
     summary: Optional[str] = None
@@ -71,6 +85,7 @@ class CareerProfileUpsert(BaseModel):
     education: list[Education] = Field(default_factory=list)
     certifications: list[Certification] = Field(default_factory=list)
     languages: list[Language] = Field(default_factory=list)
+    screening_answers: list[ScreeningAnswer] = Field(default_factory=list)
 
 
 class CVUploadResult(BaseModel):
@@ -108,5 +123,6 @@ class CareerProfile(BaseModel):
     education: list[dict[str, Any]] = Field(default_factory=list)
     certifications: list[dict[str, Any]] = Field(default_factory=list)
     languages: list[dict[str, Any]] = Field(default_factory=list)
+    screening_answers: list[dict[str, Any]] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime

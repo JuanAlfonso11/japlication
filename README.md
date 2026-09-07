@@ -96,6 +96,23 @@ personal, en [`docs/PUBLIC_APIS_RESEARCH.md`](docs/PUBLIC_APIS_RESEARCH.md):
 | RemoteJobs.org | [remotejobs.org](https://remotejobs.org/api-access) | `backend/app/services/remotejobs_org.py` |
 | The Muse | [themuse.com](https://www.themuse.com/developers/api/v2) | `backend/app/services/themuse.py` |
 
+## Kit de aplicación
+
+Los productos de "auto-apply" (JobCopilot, Sorce, Comet) no venden encontrar vacantes — venden
+**dejar de retipear los mismos doce campos**. JobPilot ataca ese mismo trabajo repetitivo sin un bot
+que postule por ti:
+
+- **Respuestas frecuentes** (`Perfil → Respuestas frecuentes`): las preguntas que todo formulario
+  vuelve a hacer (autorización de trabajo, preaviso, expectativa salarial). Se responden una vez y
+  se guardan en `career_profiles.screening_answers`.
+- **Kit por vacante** (`components/ApplicationKit.tsx`, en el detalle del trabajo): datos de
+  contacto y esas respuestas, cada uno con botón de copiar, junto al enlace al formulario original.
+
+La diferencia con el auto-apply es deliberada: esas herramientas responden preguntas de screening
+en tu nombre, lo que implica inventar cosas que nunca declaraste — justo lo que el resto del sistema
+evita. Acá el texto lo escribiste tú; lo único que se automatiza es no volver a escribirlo. (Además
+el auto-apply es frágil: Perplexity lo lanzó y lo retiró a las pocas semanas.)
+
 ## Notas de seguridad y veracidad
 
 - La adaptación de CV, las cover letters y la importación de CV en PDF se generan **solo a partir de lo que ya existe** (el perfil maestro, o el propio PDF) — reformulan/enfatizan lenguaje existente, nunca inventan experiencia o habilidades no declaradas.

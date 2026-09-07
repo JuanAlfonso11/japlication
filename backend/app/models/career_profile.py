@@ -23,6 +23,9 @@ class CareerProfile(Base):
     education: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     certifications: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     languages: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    #: [{question, answer}] — the reusable screening-question answers the
+    #: application kit copies from. See db/schema.sql for the rationale.
+    screening_answers: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

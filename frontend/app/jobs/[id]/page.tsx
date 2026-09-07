@@ -8,6 +8,7 @@ import ErrorNotice from "@/components/ErrorNotice";
 import MatchBreakdown from "@/components/MatchBreakdown";
 import ScoreBadge from "@/components/ScoreBadge";
 import SkillTag from "@/components/SkillTag";
+import ApplicationKit from "@/components/ApplicationKit";
 import { ApiError, coverLetterApi, jobsApi, resumeApi } from "@/lib/api";
 import type { CoverLetter, Job, MatchResult, ResumeVersion, ReusableResumeSuggestion } from "@/lib/types";
 
@@ -298,6 +299,11 @@ function JobDetailContent() {
           )}
         </div>
       </div>
+
+      {/* Sits directly under the apply block on purpose: the moment the
+          user taps "Aplicar" they're headed into someone else's form, and
+          this is the panel they'll be tabbing back to. */}
+      <ApplicationKit job={job} />
 
       {match && (
         <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-100 dark:bg-gray-900 dark:ring-gray-800">

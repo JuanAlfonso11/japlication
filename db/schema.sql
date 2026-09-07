@@ -66,6 +66,12 @@ CREATE TABLE career_profiles (
     education       JSONB NOT NULL DEFAULT '[]'::jsonb,   -- [{institution, degree, field, start_date, end_date}]
     certifications  JSONB NOT NULL DEFAULT '[]'::jsonb,
     languages       JSONB NOT NULL DEFAULT '[]'::jsonb,   -- [{name, level}]
+    -- Reusable answers to the screening questions every application form
+    -- asks again (work authorization, notice period, salary expectation,
+    -- ...). Written once here, surfaced per-job in the application kit with
+    -- a copy button, so the repetitive part of applying stops being retyped.
+    -- [{question, answer}]
+    screening_answers JSONB NOT NULL DEFAULT '[]'::jsonb,
     embedding       VECTOR(1536),                          -- optional semantic embedding of the full profile
     search_vector   TSVECTOR GENERATED ALWAYS AS (
                         to_tsvector('spanish', coalesce(headline,'') || ' ' || coalesce(summary,''))

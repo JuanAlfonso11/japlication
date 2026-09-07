@@ -15,6 +15,7 @@ import ExperienceSection from "@/components/profile/ExperienceSection";
 import EducationSection from "@/components/profile/EducationSection";
 import CertificationsSection from "@/components/profile/CertificationsSection";
 import LanguagesSection from "@/components/profile/LanguagesSection";
+import ScreeningAnswersSection from "@/components/profile/ScreeningAnswersSection";
 import { ApiError, jobsApi, profileApi } from "@/lib/api";
 import type { CareerProfile, CVEvaluation } from "@/lib/types";
 
@@ -58,6 +59,7 @@ const EMPTY_PROFILE: CareerProfile = {
   education: [],
   certifications: [],
   languages: [],
+  screening_answers: [],
 };
 
 function ProfileContent() {
@@ -485,6 +487,10 @@ function ProfileContent() {
       <LanguagesSection
         languages={profile.languages}
         onChange={(languages) => patch({ languages })}
+      />
+      <ScreeningAnswersSection
+        answers={profile.screening_answers ?? []}
+        onChange={(screening_answers) => patch({ screening_answers })}
       />
 
       <div className="sticky bottom-16 flex justify-end md:bottom-0">
