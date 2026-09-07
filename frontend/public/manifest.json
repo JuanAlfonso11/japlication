@@ -8,6 +8,15 @@
   "orientation": "portrait-primary",
   "background_color": "#f6f7fb",
   "theme_color": "#6d28f5",
+  "share_target": {
+    "action": "/jobs/import",
+    "method": "GET",
+    "params": {
+      "title": "shared_title",
+      "text": "shared",
+      "url": "shared_url"
+    }
+  },
   "icons": [
     {
       "src": "/icons/icon-192.png",

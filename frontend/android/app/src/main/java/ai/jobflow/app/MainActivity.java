@@ -13,6 +13,8 @@ import android.provider.Settings;
 import android.webkit.URLUtil;
 import android.widget.Toast;
 import com.getcapacitor.BridgeActivity;
+import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
 
 /**
  * Capacitor's WebView always loads capacitor.config.ts's server.url on
@@ -39,10 +41,16 @@ public class MainActivity extends BridgeActivity {
     private long updateDownloadId = -1L;
     private BroadcastReceiver downloadCompleteReceiver;
 
+    /** Set when a share arrives before the WebView is ready to navigate, so
+     * onCreate's share isn't dropped on the floor while Capacitor is still
+     * loading the app. */
+    private String pendingSharedText;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         handleViewIntent(getIntent());
+        handleShareIntent(getIntent());
         setupDownloadListener();
         registerDownloadCompleteReceiver();
     }
@@ -66,6 +74,22 @@ public class MainActivity extends BridgeActivity {
     public void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         handleViewIntent(intent);
+        handleShareIntent(intent);
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        // A share that arrived during onCreate (cold start) can't navigate
+        // yet — the bridge/WebView isn't up. By the time we're resumed it
+        // is, so replay it here. launchMode is singleTask, so a share into
+        // an already-running app goes through onNewIntent instead and is
+        // handled immediately.
+        if (pendingSharedText != null) {
+            String text = pendingSharedText;
+            pendingSharedText = null;
+            navigateToImport(text);
+        }
     }
 
     private void handleViewIntent(Intent intent) {
@@ -74,6 +98,59 @@ public class MainActivity extends BridgeActivity {
         if (data == null) return;
         if (getBridge() != null && getBridge().getWebView() != null) {
             getBridge().getWebView().loadUrl(data.toString());
+        }
+    }
+
+    /**
+     * Receives a posting shared from any other app (Chrome, LinkedIn,
+     * WhatsApp) and hands it to the import screen.
+     *
+     * The text is passed through as-is rather than parsed here: apps send
+     * wildly different shapes (a bare URL, "Mira esta vacante: <url>", a
+     * title and a URL on separate lines), and the web side already has the
+     * extractor for that — with tests — so keeping one implementation in
+     * JavaScript beats a second, subtly different one in Java.
+     */
+    private void handleShareIntent(Intent intent) {
+        if (intent == null || !Intent.ACTION_SEND.equals(intent.getAction())) return;
+
+        String shared = intent.getStringExtra(Intent.EXTRA_TEXT);
+        if (shared == null || shared.trim().isEmpty()) {
+            // Some apps put the link in the subject instead of the body.
+            shared = intent.getStringExtra(Intent.EXTRA_SUBJECT);
+        }
+        if (shared == null || shared.trim().isEmpty()) return;
+
+        // Consume it, so a configuration change (rotation) doesn't replay
+        // the same share and import the job twice.
+        intent.removeExtra(Intent.EXTRA_TEXT);
+        intent.removeExtra(Intent.EXTRA_SUBJECT);
+
+        if (!navigateToImport(shared)) {
+            pendingSharedText = shared;
+        }
+    }
+
+    /** Returns false when the WebView isn't ready yet, so the caller can
+     * hold the share until onResume. */
+    private boolean navigateToImport(String sharedText) {
+        if (getBridge() == null || getBridge().getWebView() == null) return false;
+        try {
+            String base = getBridge().getServerUrl();
+            if (base == null || base.isEmpty()) {
+                base = getBridge().getLocalUrl();
+            }
+            if (base == null || base.isEmpty()) return false;
+
+            String target = base.replaceAll("/+$", "")
+                + "/jobs/import?shared="
+                + URLEncoder.encode(sharedText, "UTF-8");
+            getBridge().getWebView().loadUrl(target);
+            return true;
+        } catch (UnsupportedEncodingException e) {
+            // UTF-8 is always available; this branch exists only because the
+            // checked exception has to go somewhere.
+            return false;
         }
     }
 

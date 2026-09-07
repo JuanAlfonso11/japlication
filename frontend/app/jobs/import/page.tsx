@@ -1,34 +1,62 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import RouteGuard from "@/components/RouteGuard";
+import Spinner from "@/components/Spinner";
 import ErrorNotice from "@/components/ErrorNotice";
 import ImportedJobCard from "@/components/ImportedJobCard";
 import { inputClass, textareaClass } from "@/components/ui/Field";
 import { ApiError, jobsApi } from "@/lib/api";
 import { importAndMatch } from "@/lib/jobActions";
+import { extractSharedUrl } from "@/lib/sharedText";
 import type { Job } from "@/lib/types";
 
-function ImportByUrl({ onImported }: { onImported: (job: Job) => void }) {
-  const [url, setUrl] = useState("");
+function ImportByUrl({
+  onImported,
+  initialUrl = "",
+  autoStart = false,
+}: {
+  onImported: (job: Job) => void;
+  /** Pre-filled when the page was opened from Android's share sheet. */
+  initialUrl?: string;
+  /** Fires the import immediately, so sharing a job is one tap end to end
+   * instead of "share, then tap Importar". */
+  autoStart?: boolean;
+}) {
+  const [url, setUrl] = useState(initialUrl);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const runImport = useCallback(
+    async (target: string) => {
+      setError(null);
+      setLoading(true);
+      try {
+        const job = await jobsApi.import({ url: target });
+        onImported(await importAndMatch(job));
+        setUrl("");
+      } catch (err) {
+        setError(err instanceof ApiError ? err.message : "No se pudo importar esa vacante.");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [onImported]
+  );
+
+  // Guards against a second run: React 18 mounts effects twice in dev, and
+  // importing the same posting twice would create a duplicate job row.
+  const autoStarted = useRef(false);
+  useEffect(() => {
+    if (!autoStart || !initialUrl || autoStarted.current) return;
+    autoStarted.current = true;
+    runImport(initialUrl);
+  }, [autoStart, initialUrl, runImport]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setError(null);
-    setLoading(true);
-    try {
-      const job = await jobsApi.import({ url });
-      onImported(await importAndMatch(job));
-      setUrl("");
-    } catch (err) {
-      setError(
-        err instanceof ApiError ? err.message : "No se pudo importar esa vacante."
-      );
-    } finally {
-      setLoading(false);
-    }
+    runImport(url);
   }
 
   return (
@@ -56,11 +84,51 @@ function ImportByUrl({ onImported }: { onImported: (job: Job) => void }) {
   );
 }
 
-function ManualJobForm({ onImported }: { onImported: (job: Job) => void }) {
+/** Banner shown when the page was opened from the share sheet. Sharing
+ * launches the app, which is disorienting without a line saying why you're
+ * suddenly looking at this screen. */
+function SharedNotice({ url, rawText }: { url: string | null; rawText: string }) {
+  if (url) {
+    return (
+      <div className="rounded-2xl bg-brand-50 p-3.5 ring-1 ring-inset ring-brand-100 dark:bg-brand-500/10 dark:ring-brand-500/20">
+        <p className="text-xs font-bold text-brand-900 dark:text-brand-200">
+          Importando lo que compartiste
+        </p>
+        <p className="mt-1 truncate text-xs text-brand-700 dark:text-brand-300">{url}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl bg-accent-50 p-3.5 ring-1 ring-inset ring-accent-600/20 dark:bg-accent-500/10 dark:ring-accent-400/25">
+      <p className="text-xs font-bold text-accent-900 dark:text-accent-200">
+        No encontramos un enlace en lo que compartiste
+      </p>
+      <p className="mt-1 text-xs leading-relaxed text-accent-800 dark:text-accent-300">
+        Lo dejamos abajo para que lo cargues a mano, o pega la URL de la vacante arriba.
+      </p>
+      {rawText && (
+        <p className="mt-2 line-clamp-3 rounded-lg bg-white/60 p-2 text-[11px] text-gray-600 dark:bg-black/20 dark:text-gray-400">
+          {rawText}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function ManualJobForm({
+  onImported,
+  initialDescription = "",
+}: {
+  onImported: (job: Job) => void;
+  /** Carries over text shared from another app when it held no link, so the
+   * user doesn't have to go back and copy it again. */
+  initialDescription?: string;
+}) {
   const [title, setTitle] = useState("");
   const [company, setCompany] = useState("");
   const [location, setLocation] = useState("");
-  const [description, setDescription] = useState("");
+  const [description, setDescription] = useState(initialDescription);
   const [requirements, setRequirements] = useState("");
   const [skills, setSkills] = useState("");
   const [requiresCoverLetter, setRequiresCoverLetter] = useState(false);
@@ -173,7 +241,28 @@ function ManualJobForm({ onImported }: { onImported: (job: Job) => void }) {
 }
 
 function ImportContent() {
-  const [mode, setMode] = useState<"url" | "manual">("url");
+  const searchParams = useSearchParams();
+  // Two different callers land here, and they don't agree on parameters:
+  //   - the native app, where MainActivity forwards the whole shared blob
+  //     as ?shared=
+  //   - the installed PWA, where the browser splits a share into the
+  //     title/text/url fields declared in manifest.json's share_target
+  // A normal visit has none of them and the screen behaves as it always did.
+  const sharedText = searchParams.get("shared");
+  const sharedUrlParam = searchParams.get("shared_url");
+  const sharedTitle = searchParams.get("shared_title");
+
+  // The browser's own `url` field is authoritative when present; otherwise
+  // dig the link out of the free text, which is where every app that wraps
+  // the link in prose puts it.
+  const sharedUrl = sharedUrlParam ?? extractSharedUrl(sharedText) ?? extractSharedUrl(sharedTitle);
+  // What to show/keep when no link was found at all.
+  const sharedRaw = sharedText ?? sharedTitle;
+  const wasShared = Boolean(sharedText || sharedUrlParam || sharedTitle);
+
+  const [mode, setMode] = useState<"url" | "manual">(
+    wasShared && !sharedUrl ? "manual" : "url"
+  );
   const [lastImported, setLastImported] = useState<Job | null>(null);
 
   return (
@@ -191,6 +280,8 @@ function ImportContent() {
           .
         </p>
       </div>
+
+      {wasShared && <SharedNotice url={sharedUrl} rawText={sharedRaw ?? ""} />}
 
       <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-100 dark:bg-gray-900 dark:ring-gray-800">
         <div className="mb-4 inline-flex rounded-lg bg-gray-100 p-1 text-sm font-medium dark:bg-gray-800">
@@ -219,9 +310,13 @@ function ImportContent() {
         </div>
 
         {mode === "url" ? (
-          <ImportByUrl onImported={setLastImported} />
+          <ImportByUrl
+            onImported={setLastImported}
+            initialUrl={sharedUrl ?? ""}
+            autoStart={Boolean(sharedUrl)}
+          />
         ) : (
-          <ManualJobForm onImported={setLastImported} />
+          <ManualJobForm onImported={setLastImported} initialDescription={sharedRaw ?? ""} />
         )}
       </div>
 
@@ -233,7 +328,11 @@ function ImportContent() {
 export default function ImportJobPage() {
   return (
     <RouteGuard>
-      <ImportContent />
+      {/* useSearchParams needs a Suspense boundary to keep this route
+          statically renderable. */}
+      <Suspense fallback={<Spinner />}>
+        <ImportContent />
+      </Suspense>
     </RouteGuard>
   );
 }

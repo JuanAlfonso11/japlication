@@ -38,6 +38,18 @@
                 <data android:scheme="https" android:host="jobpilot.tailb3d4c1.ts.net" />
                 <data android:scheme="https" android:host="jobpilot.tailb3d4c1.ts.net" android:port="8443" />
             </intent-filter>
+
+            <!-- Puts JobPilot in Android's share sheet. Seeing a posting in
+                 Chrome or LinkedIn and saving it used to mean: copy the URL,
+                 leave, open JobPilot, go to Importar, paste, submit. With
+                 this it's Compartir -> JobPilot, and MainActivity forwards
+                 the shared text to the import screen, which starts on its
+                 own. text/plain is what every app sends for a link. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
         </activity>
 
         <provider
