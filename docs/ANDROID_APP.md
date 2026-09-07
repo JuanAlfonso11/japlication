@@ -107,6 +107,26 @@ then install. You'll see a **JobFlow AI** icon like any other app.
   `docker run --rm -v "${PWD}/frontend:/app" -w /app node:22 npx cap sync android` from the repo
   root, same as this setup used), then `.\gradlew.bat assembleDebug` again and reinstall.
 
+## Onboarding beta testers (people outside your own devices)
+
+The setup above assumes every device is logged into **the same Tailscale account** (yours). For an
+external tester, don't invite them as a full tailnet member — that would give them visibility into
+your other devices too. Instead, share just the `jobpilot` node:
+
+1. In the [admin console → Machines](https://login.tailscale.com/admin/machines), find `jobpilot` →
+   `···` menu → **Share...** → enter the tester's email. This gives them access to only that node,
+   appearing as a shared machine in their own tailnet — not membership in yours.
+2. Tailscale emails them an invite automatically.
+
+What to send the tester:
+
+1. Accept the Tailscale share invite email.
+2. Install Tailscale (`https://tailscale.com/download`, or the Play Store on Android) and sign in
+   with the invited email.
+3. With Tailscale connected, open `https://jobpilot.tailb3d4c1.ts.net` in Chrome and log in. From
+   there, **Add to Home Screen** (PWA) is the easiest way for them to get an app icon — avoids
+   walking each tester through sideloading the unsigned debug `.apk`.
+
 ## About the earlier WireGuard attempt
 
 This setup originally targeted a self-hosted WireGuard road-warrior server, but that needed router
