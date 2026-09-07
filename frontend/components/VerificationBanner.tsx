@@ -26,17 +26,18 @@ export default function VerificationBanner() {
   }
 
   return (
-    <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800 ring-1 ring-inset ring-amber-600/20 dark:bg-amber-900/20 dark:text-amber-300 dark:ring-amber-400/30">
-      <span>
-        Confirma tu correo (<strong>{user.email}</strong>) para verificar tu cuenta.
-        {message && <span className="ml-2 text-amber-700 dark:text-amber-400">{message}</span>}
+    <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-accent-50 px-4 py-3 text-sm text-accent-900 ring-1 ring-inset ring-accent-600/20 dark:bg-accent-500/10 dark:text-accent-200 dark:ring-accent-400/25">
+      <span className="min-w-0">
+        Confirma tu correo (<strong className="font-bold">{user.email}</strong>) para verificar tu
+        cuenta.
+        {message && <span className="ml-2 text-accent-700 dark:text-accent-300">{message}</span>}
       </span>
-      <div className="flex items-center gap-3">
+      <div className="flex shrink-0 items-center gap-2">
         <button
           type="button"
           onClick={handleResend}
           disabled={sending}
-          className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-60"
+          className="inline-flex min-h-[34px] items-center rounded-lg bg-accent-600 px-3.5 text-xs font-bold text-white transition-colors hover:bg-accent-700 active:scale-95 disabled:opacity-60"
         >
           {sending ? "Enviando…" : "Reenviar correo"}
         </button>
@@ -44,9 +45,9 @@ export default function VerificationBanner() {
           type="button"
           onClick={() => setDismissed(true)}
           aria-label="Cerrar"
-          className="text-amber-500 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300"
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-accent-600 transition-colors hover:bg-accent-100 dark:text-accent-400 dark:hover:bg-accent-500/15"
         >
-          ✕
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
         </button>
       </div>
     </div>

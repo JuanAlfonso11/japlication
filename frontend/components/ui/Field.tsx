@@ -18,16 +18,21 @@ export function FormField({
 }) {
   return (
     <label className={`block ${className}`}>
-      <span className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">{label}</span>
+      <span className="mb-1.5 block text-xs font-semibold text-gray-600 dark:text-gray-400">{label}</span>
       {children}
     </label>
   );
 }
 
+/* min-h-[46px] rather than a `py` value: it holds the same comfortable tap
+ * height whether the control is an input, a select, or wraps to two lines,
+ * which is what kept the old py-2/py-2.5/py-1.5 mix from ever lining up.
+ * The focus ring is a shadow, not `ring-*`, so it composes with the
+ * border-color change instead of fighting it for the same pixels. */
 export const inputClass =
-  "w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm text-gray-900 outline-none transition-colors focus:border-brand-500 focus:ring-2 focus:ring-brand-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:focus:ring-brand-900/40";
+  "w-full min-h-[46px] rounded-xl border border-gray-200 bg-white px-3.5 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 hover:border-gray-300 focus:border-brand-500 focus:shadow-[0_0_0_3px_rgb(109_40_245_/_0.12)] dark:border-gray-700 dark:bg-gray-800/60 dark:text-gray-100 dark:placeholder:text-gray-500 dark:hover:border-gray-600 dark:focus:border-brand-400 dark:focus:shadow-[0_0_0_3px_rgb(156_121_255_/_0.18)]";
 
-export const textareaClass = `${inputClass} min-h-[80px] resize-y`;
+export const textareaClass = `${inputClass} min-h-[88px] resize-y py-2.5 leading-relaxed`;
 
 /** Base class for a `<select>` trigger — `appearance-none` strips the
  * browser/OS-native arrow (which looks different per platform) so the

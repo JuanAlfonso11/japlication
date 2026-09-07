@@ -4,11 +4,13 @@ import Link from "next/link";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import RouteGuard from "@/components/RouteGuard";
-import Spinner from "@/components/Spinner";
 import ErrorNotice from "@/components/ErrorNotice";
 import StatusBadge, { STATUS_LABELS } from "@/components/StatusBadge";
 import ScoreBadge from "@/components/ScoreBadge";
-import { Select } from "@/components/ui/Field";
+import { Select, textareaClass } from "@/components/ui/Field";
+import Button from "@/components/ui/Button";
+import { ListSkeleton } from "@/components/ui/Skeleton";
+import PageHeader from "@/components/ui/PageHeader";
 import { ApiError, applicationsApi } from "@/lib/api";
 import type { Application, ApplicationStatus } from "@/lib/types";
 
@@ -92,20 +94,53 @@ function ApplicationRow({
   const job = application.job;
 
   return (
-    <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-100 dark:bg-gray-900 dark:ring-gray-800">
+    <div
+      className={`rounded-2xl bg-white p-3.5 ring-1 transition-shadow dark:bg-gray-900 ${
+        expanded
+          ? "shadow-card ring-gray-200 dark:ring-gray-700"
+          : "shadow-soft ring-gray-100 hover:shadow-card dark:ring-gray-800"
+      }`}
+    >
       <div className="flex items-start justify-between gap-3">
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
-          className="flex-1 text-left"
+          aria-expanded={expanded}
+          className="flex min-w-0 flex-1 items-start gap-3 text-left"
         >
-          <p className="font-semibold text-gray-900 dark:text-gray-100">{job?.title ?? "Trabajo sin título"}</p>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            {job?.company}
-            {job?.location ? ` · ${job.location}` : ""}
-          </p>
+          <span
+            aria-hidden="true"
+            className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-100 font-display text-sm font-extrabold text-gray-500 dark:bg-gray-800 dark:text-gray-400"
+          >
+            {job?.company?.trim()?.[0]?.toUpperCase() ?? "?"}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate font-semibold text-gray-900 dark:text-gray-100">
+              {job?.title ?? "Trabajo sin título"}
+            </span>
+            <span className="mt-0.5 block truncate text-[13px] text-gray-500 dark:text-gray-400">
+              {job?.company}
+              {job?.location ? ` · ${job.location}` : ""}
+            </span>
+          </span>
+          <svg
+            aria-hidden="true"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className={`mt-2 shrink-0 text-gray-300 transition-transform dark:text-gray-600 ${
+              expanded ? "rotate-180" : ""
+            }`}
+          >
+            <path d="m6 9 6 6 6-6" />
+          </svg>
         </button>
-        <div className="flex flex-col items-end gap-1.5">
+        <div className="flex shrink-0 flex-col items-end gap-1.5">
           {job?.match && <ScoreBadge score={job.match.overall_score} size="sm" />}
           <StatusBadge status={application.status} />
           {application.status === "passed" && (
@@ -113,7 +148,7 @@ function ApplicationRow({
               type="button"
               onClick={handleUndo}
               disabled={undoing}
-              className="text-[11px] font-semibold text-brand-600 hover:underline disabled:opacity-60 dark:text-brand-400"
+              className="text-[11px] font-bold text-brand-600 hover:underline disabled:opacity-60 dark:text-brand-400"
             >
               {undoing ? "Deshaciendo…" : "Deshacer"}
             </button>
@@ -168,7 +203,7 @@ function ApplicationRow({
                 if (notes !== (application.notes ?? "")) saveNotes();
               }}
               placeholder="Notas de la entrevista, contactos, seguimientos…"
-              className="min-h-[70px] w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:focus:ring-brand-900/40"
+              className={textareaClass}
             />
             <p className="mt-1 text-[11px] text-gray-400 dark:text-gray-500">
               {saving ? "Guardando…" : "Las notas se guardan solas al salir del campo."}
@@ -240,26 +275,32 @@ function ApplicationsContent() {
 
   return (
     <div className="space-y-5 pb-4 animate-fade-in">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Aplicaciones</h1>
-        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          Sigue cada trabajo en tu pipeline, desde guardado hasta oferta.
-        </p>
-      </div>
+      <PageHeader
+        title="Pipeline"
+        subtitle="Sigue cada trabajo desde guardado hasta oferta."
+        action={
+          !loading && !error && applications ? (
+            <span className="tabular inline-flex items-center rounded-full bg-gray-100 px-3 py-1.5 text-xs font-bold text-gray-600 dark:bg-gray-800 dark:text-gray-300">
+              {total} en total
+            </span>
+          ) : null
+        }
+      />
 
       {/* Always wraps (never a hidden horizontal scroll) — with 8 filters,
           a scrollable single row cut off the last couple off-screen with
           no visual hint there was more to see. Wrapping keeps every
           filter visible up front, at the cost of taking 2-3 lines. */}
-      <div className="flex flex-wrap gap-2 pt-1">
+      <div className="flex flex-wrap gap-1.5 pt-1">
         {FILTERS.map((f) => (
           <button
             key={f.value}
             onClick={() => setFilter(f.value)}
-            className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
+            aria-pressed={filter === f.value}
+            className={`min-h-[34px] rounded-full px-3.5 text-[13px] font-semibold transition-all active:scale-95 ${
               filter === f.value
-                ? "bg-brand-600 text-white"
-                : "bg-white text-gray-600 ring-1 ring-gray-200 hover:bg-gray-50 dark:bg-gray-900 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-gray-800"
+                ? "bg-brand-600 text-white shadow-brand"
+                : "bg-white text-gray-600 ring-1 ring-inset ring-gray-200 hover:bg-gray-50 hover:text-gray-900 dark:bg-gray-900 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-gray-800"
             }`}
           >
             {f.label}
@@ -267,30 +308,39 @@ function ApplicationsContent() {
         ))}
       </div>
 
-      {loading && <Spinner label="Cargando aplicaciones…" />}
+      {loading && <ListSkeleton rows={5} />}
       {!loading && error && <ErrorNotice message={error} onRetry={() => load(filter)} />}
 
       {!loading && !error && applications && applications.length === 0 && (
-        <div className="rounded-2xl border border-dashed border-gray-300 p-8 text-center text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">
-          Todavía no hay aplicaciones en esta vista.
+        <div className="rounded-3xl bg-white/60 p-10 text-center ring-1 ring-inset ring-gray-200 dark:bg-gray-900/40 dark:ring-gray-800">
+          <span className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-400">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="4" width="18" height="4" rx="1" />
+              <rect x="3" y="10" width="12" height="4" rx="1" />
+              <rect x="3" y="16" width="8" height="4" rx="1" />
+            </svg>
+          </span>
+          <p className="font-display text-base font-extrabold text-gray-900 dark:text-gray-100">
+            Nada por aquí todavía
+          </p>
+          <p className="mx-auto mt-1 max-w-[38ch] text-sm text-gray-500 dark:text-gray-400">
+            {filter === "all"
+              ? "Cuando guardes una vacante desde Inicio, aparecerá en esta lista."
+              : `No tienes vacantes en "${FILTERS.find((f) => f.value === filter)?.label}".`}
+          </p>
         </div>
       )}
 
       {!loading && !error && applications && applications.length > 0 && (
-        <div className="space-y-3">
+        <div className="space-y-2.5">
           {applications.map((app) => (
             <ApplicationRow key={app.id} application={app} onUpdated={handleUpdated} onUndone={handleUndone} />
           ))}
           {applications.length < total && (
             <div className="flex justify-center pt-2">
-              <button
-                type="button"
-                onClick={loadMore}
-                disabled={loadingMore}
-                className="rounded-lg bg-white px-4 py-2 text-sm font-semibold text-brand-600 shadow-sm ring-1 ring-gray-200 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-gray-900 dark:text-brand-400 dark:ring-gray-800 dark:hover:bg-gray-800"
-              >
+              <Button variant="secondary" onClick={loadMore} loading={loadingMore}>
                 {loadingMore ? "Cargando…" : `Cargar más (${total - applications.length} restantes)`}
-              </button>
+              </Button>
             </div>
           )}
         </div>
@@ -302,7 +352,7 @@ function ApplicationsContent() {
 export default function ApplicationsPage() {
   return (
     <RouteGuard>
-      <Suspense fallback={<Spinner label="Cargando aplicaciones…" />}>
+      <Suspense fallback={<ListSkeleton rows={5} />}>
         <ApplicationsContent />
       </Suspense>
     </RouteGuard>

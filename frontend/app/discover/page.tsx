@@ -6,6 +6,8 @@ import ErrorNotice from "@/components/ErrorNotice";
 import ImportedJobCard from "@/components/ImportedJobCard";
 import SkillTag from "@/components/SkillTag";
 import { Select } from "@/components/ui/Field";
+import Button from "@/components/ui/Button";
+import PageHeader from "@/components/ui/PageHeader";
 import { ApiError, jobsApi } from "@/lib/api";
 import { EXTERNAL_PLATFORM_GROUPS } from "@/lib/externalPlatforms";
 import { importAndMatch } from "@/lib/jobActions";
@@ -77,43 +79,47 @@ function ExternalResultCard({
       : null;
 
   return (
-    <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+    <div className="rounded-2xl bg-white p-4 shadow-soft ring-1 ring-gray-100 transition-shadow hover:shadow-card dark:bg-gray-900 dark:ring-gray-800">
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="mb-1 flex items-center gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
             <SourceBadge source={result.source} />
             {result.seniority && <LevelBadge level={result.seniority} />}
           </div>
-          <h3 className="font-semibold text-gray-900 dark:text-gray-100">{result.title}</h3>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            {result.company}
+          <h3 className="font-display font-bold leading-snug text-gray-900 dark:text-gray-100">
+            {result.title}
+          </h3>
+          <p className="mt-0.5 text-[13px] text-gray-500 dark:text-gray-400">
+            <span className="font-semibold text-gray-700 dark:text-gray-300">{result.company}</span>
             {result.location ? ` · ${result.location}` : ""}
           </p>
           {(budget || result.posted_at_text) && (
-            <p className="mt-0.5 text-xs text-gray-400 dark:text-gray-500">
-              {budget}
+            <p className="mt-1 text-[11px] font-medium text-gray-400 dark:text-gray-500">
+              {budget && <span className="text-emerald-600 dark:text-emerald-400">{budget}</span>}
               {budget && result.posted_at_text ? " · " : ""}
               {result.posted_at_text}
             </p>
           )}
         </div>
-        <button
-          type="button"
+        <Button
+          size="sm"
+          variant={imported ? "secondary" : "primary"}
           onClick={handleImport}
-          disabled={loading || imported}
-          className="shrink-0 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={imported}
+          loading={loading}
+          className="shrink-0"
         >
-          {imported ? "Agregado ✓" : loading ? "Agregando…" : "Agregar a la cola"}
-        </button>
+          {imported ? "Agregado ✓" : loading ? "Agregando…" : "Agregar"}
+        </Button>
       </div>
       {result.skills_required?.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-1.5">
+        <div className="mt-2.5 flex flex-wrap gap-1.5">
           {result.skills_required.slice(0, 8).map((s) => (
             <SkillTag key={s.name} label={s.name} />
           ))}
         </div>
       )}
-      {error && <p className="mt-2 text-xs text-rose-600 dark:text-rose-400">{error}</p>}
+      {error && <p className="mt-2 text-xs font-medium text-rose-600 dark:text-rose-400">{error}</p>}
     </div>
   );
 }
@@ -261,16 +267,12 @@ function DiscoverContent() {
 
   return (
     <div className="space-y-6 pb-4 animate-fade-in">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Buscar trabajos</h1>
-        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          Busca a la vez en 12 fuentes (9 públicas sin login + Adzuna/USAJobs/Google Jobs si
-          configuraste sus claves) y combina los resultados en una sola lista. Todo lo que agregues
-          queda comparado contra tu perfil en Home.
-        </p>
-      </div>
+      <PageHeader
+        title="Buscar trabajos"
+        subtitle="Busca en 12 fuentes a la vez y combina todo en una sola lista. Lo que agregues se compara contra tu perfil en Inicio."
+      />
 
-      <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-100 dark:bg-gray-900 dark:ring-gray-800">
+      <div className="rounded-2xl bg-white p-5 shadow-soft ring-1 ring-gray-100 dark:bg-gray-900 dark:ring-gray-800">
         <div className="space-y-4">
           <form onSubmit={handleSubmit} className="space-y-2">
             <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">

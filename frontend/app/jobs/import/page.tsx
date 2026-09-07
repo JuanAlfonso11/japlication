@@ -179,13 +179,14 @@ function ImportContent() {
   return (
     <div className="space-y-6 pb-4 animate-fade-in">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Agregar una vacante específica</h1>
-        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          ¿Ya encontraste una vacante en otro lado? Pega su URL o el texto de la descripción —
-          JobPilot la convierte en un trabajo estructurado y la compara contra tu perfil. ¿Buscas
-          vacantes nuevas en cambio? Prueba{" "}
-          <a href="/discover" className="font-medium text-brand-600 hover:underline dark:text-brand-400">
-            Discover
+        <h1 className="font-display text-[26px] font-extrabold leading-tight tracking-display-tight text-gray-900 dark:text-gray-50">
+          Agregar una vacante
+        </h1>
+        <p className="mt-1 max-w-[52ch] text-sm leading-relaxed text-gray-500 dark:text-gray-400">
+          Pega la URL o el texto de una vacante y JobPilot la convierte en un trabajo estructurado,
+          comparado contra tu perfil. ¿Buscas vacantes nuevas? Prueba{" "}
+          <a href="/discover" className="font-semibold text-brand-600 hover:underline dark:text-brand-400">
+            Buscar
           </a>
           .
         </p>

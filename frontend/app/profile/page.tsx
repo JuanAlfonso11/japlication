@@ -248,10 +248,12 @@ function ProfileContent() {
     <form onSubmit={handleSave} className="space-y-6 pb-4 animate-fade-in">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">CV Maestro</h1>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Mantén tu perfil profesional actualizado — de ahí salen el match, los CVs a medida y
-            las cartas de presentación.
+          <h1 className="font-display text-[26px] font-extrabold leading-tight tracking-display-tight text-gray-900 dark:text-gray-50">
+            CV Maestro
+          </h1>
+          <p className="mt-1 max-w-[52ch] text-sm leading-relaxed text-gray-500 dark:text-gray-400">
+            Mantén tu perfil actualizado — de aquí salen el match, los CVs a medida y las cartas de
+            presentación.
           </p>
         </div>
         <div className="flex items-center gap-3">

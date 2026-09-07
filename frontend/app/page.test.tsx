@@ -67,7 +67,9 @@ describe("Home swipe/decision flow", () => {
     window.localStorage.clear();
     setToken("fake-access-token");
     me.mockResolvedValue({ id: "u1", email: "user@example.com", full_name: "Test User", email_verified: true });
-    listApplications.mockResolvedValue([]);
+    // Same shape the real endpoint returns — Home reads `.items` off this,
+    // so a bare array silently left the stats row unrendered.
+    listApplications.mockResolvedValue({ items: [], total: 0 });
     decide.mockReset();
   });
 
@@ -82,7 +84,11 @@ describe("Home swipe/decision flow", () => {
 
     await waitFor(() => expect(screen.getByText("Frontend Engineer")).toBeInTheDocument());
     expect(decide).toHaveBeenCalledWith("a", { decision: "right" });
-    expect(screen.queryByText("Backend Engineer")).not.toBeInTheDocument();
+    // Scoped to the card (the mock above renders the title in a <span>):
+    // the decided job is deliberately still named in the "saved to your
+    // pipeline" confirmation below the deck, so an unscoped query here
+    // matches that banner and fails even though the queue advanced.
+    expect(screen.queryByText("Backend Engineer", { selector: "span" })).not.toBeInTheDocument();
   });
 
   it("keeps the job in the queue and shows an error when the decision fails to save", async () => {
@@ -95,7 +101,9 @@ describe("Home swipe/decision flow", () => {
     await userEvent.click(screen.getByText("mock-pass"));
 
     await waitFor(() =>
-      expect(screen.getByText("Could not record your decision. Try again.")).toBeInTheDocument()
+      expect(
+        screen.getByText("No se pudo registrar tu decisión. Intenta de nuevo.")
+      ).toBeInTheDocument()
     );
     // The failed decision must NOT remove the job — otherwise a flaky
     // network error would silently drop it from the user's queue.
@@ -110,6 +118,6 @@ describe("Home swipe/decision flow", () => {
     await waitFor(() => expect(screen.getByText("mock-save")).toBeInTheDocument());
     await userEvent.click(screen.getByText("mock-save"));
 
-    await waitFor(() => expect(screen.getByText(/you're all caught up/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/ya estás al día/i)).toBeInTheDocument());
   });
 });

@@ -5,7 +5,27 @@ import { motion, useMotionValue, useTransform, type PanInfo } from "framer-motio
 import Link from "next/link";
 import MatchBreakdown from "@/components/MatchBreakdown";
 import ScoreBadge from "@/components/ScoreBadge";
-import type { Job } from "@/lib/types";
+import { REMOTE_TYPE_LABELS, type Job, type RemoteType } from "@/lib/types";
+
+function PinIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      width="11"
+      height="11"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="shrink-0 opacity-70"
+    >
+      <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
+      <circle cx="12" cy="10" r="3" />
+    </svg>
+  );
+}
 
 const SWIPE_THRESHOLD = 120;
 const EXIT_DISTANCE = 700;
@@ -128,7 +148,7 @@ export default function SwipeCard({
         if (decision) onDecide(decision);
       }}
     >
-      <div className="relative flex h-full w-full flex-col overflow-hidden rounded-3xl bg-white shadow-lg ring-1 ring-gray-100 dark:bg-gray-900 dark:ring-gray-800">
+      <div className="relative flex h-full w-full flex-col overflow-hidden rounded-3xl bg-white shadow-card ring-1 ring-gray-200/70 dark:bg-gray-900 dark:ring-gray-800">
         <motion.div
           style={{ backgroundColor: tint }}
           className="pointer-events-none absolute inset-0 z-10"
@@ -137,57 +157,100 @@ export default function SwipeCard({
           <>
             <motion.div
               style={{ opacity: rightOpacity }}
-              className="pointer-events-none absolute right-5 top-5 z-20 rotate-6 rounded-lg border-4 border-emerald-500 px-3 py-1 text-xl font-extrabold text-emerald-500"
+              className="pointer-events-none absolute right-5 top-5 z-20 rotate-[8deg] rounded-xl bg-emerald-500 px-4 py-1.5 text-lg font-extrabold uppercase tracking-wide text-white shadow-lg"
             >
-              APLICAR
+              Aplicar
             </motion.div>
             <motion.div
               style={{ opacity: leftOpacity }}
-              className="pointer-events-none absolute left-5 top-5 z-20 -rotate-6 rounded-lg border-4 border-rose-500 px-3 py-1 text-xl font-extrabold text-rose-500"
+              className="pointer-events-none absolute left-5 top-5 z-20 -rotate-[8deg] rounded-xl bg-rose-500 px-4 py-1.5 text-lg font-extrabold uppercase tracking-wide text-white shadow-lg"
             >
-              PASAR
+              Pasar
             </motion.div>
           </>
         )}
 
         <div className="flex-1 overflow-y-auto p-5">
           <div className="flex items-start justify-between gap-3">
-            <div>
-              <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">{job.title}</h2>
-              <p className="text-sm text-gray-600 dark:text-gray-400">{job.company}</p>
-              {job.location && <p className="text-xs text-gray-400 dark:text-gray-500">{job.location}</p>}
+            <div className="flex min-w-0 flex-1 items-start gap-3">
+              {/* A company monogram gives the card a fixed visual anchor in
+                  the top-left — every card then has the same silhouette,
+                  which is what makes a fast-moving deck feel consistent
+                  instead of ragged. */}
+              <span
+                aria-hidden="true"
+                className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 font-display text-base font-extrabold text-white shadow-brand"
+              >
+                {job.company?.trim()?.[0]?.toUpperCase() ?? "?"}
+              </span>
+              <div className="min-w-0">
+                <h2 className="font-display text-[19px] font-extrabold leading-tight tracking-display-tight text-gray-900 dark:text-gray-50">
+                  {job.title}
+                </h2>
+                <p className="mt-0.5 truncate text-sm font-semibold text-gray-600 dark:text-gray-300">
+                  {job.company}
+                </p>
+              </div>
             </div>
             {match && <ScoreBadge score={match.overall_score} size="lg" />}
           </div>
 
+          {(job.location || job.remote_type) && (
+            <div className="mt-3 flex flex-wrap items-center gap-1.5">
+              {job.remote_type && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-2.5 py-1 text-[11px] font-semibold text-brand-700 dark:bg-brand-500/15 dark:text-brand-300">
+                  {REMOTE_TYPE_LABELS[job.remote_type as RemoteType] ?? job.remote_type}
+                </span>
+              )}
+              {job.location && (
+                <span className="inline-flex min-w-0 items-center gap-1 rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-300">
+                  <PinIcon />
+                  <span className="truncate">{job.location}</span>
+                </span>
+              )}
+            </div>
+          )}
+
           {job.skills_required?.length > 0 && (
             <div className="mt-3 flex flex-wrap gap-1.5">
-              {job.skills_required.slice(0, 8).map((s) => (
+              {job.skills_required.slice(0, 7).map((s) => (
                 <span
                   key={s.name}
-                  className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-300"
+                  className={`rounded-full px-2.5 py-1 text-[11px] font-medium ring-1 ring-inset ${
+                    s.importance === "required"
+                      ? "bg-gray-900/[0.04] text-gray-700 ring-gray-900/10 dark:bg-white/5 dark:text-gray-200 dark:ring-white/10"
+                      : "text-gray-500 ring-gray-200 dark:text-gray-400 dark:ring-gray-700"
+                  }`}
                 >
                   {s.name}
                 </span>
               ))}
+              {job.skills_required.length > 7 && (
+                <span className="rounded-full px-2 py-1 text-[11px] font-medium text-gray-400 dark:text-gray-500">
+                  +{job.skills_required.length - 7}
+                </span>
+              )}
             </div>
           )}
 
           {job.requirements?.length > 0 && (
-            <div className="mt-4">
-              <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+            <div className="mt-5">
+              <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.08em] text-gray-400 dark:text-gray-500">
                 Requisitos clave
               </p>
-              <ul className="list-inside list-disc space-y-1 text-sm text-gray-700 dark:text-gray-300">
+              <ul className="space-y-1.5">
                 {job.requirements.slice(0, 5).map((r, i) => (
-                  <li key={i}>{r}</li>
+                  <li key={i} className="flex gap-2 text-sm leading-snug text-gray-700 dark:text-gray-300">
+                    <span className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-brand-400" />
+                    <span>{r}</span>
+                  </li>
                 ))}
               </ul>
             </div>
           )}
 
           {match && (
-            <div className="mt-4 border-t border-gray-100 pt-4 dark:border-gray-800">
+            <div className="mt-5 border-t border-gray-100 pt-4 dark:border-gray-800">
               <MatchBreakdown match={match} />
             </div>
           )}
@@ -195,11 +258,17 @@ export default function SwipeCard({
           <Link
             href={`/jobs/${job.id}`}
             onPointerDown={(e) => e.stopPropagation()}
-            className="mt-4 inline-block text-xs font-semibold text-brand-600 hover:text-brand-700"
+            className="mt-5 inline-flex items-center gap-1 rounded-lg text-xs font-bold text-brand-600 transition-colors hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
           >
-            Ver detalles completos →
+            Ver detalles completos
+            <span aria-hidden="true">→</span>
           </Link>
         </div>
+
+        {/* Fades the last line of scrollable content instead of letting it
+            end flush against the card edge — the standard cue that there's
+            more below, which a hard cut doesn't give. */}
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-white to-transparent dark:from-gray-900" />
       </div>
     </motion.div>
   );

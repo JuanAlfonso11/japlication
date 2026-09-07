@@ -227,19 +227,29 @@ function JobDetailContent() {
 
   return (
     <div className="space-y-6 pb-4 animate-fade-in">
-      <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-100 dark:bg-gray-900 dark:ring-gray-800">
+      <div className="rounded-2xl bg-white p-5 shadow-soft ring-1 ring-gray-100 dark:bg-gray-900 dark:ring-gray-800">
         <div className="flex items-start justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{job.title}</h1>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              {job.company}
-              {job.location ? ` · ${job.location}` : ""}
-            </p>
-            {job.requires_cover_letter && (
-              <span className="mt-1.5 inline-block rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
-                Requiere carta de presentación
-              </span>
-            )}
+          <div className="flex min-w-0 flex-1 items-start gap-3">
+            <span
+              aria-hidden="true"
+              className="mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 font-display text-lg font-extrabold text-white shadow-brand"
+            >
+              {job.company?.trim()?.[0]?.toUpperCase() ?? "?"}
+            </span>
+            <div className="min-w-0">
+              <h1 className="font-display text-[22px] font-extrabold leading-tight tracking-display-tight text-gray-900 dark:text-gray-50">
+                {job.title}
+              </h1>
+              <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
+                <span className="font-semibold text-gray-700 dark:text-gray-300">{job.company}</span>
+                {job.location ? ` · ${job.location}` : ""}
+              </p>
+              {job.requires_cover_letter && (
+                <span className="mt-2 inline-block rounded-full bg-accent-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-accent-700 ring-1 ring-inset ring-accent-600/20 dark:bg-accent-500/10 dark:text-accent-300 dark:ring-accent-400/30">
+                  Requiere carta de presentación
+                </span>
+              )}
+            </div>
           </div>
           {match && <ScoreBadge score={match.overall_score} size="lg" />}
         </div>

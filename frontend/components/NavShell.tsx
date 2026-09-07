@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import VerificationBanner from "@/components/VerificationBanner";
 import ThemeToggle from "@/components/ThemeToggle";
+import { Wordmark } from "@/components/ui/Logo";
 import { applicationsApi } from "@/lib/api";
 
 const NAV_ITEMS = [
@@ -24,7 +25,7 @@ const STALE_COUNT_RECHECK_MS = 30 * 60 * 1000;
 function NavBadge({ count }: { count: number }) {
   if (count <= 0) return null;
   return (
-    <span className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold leading-none text-white">
+    <span className="absolute -right-1.5 -top-1 flex h-[17px] min-w-[17px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white dark:ring-gray-900">
       {count > 9 ? "9+" : count}
     </span>
   );
@@ -68,11 +69,10 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-dvh bg-gray-50 dark:bg-gray-950">
       {/* Top nav (desktop) */}
-      <header className="sticky top-0 z-40 hidden border-b border-gray-200 bg-white/90 backdrop-blur md:block dark:border-gray-800 dark:bg-gray-900/90">
+      <header className="sticky top-0 z-40 hidden border-b border-gray-200/80 bg-white/80 backdrop-blur-xl md:block dark:border-gray-800/80 dark:bg-gray-950/80">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-3">
-          <Link href="/" className="flex items-center gap-2 font-semibold text-gray-900 dark:text-gray-100">
-            <img src="/icons/icon-192.png" alt="" className="h-8 w-8" />
-            JobPilot
+          <Link href="/" className="transition-opacity hover:opacity-80">
+            <Wordmark />
           </Link>
           <nav className="flex items-center gap-1">
             {NAV_ITEMS.map((item) => {
@@ -82,10 +82,11 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`relative rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                  aria-current={active ? "page" : undefined}
+                  className={`relative rounded-xl px-3.5 py-2 text-sm font-semibold transition-colors ${
                     active
-                      ? "bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-300"
-                      : "text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-100"
+                      ? "bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300"
+                      : "text-gray-500 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-100"
                   }`}
                 >
                   {item.label}
@@ -96,7 +97,18 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
           </nav>
           <div className="flex items-center gap-3">
             {user && (
-              <span className="hidden text-sm text-gray-500 lg:inline dark:text-gray-400">{user.full_name}</span>
+              <Link
+                href="/profile"
+                className="hidden items-center gap-2 lg:flex"
+                title={user.full_name}
+              >
+                <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                  {user.full_name.split(" ")[0]}
+                </span>
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-600 text-xs font-bold text-white shadow-brand">
+                  {initialsOf(user.full_name)}
+                </span>
+              </Link>
             )}
             <ThemeToggle />
           </div>
@@ -106,24 +118,23 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
       {/* Mobile top bar — padding-top covers the status bar (battery/clock)
           area on the Android app, which renders edge-to-edge by default. */}
       <header
-        className="sticky top-0 z-40 flex items-center justify-between border-b border-gray-200 bg-white/90 px-4 pb-3 backdrop-blur md:hidden dark:border-gray-800 dark:bg-gray-900/90"
+        className="sticky top-0 z-40 flex items-center justify-between border-b border-gray-200/80 bg-white/80 px-4 pb-3 backdrop-blur-xl md:hidden dark:border-gray-800/80 dark:bg-gray-950/80"
         style={{ paddingTop: "calc(env(safe-area-inset-top) + 0.75rem)" }}
       >
-        <Link href="/" className="flex items-center gap-2 font-semibold text-gray-900 dark:text-gray-100">
-          <img src="/icons/icon-192.png" alt="" className="h-7 w-7" />
-          JobPilot
+        <Link href="/">
+          <Wordmark markClassName="h-7 w-7" textClassName="text-base" />
         </Link>
         <ThemeToggle compact />
       </header>
 
-      <main className="mx-auto max-w-5xl px-4 pb-24 pt-4 md:px-6 md:pb-10 md:pt-6">
+      <main className="mx-auto max-w-5xl px-4 pb-28 pt-4 md:px-6 md:pb-10 md:pt-6">
         <VerificationBanner />
         {children}
       </main>
 
       {/* Bottom tab bar (mobile) */}
       <nav
-        className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white/95 backdrop-blur md:hidden dark:border-gray-800 dark:bg-gray-900/95"
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200/80 bg-white/90 backdrop-blur-xl md:hidden dark:border-gray-800/80 dark:bg-gray-950/90"
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
         <div className="grid grid-cols-5">
@@ -135,18 +146,24 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex min-h-[56px] flex-col items-center justify-center gap-0.5 text-[11px] font-medium ${
-                  active ? "text-brand-600 dark:text-brand-400" : "text-gray-500 dark:text-gray-400"
+                aria-current={active ? "page" : undefined}
+                className={`group relative flex min-h-[58px] flex-col items-center justify-center gap-1 pt-1.5 text-[10px] font-semibold transition-colors ${
+                  active ? "text-brand-600 dark:text-brand-400" : "text-gray-400 dark:text-gray-500"
                 }`}
               >
-                {/* Same filled-pill treatment as the desktop nav's active
-                    link (bg-brand-50), so "active" reads identically on
-                    both — mobile just applies it to the icon instead of
-                    the whole row, since there's no room for a label pill
-                    in a 5-column bottom bar. */}
+                {/* A short bar riding the top edge marks the active tab.
+                    The filled pill alone (what this used to be) is easy to
+                    miss mid-swipe on a small screen; an edge indicator is
+                    readable peripherally, which is how a tab bar is
+                    actually consulted. */}
                 <span
-                  className={`relative flex items-center justify-center rounded-full px-3 py-1 transition-colors ${
-                    active ? "bg-brand-50 dark:bg-brand-900/40" : ""
+                  className={`absolute inset-x-0 top-0 mx-auto h-0.5 w-8 rounded-full bg-brand-600 transition-opacity dark:bg-brand-400 ${
+                    active ? "opacity-100" : "opacity-0"
+                  }`}
+                />
+                <span
+                  className={`relative flex items-center justify-center rounded-full px-3.5 py-1 transition-colors ${
+                    active ? "bg-brand-50 dark:bg-brand-500/15" : "group-active:bg-gray-100 dark:group-active:bg-gray-800"
                   }`}
                 >
                   <Icon active={active} />
@@ -160,6 +177,18 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
       </nav>
     </div>
   );
+}
+
+/** "Juan Alfonso Alvarado" -> "JA". Falls back to one letter for
+ * single-word names, and to nothing at all for an empty string rather
+ * than rendering an empty circle. */
+function initialsOf(fullName: string): string {
+  return fullName
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("");
 }
 
 function HomeIcon({ active }: { active: boolean }) {

@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import RouteGuard from "@/components/RouteGuard";
-import Spinner from "@/components/Spinner";
 import ErrorNotice from "@/components/ErrorNotice";
 import PullToRefresh from "@/components/PullToRefresh";
 import { STATUS_LABELS } from "@/components/StatusBadge";
 import SwipeCard from "@/components/SwipeCard";
+import Button, { buttonClass } from "@/components/ui/Button";
+import { Skeleton, SwipeCardSkeleton } from "@/components/ui/Skeleton";
 import { useAuth } from "@/context/AuthContext";
 import { applicationsApi, ApiError, jobsApi } from "@/lib/api";
 import {
@@ -61,14 +62,19 @@ function ScopePill({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-[11px] font-medium text-gray-600 shadow-sm ring-1 ring-gray-200 dark:bg-gray-900 dark:text-gray-300 dark:ring-gray-700"
+        aria-expanded={open}
+        className="flex min-h-[30px] items-center gap-1 rounded-full bg-white px-2.5 text-[11px] font-semibold text-gray-600 shadow-soft ring-1 ring-gray-200 transition-colors hover:bg-gray-50 active:scale-95 dark:bg-gray-900 dark:text-gray-300 dark:ring-gray-700 dark:hover:bg-gray-800"
       >
-        📍 {SCOPE_LEVELS[scopeIndex].label}
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-brand-500">
+          <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
+          <circle cx="12" cy="10" r="3" />
+        </svg>
+        {SCOPE_LEVELS[scopeIndex].label}
         {geoStatus === "locating" && <span className="text-gray-400">…</span>}
       </button>
 
       {open && (
-        <div className="absolute left-0 top-8 z-20 w-64 rounded-xl bg-white p-3 shadow-lg ring-1 ring-gray-100 dark:bg-gray-900 dark:ring-gray-800">
+        <div className="absolute left-0 top-9 z-20 w-64 animate-scale-in rounded-2xl bg-white p-3.5 shadow-lift ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-gray-800">
           <input
             type="range"
             min={0}
@@ -110,14 +116,14 @@ function StatsRow({ applications, queueCount }: { applications: Application[]; q
 
   return (
     <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
-      <span className="shrink-0 rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-medium text-gray-500 dark:bg-gray-800 dark:text-gray-400">
+      <span className="tabular flex min-h-[30px] shrink-0 items-center rounded-full bg-gray-100 px-2.5 text-[11px] font-semibold text-gray-500 dark:bg-gray-800 dark:text-gray-400">
         {queueCount} en cola
       </span>
       {PIPELINE_STATUSES.map((status) => (
         <Link
           key={status}
           href={`/applications?status=${status}`}
-          className="shrink-0 rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-medium text-gray-500 transition-colors hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700"
+          className="tabular flex min-h-[30px] shrink-0 items-center rounded-full bg-gray-100 px-2.5 text-[11px] font-semibold text-gray-500 transition-colors hover:bg-gray-200 hover:text-gray-700 active:scale-95 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200"
         >
           {counts[status]} {STATUS_LABELS[status]}
         </Link>
@@ -296,7 +302,7 @@ function HomeContent() {
     return () => window.removeEventListener("keydown", handleKey);
   }, [requestDecision]);
 
-  if (loading) return <Spinner label="Buscando tus mejores coincidencias…" />;
+  if (loading) return <HomeSkeleton />;
   if (loadError) return <ErrorNotice message={loadError} onRetry={load} />;
 
   const hiddenByScope = (queue?.length ?? 0) > 0 && (filteredQueue?.length ?? 0) === 0;
@@ -305,9 +311,14 @@ function HomeContent() {
     <PullToRefresh onRefresh={handlePullRefresh} ignoreSelector=".swipe-drag-surface">
       <div className="flex flex-col items-center gap-3 pb-4 animate-fade-in">
       <div className="w-full max-w-md">
-        <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">
-          Hola{user?.full_name ? `, ${user.full_name.split(" ")[0]}` : ""} 👋
+        <h1 className="font-display text-[22px] font-extrabold leading-tight tracking-display-tight text-gray-900 dark:text-gray-50">
+          Hola{user?.full_name ? `, ${user.full_name.split(" ")[0]}` : ""}
         </h1>
+        <p className="mt-0.5 text-[13px] text-gray-500 dark:text-gray-400">
+          {current
+            ? "Desliza a la derecha para guardar, a la izquierda para pasar."
+            : "Tu cola está al día."}
+        </p>
       </div>
 
       <div className="flex w-full max-w-md items-center gap-1.5">
@@ -341,37 +352,29 @@ function HomeContent() {
           48dvh/420px leaves real clearance above it. */}
       <div className="relative h-[min(48dvh,420px)] w-full max-w-md">
         {!current && hiddenByScope && (
-          <div className="flex h-full flex-col items-center justify-center gap-3 rounded-3xl border-2 border-dashed border-gray-300 p-8 text-center dark:border-gray-700">
-            <span className="text-4xl">📍</span>
-            <p className="text-lg font-semibold text-gray-800 dark:text-gray-200">Nada en este alcance</p>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              Hay recomendaciones esperando, pero ninguna coincide con &quot;
-              {SCOPE_LEVELS[scopeIndex].label}&quot;. Prueba un alcance más amplio.
-            </p>
-            <button
-              type="button"
-              onClick={() => setScopeIndex(DEFAULT_SCOPE_INDEX)}
-              className="mt-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
-            >
-              Ver cualquier lugar
-            </button>
-          </div>
+          <EmptyState
+            icon={<PinGlyph />}
+            title="Nada en este alcance"
+            body={`Hay recomendaciones esperando, pero ninguna coincide con "${SCOPE_LEVELS[scopeIndex].label}". Prueba un alcance más amplio.`}
+            action={
+              <Button size="sm" onClick={() => setScopeIndex(DEFAULT_SCOPE_INDEX)}>
+                Ver cualquier lugar
+              </Button>
+            }
+          />
         )}
 
         {!current && !hiddenByScope && (
-          <div className="flex h-full flex-col items-center justify-center gap-3 rounded-3xl border-2 border-dashed border-gray-300 p-8 text-center dark:border-gray-700">
-            <span className="text-4xl">🎉</span>
-            <p className="text-lg font-semibold text-gray-800 dark:text-gray-200">Ya estás al día</p>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              No hay recomendaciones nuevas por ahora. Explora más vacantes en Discover para seguir.
-            </p>
-            <Link
-              href="/discover"
-              className="mt-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
-            >
-              Buscar vacantes
-            </Link>
-          </div>
+          <EmptyState
+            icon={<CheckGlyph />}
+            title="Ya estás al día"
+            body="Revisaste todo lo que teníamos para ti. Desliza hacia abajo para buscar nuevas, o explora por tu cuenta."
+            action={
+              <Link href="/discover" className={buttonClass({ size: "sm" })}>
+                Buscar vacantes
+              </Link>
+            }
+          />
         )}
 
         {next && <SwipeCard key={next.id} job={next} onDecide={() => {}} isTop={false} />}
@@ -387,42 +390,42 @@ function HomeContent() {
       </div>
 
       {current && (
-        <div className="flex items-center gap-6">
-          <button
-            type="button"
+        <div className="flex items-center gap-5">
+          {/* Labelled, not just iconographic. "✕ / ✓" alone reads as
+              delete/confirm; here the left action is a soft "pass" that's
+              undoable and the right one only saves to the pipeline (it
+              never submits an application), so the words carry meaning the
+              icons can't. */}
+          <DecisionButton
             onClick={() => requestDecision("left")}
             disabled={pending || !!pendingDecision}
-            aria-label="Pasar"
-            className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-rose-500 shadow-md ring-1 ring-gray-200 transition-transform hover:scale-105 active:scale-95 disabled:opacity-50 dark:bg-gray-900 dark:ring-gray-700"
-          >
-            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
-          </button>
-          <button
-            type="button"
+            label="Pasar"
+            tone="pass"
+          />
+          <DecisionButton
             onClick={() => requestDecision("right")}
             disabled={pending || !!pendingDecision}
-            aria-label="Aplicar"
-            className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500 text-white shadow-lg transition-transform hover:scale-105 active:scale-95 disabled:opacity-50"
-          >
-            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
-          </button>
+            label="Guardar"
+            tone="save"
+          />
         </div>
       )}
 
       {justApplied && (
-        <div className="w-full max-w-md rounded-xl bg-brand-50 p-3 dark:bg-brand-900/20">
+        <div className="w-full max-w-md animate-slide-up rounded-2xl bg-brand-50 p-3.5 ring-1 ring-inset ring-brand-100 dark:bg-brand-500/10 dark:ring-brand-500/20">
           <div className="flex items-start justify-between gap-2">
-            <p className="text-xs text-brand-800 dark:text-brand-300">
+            <p className="text-xs leading-relaxed text-brand-900 dark:text-brand-200">
               Guardado en tu pipeline. JobPilot no lo envía por ti — para aplicar de verdad a{" "}
-              <strong>{justApplied.title}</strong> tienes que hacerlo en el sitio original.
+              <strong className="font-bold">{justApplied.title}</strong> tienes que hacerlo en el sitio
+              original.
             </p>
             <button
               type="button"
               onClick={() => setJustApplied(null)}
               aria-label="Cerrar"
-              className="shrink-0 text-brand-400 hover:text-brand-600 dark:text-brand-500"
+              className="-mr-1 -mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-brand-400 transition-colors hover:bg-brand-100 hover:text-brand-700 dark:hover:bg-brand-500/20"
             >
-              ✕
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
             </button>
           </div>
           {justApplied.source_url ? (
@@ -430,14 +433,14 @@ function HomeContent() {
               href={justApplied.source_url}
               target="_blank"
               rel="noreferrer"
-              className="mt-2 inline-block rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700"
+              className={buttonClass({ size: "sm", className: "mt-2.5" })}
             >
               Aplicar en el sitio original ↗
             </a>
           ) : (
             <Link
               href={`/jobs/${justApplied.id}`}
-              className="mt-2 inline-block text-xs font-semibold text-brand-700 hover:underline dark:text-brand-300"
+              className={buttonClass({ variant: "secondary", size: "sm", className: "mt-2.5" })}
             >
               Ver detalles del trabajo →
             </Link>
@@ -446,28 +449,148 @@ function HomeContent() {
       )}
 
       {justPassed && (
-        <div className="w-full max-w-md rounded-xl bg-gray-100 p-3 dark:bg-gray-800">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-xs text-gray-600 dark:text-gray-400">
-              Pasaste <strong>{justPassed.job.title}</strong>.
-            </p>
-            <button
-              type="button"
-              onClick={handleUndoPass}
-              disabled={undoing}
-              className="shrink-0 rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 shadow-sm ring-1 ring-gray-200 hover:bg-gray-50 disabled:opacity-60 dark:bg-gray-900 dark:text-gray-200 dark:ring-gray-700"
-            >
-              {undoing ? "Deshaciendo…" : "Deshacer"}
-            </button>
-          </div>
+        <div className="flex w-full max-w-md animate-slide-up items-center justify-between gap-2 rounded-2xl bg-gray-900 p-2 pl-4 dark:bg-gray-800">
+          <p className="min-w-0 truncate text-xs text-gray-300">
+            Pasaste <strong className="font-semibold text-white">{justPassed.job.title}</strong>
+          </p>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleUndoPass}
+            loading={undoing}
+            className="shrink-0"
+          >
+            {undoing ? "Deshaciendo…" : "Deshacer"}
+          </Button>
         </div>
       )}
 
       {filteredQueue && current && (
-        <p className="text-xs text-gray-400 dark:text-gray-500">Quedan {filteredQueue.length} en tu cola</p>
+        <p className="tabular text-[11px] font-medium text-gray-400 dark:text-gray-500">
+          Quedan {filteredQueue.length} en tu cola
+        </p>
       )}
       </div>
     </PullToRefresh>
+  );
+}
+
+/** The two swipe actions. Sized well above the 44px tap-target floor (the
+ * old buttons were 56/64px circles with no label), and colored by outcome
+ * rather than both being neutral chrome. */
+function DecisionButton({
+  onClick,
+  disabled,
+  label,
+  tone,
+}: {
+  onClick: () => void;
+  disabled: boolean;
+  label: string;
+  tone: "pass" | "save";
+}) {
+  const save = tone === "save";
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      className={`group flex flex-col items-center gap-1.5 transition-transform active:scale-95 disabled:opacity-40 ${
+        disabled ? "" : "hover:-translate-y-0.5"
+      }`}
+    >
+      <span
+        className={`flex items-center justify-center rounded-full transition-shadow ${
+          save
+            ? "h-[64px] w-[64px] bg-emerald-500 text-white shadow-[0_8px_24px_-6px_rgb(16_185_129_/_0.6)] group-hover:shadow-[0_12px_30px_-6px_rgb(16_185_129_/_0.7)]"
+            : "h-14 w-14 bg-white text-rose-500 shadow-card ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-gray-700"
+        }`}
+      >
+        {save ? (
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+        ) : (
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+        )}
+      </span>
+      <span
+        className={`text-[11px] font-bold uppercase tracking-wide ${
+          save ? "text-emerald-600 dark:text-emerald-400" : "text-gray-400 dark:text-gray-500"
+        }`}
+      >
+        {label}
+      </span>
+    </button>
+  );
+}
+
+/** Shared shell for Home's two "nothing to show" states, so they can't
+ * drift apart the way the two hand-written copies did. */
+function EmptyState({
+  icon,
+  title,
+  body,
+  action,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  body: string;
+  action: React.ReactNode;
+}) {
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-3 rounded-3xl bg-white/60 p-8 text-center ring-1 ring-inset ring-gray-200 dark:bg-gray-900/40 dark:ring-gray-800">
+      <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-400">
+        {icon}
+      </span>
+      <p className="font-display text-lg font-extrabold tracking-display-tight text-gray-900 dark:text-gray-100">
+        {title}
+      </p>
+      <p className="max-w-[36ch] text-sm leading-relaxed text-gray-500 dark:text-gray-400">{body}</p>
+      <div className="mt-1">{action}</div>
+    </div>
+  );
+}
+
+function PinGlyph() {
+  return (
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
+      <circle cx="12" cy="10" r="3" />
+    </svg>
+  );
+}
+
+function CheckGlyph() {
+  return (
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21.8 10.7V12a10 10 0 1 1-5.9-9.1" />
+      <path d="m9 11 3 3L22 4" />
+    </svg>
+  );
+}
+
+/** Mirrors the real Home layout (greeting, filter row, card, buttons) so
+ * the screen doesn't visibly re-assemble itself when the queue lands. */
+function HomeSkeleton() {
+  return (
+    <div className="flex flex-col items-center gap-3 pb-4">
+      <div className="w-full max-w-md space-y-2">
+        <Skeleton className="h-6 w-40" />
+        <Skeleton className="h-3 w-64" />
+      </div>
+      <div className="flex w-full max-w-md gap-1.5">
+        <Skeleton className="h-7 w-24 rounded-full" />
+        <Skeleton className="h-7 w-20 rounded-full" />
+        <Skeleton className="h-7 w-20 rounded-full" />
+      </div>
+      <div className="h-[min(48dvh,420px)] w-full max-w-md">
+        <SwipeCardSkeleton />
+      </div>
+      <div className="flex items-center gap-5">
+        <Skeleton className="h-14 w-14 rounded-full" />
+        <Skeleton className="h-16 w-16 rounded-full" />
+      </div>
+    </div>
   );
 }
 
