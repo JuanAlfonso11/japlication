@@ -1,28 +1,33 @@
-/** JobPilot's mark: a paper plane — "pilot", and an application in flight.
+/** JobPilot's mark: a compass needle inside a ring.
  *
- * Drawn inline as SVG rather than reusing `/icons/icon-192.png` (which the
- * header used to render at 28px) so it stays crisp at any size, needs no
- * network request, and can pick up the brand gradient from the same tokens
- * as the rest of the UI instead of being a baked-in bitmap that drifts
- * every time the palette changes.
+ * "Pilot" is navigation, and the ring deliberately rhymes with the match
+ * dial in `ScoreBadge` — the app's most-repeated shape. It replaced an
+ * earlier paper plane, which read as a messaging app (Telegram owns that
+ * silhouette) rather than anything to do with a job search.
  *
- * The two wings are the same white at different opacities: that fold is
- * what keeps the plane readable as a plane down at 20px, where a flat
- * silhouette turns into an unidentifiable triangle. */
+ * Painted with FLAT fills, no `<linearGradient>` + `url(#id)`. The gradient
+ * version had a real bug: NavShell renders this twice (desktop header and
+ * mobile header, one of them `display:none` at any given width) and both
+ * copies declared the same gradient id. `url(#id)` resolves to the FIRST
+ * match in document order — the hidden one — and a paint server inside a
+ * `display:none` subtree paints nothing, so the logo silently vanished.
+ * Verified in a standalone repro: duplicate id + hidden first copy renders
+ * empty, unique id and flat fill both render fine. A flat fill can't
+ * regress that way no matter how many times the component is mounted, and
+ * at header sizes (28px) a gradient was imperceptible anyway. The generated
+ * PNG icons — standalone files with no collision risk — do keep the
+ * gradient, where it reads at 512px on a home screen. */
 
 export default function Logo({ className = "h-8 w-8" }: { className?: string }) {
   return (
     <svg viewBox="0 0 48 48" className={className} role="img" aria-label="JobPilot">
-      <defs>
-        <linearGradient id="jobpilot-mark" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#9c79ff" />
-          <stop offset="55%" stopColor="#6d28f5" />
-          <stop offset="100%" stopColor="#4a1cad" />
-        </linearGradient>
-      </defs>
-      <rect width="48" height="48" rx="13" fill="url(#jobpilot-mark)" />
-      <path d="M37 12 L21.5 26.5 L26 37 Z" fill="#ffffff" fillOpacity="0.62" />
-      <path d="M37 12 L11 22 L21.5 26.5 Z" fill="#ffffff" />
+      <rect width="48" height="48" rx="13" fill="#6d28f5" />
+      <circle cx="24" cy="24" r="14" fill="none" stroke="#ffffff" strokeWidth="2.2" opacity="0.45" />
+      {/* North half of the needle, bright; south half dimmed — that
+          two-tone split is what makes it read as a compass rather than a
+          generic arrow once it's down at 20px. */}
+      <path d="M31.07 16.93 L26.83 26.83 L21.17 21.17 Z" fill="#ffffff" />
+      <path d="M16.93 31.07 L26.83 26.83 L21.17 21.17 Z" fill="#ffffff" fillOpacity="0.45" />
     </svg>
   );
 }
