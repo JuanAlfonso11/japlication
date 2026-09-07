@@ -17,7 +17,7 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 26px;
+    gap: 22px;
     min-height: 100dvh;
     padding: 24px;
     text-align: center;
@@ -25,41 +25,46 @@
     overflow: hidden;
   }
 
-  /* -- Mascot: JobPilot's copilot, asleep. This page only ever shows when
-        the stack was stopped ON PURPOSE from the control panel, so he's
-        napping rather than worried — the near-identical page bundled in the
-        APK (frontend/public/offline.html) uses the awake, worried version
-        for "can't reach the server". Same character, two moods, so the two
-        situations are told apart without reading a word. -- */
+  /* -- Mascota: el gato piloto de JobPilot, dormido al mando.
+        Esta pagina solo aparece cuando el stack se apago A PROPOSITO desde
+        el panel de la PC, asi que el gato duerme la siesta. La pagina
+        gemela que va dentro del APK (frontend/public/offline.html) usa al
+        mismo gato despierto y desconcertado, para cuando no encuentra el
+        servidor. Mismo personaje, dos estados de animo: se distinguen las
+        dos situaciones sin leer una palabra.
+
+        El avion va en crema y no en violeta a proposito: sobre este fondo,
+        un avion violeta desaparecia y el gato parecia flotar sobre una
+        mancha. Negro sobre crema es el maximo contraste posible aqui. -- */
   .stage {
     position: relative;
-    width: 172px;
-    height: 172px;
+    width: min(300px, 82vw);
+    aspect-ratio: 300 / 210;
     animation: bob 3.6s ease-in-out infinite;
   }
+  .stage svg { width: 100%; height: 100%; display: block; }
   @keyframes bob {
     0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-9px); }
+    50% { transform: translateY(-10px); }
   }
-  .stage svg { width: 100%; height: 100%; }
 
   .zzz {
     position: absolute;
-    top: 4px;
-    right: 0;
+    top: 4%;
+    right: 12%;
     font-weight: 800;
     color: #fff;
-    text-shadow: 0 2px 8px rgba(0,0,0,0.25);
+    text-shadow: 0 2px 8px rgba(0,0,0,0.3);
   }
   .zzz span { position: absolute; opacity: 0; animation: rise 3.6s ease-in infinite; }
-  .zzz span:nth-child(1) { font-size: 15px; animation-delay: 0s; }
-  .zzz span:nth-child(2) { font-size: 19px; left: 12px; top: -10px; animation-delay: 0.7s; }
-  .zzz span:nth-child(3) { font-size: 24px; left: 26px; top: -22px; animation-delay: 1.4s; }
+  .zzz span:nth-child(1) { font-size: 17px; animation-delay: 0s; }
+  .zzz span:nth-child(2) { font-size: 22px; left: 15px; top: -14px; animation-delay: 0.7s; }
+  .zzz span:nth-child(3) { font-size: 28px; left: 34px; top: -30px; animation-delay: 1.4s; }
   @keyframes rise {
     0%   { opacity: 0; transform: translateY(6px); }
     18%  { opacity: 0.95; }
     70%  { opacity: 0.5; }
-    100% { opacity: 0; transform: translateY(-30px); }
+    100% { opacity: 0; transform: translateY(-32px); }
   }
 
   h1 {
@@ -103,23 +108,57 @@
 </head>
 <body>
   <div class="stage">
-    <svg viewBox="0 0 120 120" aria-label="El copiloto de JobPilot, durmiendo" role="img">
-      <ellipse cx="60" cy="110" rx="30" ry="5" fill="rgba(0,0,0,0.18)"/>
-      <rect x="17" y="52" width="15" height="31" rx="7.5" fill="#4a1cad"/>
-      <rect x="88" y="52" width="15" height="31" rx="7.5" fill="#4a1cad"/>
-      <circle cx="60" cy="62" r="38" fill="#ffffff"/>
-      <path d="M22 58 A38 38 0 0 1 98 58 Z" fill="#4a1cad"/>
-      <rect x="21" y="54" width="78" height="7" rx="3.5" fill="#5b1fd6"/>
-      <rect x="40" y="38" width="40" height="7" rx="3.5" fill="#b74b06"/>
-      <circle cx="42" cy="41" r="12" fill="#ffb02e" stroke="#b74b06" stroke-width="3"/>
-      <circle cx="78" cy="41" r="12" fill="#ffb02e" stroke="#b74b06" stroke-width="3"/>
-      <circle cx="38.5" cy="37.5" r="3.5" fill="#fff" opacity="0.55"/>
-      <circle cx="74.5" cy="37.5" r="3.5" fill="#fff" opacity="0.55"/>
-      <path d="M42 71 q7 7 14 0" fill="none" stroke="#2a3042" stroke-width="3.2" stroke-linecap="round"/>
-      <path d="M64 71 q7 7 14 0" fill="none" stroke="#2a3042" stroke-width="3.2" stroke-linecap="round"/>
-      <ellipse cx="38" cy="80" rx="6" ry="4" fill="#ffb02e" opacity="0.35"/>
-      <ellipse cx="82" cy="80" rx="6" ry="4" fill="#ffb02e" opacity="0.35"/>
-      <path d="M54 85 q6 6 12 0" fill="none" stroke="#2a3042" stroke-width="3" stroke-linecap="round"/>
+    <svg viewBox="0 0 300 210" role="img" aria-label="El gato piloto de JobPilot, dormido en su avion">
+      <ellipse cx="150" cy="192" rx="80" ry="8" fill="rgba(0,0,0,0.20)"/>
+
+      <!-- ala trasera -->
+      <ellipse cx="120" cy="146" rx="62" ry="12" fill="#c3c8db"/>
+      <!-- cola del avion -->
+      <path d="M62 128 L44 74 L96 122 Z" fill="#eceef5"/>
+      <path d="M62 128 L48 84 L78 120 Z" fill="#ffb02e"/>
+      <ellipse cx="66" cy="132" rx="26" ry="7" fill="#c3c8db"/>
+
+      <!-- fuselaje -->
+      <rect x="56" y="112" width="196" height="50" rx="25" fill="#f6f7fb"/>
+      <rect x="56" y="150" width="196" height="12" rx="6" fill="#6d28f5" opacity="0.85"/>
+      <circle cx="200" cy="132" r="10" fill="#6d28f5" opacity="0.30"/>
+      <circle cx="224" cy="132" r="7" fill="#6d28f5" opacity="0.22"/>
+      <!-- morro y helice, quieta: el avion esta estacionado -->
+      <path d="M252 114 q26 23 0 46 Z" fill="#eceef5"/>
+      <rect x="258" y="96" width="8" height="46" rx="4" fill="#3f465c" transform="rotate(18 262 118)"/>
+      <circle cx="262" cy="118" r="8" fill="#ffb02e" stroke="#b74b06" stroke-width="2.5"/>
+      <ellipse cx="176" cy="166" rx="56" ry="11" fill="#dcdfeb"/>
+
+      <!-- gato -->
+      <ellipse cx="146" cy="116" rx="38" ry="22" fill="#151824"/>
+      <ellipse cx="176" cy="112" rx="13" ry="7" fill="#232838"/>
+      <circle cx="146" cy="84" r="33" fill="#151824"/>
+      <path d="M120 64 L113 30 L144 55 Z" fill="#151824"/>
+      <path d="M172 64 L179 30 L148 55 Z" fill="#151824"/>
+      <path d="M124 61 L121 41 L139 57 Z" fill="#f9a8c4" opacity="0.5"/>
+      <path d="M168 61 L171 41 L153 57 Z" fill="#f9a8c4" opacity="0.5"/>
+      <!-- gafas de aviador, subidas a la frente -->
+      <rect x="118" y="55" width="56" height="10" rx="5" fill="#b74b06"/>
+      <circle cx="125" cy="60" r="14" fill="#ffb02e" stroke="#b74b06" stroke-width="3.5"/>
+      <circle cx="167" cy="60" r="14" fill="#ffb02e" stroke="#b74b06" stroke-width="3.5"/>
+      <circle cx="120" cy="55" r="4.5" fill="#fff" opacity="0.55"/>
+      <circle cx="162" cy="55" r="4.5" fill="#fff" opacity="0.55"/>
+      <!-- ojos cerrados -->
+      <path d="M129 88 q8 8 16 0" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round"/>
+      <path d="M151 88 q8 8 16 0" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round"/>
+      <path d="M142 97 L150 97 L146 102 Z" fill="#f9a8c4"/>
+      <path d="M146 102 q-6 6 -11 1" fill="none" stroke="#c3c8db" stroke-width="2.4" stroke-linecap="round"/>
+      <path d="M146 102 q6 6 11 1" fill="none" stroke="#c3c8db" stroke-width="2.4" stroke-linecap="round"/>
+      <path d="M116 92 L96 87 M116 99 L94 100 M176 92 L196 87 M176 99 L198 100"
+            stroke="#fff" stroke-width="2" stroke-linecap="round" opacity="0.65"/>
+      <path d="M116 112 q30 13 60 0 l0 11 q-30 12 -60 0 Z" fill="#dd6d02"/>
+      <path d="M118 118 q-26 10 -38 30 q17 6 27 -8 Z" fill="#f99207"/>
+
+      <!-- borde de la cabina, dibujado DESPUES del gato para recortarlo por
+           delante: sin esto el gato flota encima del avion en vez de ir
+           sentado dentro. -->
+      <path d="M104 124 q42 22 88 0 l0 16 q-44 20 -88 0 Z" fill="#e3e6f0"/>
+      <path d="M104 124 q42 22 88 0" fill="none" stroke="#c3c8db" stroke-width="3"/>
     </svg>
     <div class="zzz"><span>z</span><span>z</span><span>Z</span></div>
   </div>
