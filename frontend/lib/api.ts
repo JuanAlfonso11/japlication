@@ -21,6 +21,7 @@ import type {
   JobImportPayload,
   JobListResponse,
   LoginPayload,
+  ErrorLogEntry,
   InterviewPrepResponse,
   MatchResult,
   SkillGapsResponse,
@@ -485,4 +486,6 @@ export const appUpdateApi = {
 
 export const systemApi = {
   status: () => request<HeartbeatInfo[]>("/system/status"),
+  errors: (params?: { limit?: number; source?: "backend" | "frontend" }) =>
+    request<ErrorLogEntry[]>("/system/errors", { query: params }),
 };

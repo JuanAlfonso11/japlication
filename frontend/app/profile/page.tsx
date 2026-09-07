@@ -7,6 +7,7 @@ import ErrorNotice from "@/components/ErrorNotice";
 import CVEvaluationCard from "@/components/CVEvaluationCard";
 import SkillGapsCard from "@/components/SkillGapsCard";
 import SegmentedTabs from "@/components/ui/SegmentedTabs";
+import ErrorLogPanel from "@/components/ErrorLogPanel";
 import SettingsPanel from "@/components/profile/SettingsPanel";
 import UsedResumesSection from "@/components/profile/UsedResumesSection";
 import SystemStatusPanel from "@/components/profile/SystemStatusPanel";
@@ -446,6 +447,10 @@ function ProfileContent() {
           <SettingsPanel />
 
           <SystemStatusPanel />
+
+          {/* Last in Analisis: it's the thing you go looking for only when
+              something already went wrong. */}
+          <ErrorLogPanel />
         </>
       )}
 

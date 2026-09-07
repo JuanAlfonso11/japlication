@@ -612,3 +612,25 @@ export interface HeartbeatInfo {
   last_status: string;
   detail: string | null;
 }
+
+// ---------- Error log ----------
+
+/** One recorded failure, from either side of the app. The request body is
+ * never captured — see db/schema.sql for why. */
+export interface ErrorLogEntry {
+  id: string;
+  /** Short id echoed to the user in the error message, so a report of
+   * "salió el código a1b2c3" maps straight to this row. */
+  request_id: string;
+  source: "backend" | "frontend";
+  level: string;
+  kind?: string | null;
+  message: string;
+  stack?: string | null;
+  method?: string | null;
+  path?: string | null;
+  status_code?: number | null;
+  user_agent?: string | null;
+  url?: string | null;
+  created_at: string;
+}

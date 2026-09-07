@@ -39,3 +39,16 @@ if ($old) {
     $old | Remove-Item -Force
     Write-Host "[JobPilot backup] Removed $($old.Count) backup(s) older than $RetentionDays days."
 }
+
+# Same retention window applied to error_logs. That table only ever grows,
+# and while a handful of rows a week is nothing, one component crashing in a
+# render loop can write a burst of them. Pruning here rather than in the API
+# keeps the write path fast and puts all the housekeeping in the one job
+# that already runs daily and already talks to the database.
+#
+# Deliberately after the dump above: a row is preserved in that night's
+# backup before it's deleted here, so nothing is lost outright.
+Write-Host "[JobPilot backup] Pruning error_logs older than $RetentionDays days..."
+$ErrorActionPreference = "Continue"
+docker compose exec -T db psql -U jobflow -d jobflow -c "DELETE FROM error_logs WHERE created_at < now() - interval '$RetentionDays days';" 2>&1 | ForEach-Object { Write-Host $_ }
+$ErrorActionPreference = "Stop"

@@ -17,10 +17,18 @@ from app.api.v1.routers import (
     system,
 )
 from app.core.config import settings
+from app.core.error_middleware import ErrorLoggingMiddleware
 from app.core.rate_limit import limiter
 
 app = FastAPI(title=settings.PROJECT_NAME, version="1.0.0")
 app.state.limiter = limiter
+
+# Order matters: middleware wraps in reverse registration order, so CORS is
+# added last to end up OUTERMOST. If the error middleware were outside it,
+# the 500 it builds would go back without CORS headers and the browser would
+# show an opaque "network error" instead of the message — hiding exactly the
+# id the user is supposed to report.
+app.add_middleware(ErrorLoggingMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
@@ -28,6 +36,8 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # So the frontend can read the correlation id off a response.
+    expose_headers=["X-Request-Id"],
 )
 
 

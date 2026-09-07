@@ -201,6 +201,50 @@ CREATE TABLE resume_versions (
     created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- =========================================================
+-- error_logs  (todo lo que falla, en un solo lugar consultable)
+-- =========================================================
+-- Antes de esto, un error del backend vivia en el stdout de Docker (efimero,
+-- y hay que saber ir a buscarlo) y un error del frontend en el telefono no
+-- existia en ningun lado. Esta tabla es el sitio unico donde mirar cuando
+-- algo falla.
+--
+-- Lo que NO se guarda, a proposito: el cuerpo de la peticion. Un POST a
+-- /auth/login lo primero que lleva es una contrasena, y un log que la captura
+-- convierte un problema de diagnostico en una filtracion de credenciales.
+-- Se guarda de donde vino el error y que fallo, nunca con que datos.
+CREATE TABLE error_logs (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    -- Correlaciona una respuesta de error que vio el usuario con su fila
+    -- aqui: el API devuelve este id y el usuario solo tiene que leerlo.
+    request_id    TEXT NOT NULL,
+    -- 'backend' | 'frontend' — de que lado ocurrio.
+    source        TEXT NOT NULL,
+    -- 'error' | 'warning'
+    level         TEXT NOT NULL DEFAULT 'error',
+    -- Nombre de la excepcion o del error JS.
+    kind          TEXT,
+    message       TEXT NOT NULL,
+    -- Traceback (backend) o stack (frontend), recortado.
+    stack         TEXT,
+    -- Contexto de la peticion: metodo + ruta (sin query, que puede llevar
+    -- datos), y el codigo de estado devuelto.
+    method        TEXT,
+    path          TEXT,
+    status_code   INTEGER,
+    -- Quien lo sufrio, si habia sesion. ON DELETE SET NULL para que borrar
+    -- un usuario no borre el historial de fallos.
+    user_id       UUID REFERENCES users(id) ON DELETE SET NULL,
+    -- Solo para errores de frontend: que navegador/WebView y en que URL.
+    user_agent    TEXT,
+    url           TEXT,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- La consulta que se hace siempre: los ultimos primero.
+CREATE INDEX idx_error_logs_created_at ON error_logs (created_at DESC);
+CREATE INDEX idx_error_logs_request_id ON error_logs (request_id);
+
 CREATE INDEX idx_resume_versions_user ON resume_versions (user_id);
 CREATE INDEX idx_resume_versions_job ON resume_versions (job_id);
 

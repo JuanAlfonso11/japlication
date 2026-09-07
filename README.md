@@ -153,6 +153,31 @@ el auto-apply es frágil: Perplexity lo lanzó y lo retiró a las pocas semanas.
   *no* tiene se presenta como brecha a preparar con honestidad, nunca como una respuesta que fingir.
   Funciona sin `ANTHROPIC_API_KEY` (el generador basado en reglas es el default).
 
+## Cuando algo falla
+
+Todo lo que falla queda en un solo lugar consultable, `error_logs`, y se lee desde la app en
+**Perfil → Análisis → Errores recientes** — sin abrir `docker compose logs` ni una laptop.
+
+- **Errores del backend**: `ErrorLoggingMiddleware` captura cualquier excepción no manejada con su
+  traceback, la ruta y el usuario, y devuelve un 500 que **incluye un código corto**. Ese mismo
+  código va en la cabecera `X-Request-Id` de *toda* respuesta, así que un reporte de "me salió el
+  código a1b2c3" se busca directo en vez de adivinar por hora.
+- **Errores del frontend**: antes eran invisibles — un crash en el WebView del celular no dejaba
+  rastro. Ahora un `ErrorBoundary` atrapa los fallos de render (con el *component stack*, que es lo
+  que dice qué componente rompió) y los handlers globales atrapan el resto; todo se reporta a la
+  misma tabla.
+
+Dos decisiones deliberadas:
+
+- **Nunca se guarda el cuerpo de la petición.** Lo primero que lleva un `POST /auth/login` es una
+  contraseña; un log que la captura convierte una ayuda de diagnóstico en una filtración de
+  credenciales. Se guarda de dónde vino el error y qué falló, nunca con qué datos. Hay un test que
+  lo verifica.
+- **Los 4xx no se registran.** Un 401 por token vencido es la app funcionando; enterrar los fallos
+  reales bajo miles de esos es cómo un log deja de leerse.
+
+Retención: 30 días, podados por `scripts/backup-db.ps1` *después* del respaldo de esa noche.
+
 ## Notas de seguridad y veracidad
 
 - La adaptación de CV, las cover letters y la importación de CV en PDF se generan **solo a partir de lo que ya existe** (el perfil maestro, o el propio PDF) — reformulan/enfatizan lenguaje existente, nunca inventan experiencia o habilidades no declaradas.

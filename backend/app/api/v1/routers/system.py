@@ -9,17 +9,21 @@ import secrets
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.core.config import settings
+from app.core.rate_limit import limiter
 from app.db.session import get_db
+from app.models.error_log import ErrorLog
 from app.models.system_heartbeat import SystemHeartbeat
 from app.models.user import User
+from app.schemas.error_log import ClientErrorReport, ErrorLogEntry
 from app.schemas.system_heartbeat import HeartbeatInfo, HeartbeatRequest
+from app.services.error_logger import new_request_id, record_error
 
 router = APIRouter(prefix="/system", tags=["system"])
 
@@ -75,3 +79,56 @@ async def get_system_status(
 ) -> list[HeartbeatInfo]:
     rows = (await db.execute(select(SystemHeartbeat).order_by(SystemHeartbeat.job_name))).scalars().all()
     return [HeartbeatInfo.model_validate(r) for r in rows]
+
+
+@router.post("/client-errors", status_code=204)
+@limiter.limit("30/minute")
+async def report_client_error(
+    request: Request,
+    payload: ClientErrorReport,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    """Lets the frontend report its own crashes.
+
+    Without this, a JavaScript error in the phone's WebView was invisible:
+    the user saw a broken screen and there was nothing to inspect afterwards
+    — no console to open, no log to read. Now it lands in the same table as
+    backend failures, so one list answers "what broke?" regardless of side.
+
+    Rate-limited because it's an authenticated write reachable from client
+    code: one render loop throwing on every frame could otherwise write
+    thousands of rows a minute.
+    """
+    await record_error(
+        request_id=getattr(request.state, "request_id", new_request_id()),
+        source="frontend",
+        kind=payload.kind,
+        message=payload.message,
+        stack=payload.stack,
+        url=payload.url,
+        user_id=current_user.id,
+        user_agent=request.headers.get("user-agent"),
+        db=db,
+    )
+
+
+@router.get("/errors", response_model=list[ErrorLogEntry])
+async def list_errors(
+    limit: int = Query(50, ge=1, le=200),
+    source: Optional[str] = Query(None, pattern="^(backend|frontend)$"),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> list[ErrorLogEntry]:
+    """The most recent failures, newest first — what Profile's system panel
+    reads so you can diagnose from the phone instead of `docker compose logs`.
+
+    Deliberately NOT filtered to the calling user: this is a single-operator
+    app, and the point is to see everything that broke, including a tester's
+    crash you'd otherwise never hear about.
+    """
+    stmt = select(ErrorLog).order_by(ErrorLog.created_at.desc()).limit(limit)
+    if source:
+        stmt = stmt.where(ErrorLog.source == source)
+    rows = (await db.execute(stmt)).scalars().all()
+    return [ErrorLogEntry.model_validate(r) for r in rows]

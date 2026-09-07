@@ -9,6 +9,7 @@ from app.models.resume_version import ResumeVersion
 from app.models.cover_letter import CoverLetter
 from app.models.system_heartbeat import SystemHeartbeat
 from app.models.api_call_budget import ApiCallBudget
+from app.models.error_log import ErrorLog
 
 __all__ = [
     "User",
@@ -22,4 +23,5 @@ __all__ = [
     "CoverLetter",
     "SystemHeartbeat",
     "ApiCallBudget",
+    "ErrorLog",
 ]
