@@ -52,4 +52,13 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Lets the app hand a downloaded APK straight to Android's package
+         installer, so an update is "tap Actualizar, confirm, done" instead
+         of "tap the notification, find the file in Downloads, open it,
+         install". Android still gates this behind a one-time per-app
+         "allow from this source" toggle the user grants themselves; this
+         permission only makes JobPilot eligible to ask. It cannot install
+         anything silently. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 </manifest>

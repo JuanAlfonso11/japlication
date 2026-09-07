@@ -1,11 +1,15 @@
 package ai.jobflow.app;
 
 import android.app.DownloadManager;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.provider.Settings;
 import android.webkit.URLUtil;
 import android.widget.Toast;
 import com.getcapacitor.BridgeActivity;
@@ -29,11 +33,33 @@ import com.getcapacitor.BridgeActivity;
  * in the app, e.g. backing out of a job's detail page. Removed.)
  */
 public class MainActivity extends BridgeActivity {
+
+    /** The in-flight update download, so the completion receiver below only
+     * acts on our own APK and ignores every other download on the device. */
+    private long updateDownloadId = -1L;
+    private BroadcastReceiver downloadCompleteReceiver;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         handleViewIntent(getIntent());
         setupDownloadListener();
+        registerDownloadCompleteReceiver();
+    }
+
+    // public, not protected: BridgeActivity declares onDestroy() public and
+    // Java forbids narrowing an override's visibility.
+    @Override
+    public void onDestroy() {
+        if (downloadCompleteReceiver != null) {
+            try {
+                unregisterReceiver(downloadCompleteReceiver);
+            } catch (IllegalArgumentException ignored) {
+                // Already unregistered — nothing to undo.
+            }
+            downloadCompleteReceiver = null;
+        }
+        super.onDestroy();
     }
 
     @Override
@@ -78,12 +104,107 @@ public class MainActivity extends BridgeActivity {
                     request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, filename);
                     DownloadManager downloadManager = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
                     if (downloadManager != null) {
-                        downloadManager.enqueue(request);
+                        updateDownloadId = downloadManager.enqueue(request);
                         Toast.makeText(getApplicationContext(), "Descargando actualización…", Toast.LENGTH_LONG).show();
                     }
                 } catch (Exception e) {
                     Toast.makeText(getApplicationContext(), "No se pudo iniciar la descarga.", Toast.LENGTH_LONG).show();
                 }
             });
+    }
+
+    /**
+     * Turns "downloaded" into "installing" without the user leaving the app.
+     *
+     * DownloadManager only ever *fetches* the file — it drops a notification
+     * and stops there. That left the update flow as: tap Descargar, wait,
+     * pull down the shade (or open Files), find jobpilot.apk, tap it,
+     * confirm. Every other app just asks for confirmation and installs, and
+     * the difference is only this: firing ACTION_INSTALL_PACKAGE (via the
+     * generic VIEW intent, which is what still works across versions) as
+     * soon as the download our own listener started reports completion.
+     *
+     * Android keeps the user in control either way — the install screen
+     * always asks, and the first time it also makes them grant JobPilot
+     * "install unknown apps" in Settings. Nothing installs silently; the
+     * manual hunt for the file is what goes away.
+     */
+    private void registerDownloadCompleteReceiver() {
+        downloadCompleteReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                long completedId = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L);
+                // -1 guards the case where this fires for somebody else's
+                // download before we ever started one of our own.
+                if (updateDownloadId == -1L || completedId != updateDownloadId) return;
+                promptInstall(completedId);
+            }
+        };
+
+        IntentFilter filter = new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE);
+        // Android 13+ requires every runtime-registered receiver to declare
+        // whether it accepts broadcasts from other apps. DownloadManager's
+        // completion broadcast comes from the system, so exported is the
+        // correct (and required) choice here — NOT_EXPORTED would silently
+        // never fire.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(downloadCompleteReceiver, filter, Context.RECEIVER_EXPORTED);
+        } else {
+            registerReceiver(downloadCompleteReceiver, filter);
+        }
+    }
+
+    private void promptInstall(long downloadId) {
+        DownloadManager downloadManager = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
+        if (downloadManager == null) return;
+
+        // A content:// URI the installer can read without any FileProvider
+        // path config of our own, as long as we pass the read grant below.
+        Uri apkUri = downloadManager.getUriForDownloadedFile(downloadId);
+        if (apkUri == null) {
+            Toast.makeText(getApplicationContext(), "La descarga no se completó.", Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        // On O+ the install intent is refused outright unless the user has
+        // allowed this app as an install source. Sending them straight to
+        // that toggle is far clearer than letting the installer bounce with
+        // a bare "for your security" message and no obvious next step.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                && !getPackageManager().canRequestPackageInstalls()) {
+            Toast.makeText(
+                getApplicationContext(),
+                "Permite instalar apps desde JobPilot para completar la actualización.",
+                Toast.LENGTH_LONG
+            ).show();
+            try {
+                startActivity(
+                    new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES)
+                        .setData(Uri.parse("package:" + getPackageName()))
+                );
+                // The install itself is retried by the user tapping the
+                // download notification, which now has the permission it
+                // needs. Re-firing it automatically here would race the
+                // Settings screen the user is still looking at.
+                return;
+            } catch (Exception e) {
+                // Some OEM builds don't expose that Settings screen; fall
+                // through and let the installer show whatever it shows.
+            }
+        }
+
+        try {
+            Intent install = new Intent(Intent.ACTION_VIEW);
+            install.setDataAndType(apkUri, "application/vnd.android.package-archive");
+            install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            install.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(install);
+        } catch (Exception e) {
+            Toast.makeText(
+                getApplicationContext(),
+                "Descarga lista. Ábrela desde tus notificaciones para instalar.",
+                Toast.LENGTH_LONG
+            ).show();
+        }
     }
 }

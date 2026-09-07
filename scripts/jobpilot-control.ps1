@@ -5,15 +5,18 @@ $RepoDir = Split-Path -Parent $PSScriptRoot
 $Tailscale = "C:\Program Files\Tailscale\tailscale.exe"
 $DockerDesktop = "$env:ProgramFiles\Docker\Docker\Docker Desktop.exe"
 
-# -- Palette (matches the app's brand blue) --
-$ColorBg      = [System.Drawing.Color]::FromArgb(247, 248, 250)
-$ColorBrand   = [System.Drawing.Color]::FromArgb(37, 71, 233)
-$ColorBrandHv = [System.Drawing.Color]::FromArgb(31, 55, 209)
-$ColorText    = [System.Drawing.Color]::FromArgb(32, 33, 36)
-$ColorMuted   = [System.Drawing.Color]::FromArgb(128, 134, 139)
-$ColorBorder  = [System.Drawing.Color]::FromArgb(222, 225, 230)
-$ColorOn      = [System.Drawing.Color]::FromArgb(16, 150, 88)
-$ColorOff     = [System.Drawing.Color]::FromArgb(180, 184, 189)
+# -- Palette. Mirrors frontend/tailwind.config.ts exactly, so this window
+#    and the app read as the same product: brand-600 #6d28f5, brand-700
+#    #5b1fd6, and the ink neutrals (gray-50/900/500/200). The dot colours
+#    are the app's own emerald-500 and gray-300. --
+$ColorBg      = [System.Drawing.Color]::FromArgb(246, 247, 251)
+$ColorBrand   = [System.Drawing.Color]::FromArgb(109, 40, 245)
+$ColorBrandHv = [System.Drawing.Color]::FromArgb(91, 31, 214)
+$ColorText    = [System.Drawing.Color]::FromArgb(27, 32, 48)
+$ColorMuted   = [System.Drawing.Color]::FromArgb(110, 118, 145)
+$ColorBorder  = [System.Drawing.Color]::FromArgb(220, 223, 235)
+$ColorOn      = [System.Drawing.Color]::FromArgb(16, 185, 129)
+$ColorOff     = [System.Drawing.Color]::FromArgb(195, 200, 219)
 $ColorWorking = $ColorBrand
 
 function New-RoundedRegion([int]$width, [int]$height, [int]$radius) {

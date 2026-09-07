@@ -60,29 +60,35 @@ export default function UpdateChecker() {
   if (!update || dismissed || !update.apk_url) return null;
 
   return (
-    <div className="fixed inset-x-0 bottom-16 z-50 mx-auto w-[calc(100%-1.5rem)] max-w-md rounded-2xl bg-brand-600 p-4 text-white shadow-lg md:bottom-4">
+    <div className="fixed inset-x-0 bottom-20 z-50 mx-auto w-[calc(100%-1.5rem)] max-w-md animate-slide-up rounded-2xl bg-brand-600 p-4 text-white shadow-brand-lg md:bottom-4">
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-sm font-semibold">
-            Hay una actualización de JobPilot{update.version_name ? ` (v${update.version_name})` : ""}
+        <div className="min-w-0">
+          <p className="font-display text-sm font-extrabold">
+            Actualización disponible{update.version_name ? ` · v${update.version_name}` : ""}
           </p>
-          {update.notes && <p className="mt-1 text-xs text-brand-100">{update.notes}</p>}
+          {update.notes && <p className="mt-1 text-xs leading-relaxed text-brand-100">{update.notes}</p>}
         </div>
         <button
           type="button"
           onClick={() => setDismissed(true)}
           aria-label="Cerrar"
-          className="shrink-0 text-brand-200 hover:text-white"
+          className="-mr-1 -mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-brand-200 transition-colors hover:bg-white/15 hover:text-white"
         >
-          ✕
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
         </button>
       </div>
       <a
         href={update.apk_url}
-        className="mt-3 inline-block rounded-lg bg-white px-4 py-2 text-sm font-semibold text-brand-700 hover:bg-brand-50"
+        className="mt-3 inline-flex min-h-[40px] items-center rounded-xl bg-white px-4 text-sm font-bold text-brand-700 transition-colors hover:bg-brand-50 active:scale-[0.97]"
       >
-        Descargar actualización
+        Actualizar ahora
       </a>
+      {/* Says what's about to happen, because the first update after this
+          change also asks for the "install unknown apps" permission once —
+          unexplained, that screen reads like something went wrong. */}
+      <p className="mt-2 text-[11px] text-brand-200">
+        Se descarga y Android te pide confirmar la instalación.
+      </p>
     </div>
   );
 }
