@@ -101,9 +101,27 @@ async def import_cv(
         raise HTTPException(status_code=422, detail="Please upload a PDF file.")
 
     max_bytes = settings.MAX_CV_UPLOAD_MB * 1024 * 1024
-    contents = await file.read()
-    if len(contents) > max_bytes:
-        raise HTTPException(status_code=413, detail=f"PDF is too large (max {settings.MAX_CV_UPLOAD_MB} MB).")
+
+    # Read in chunks and stop the moment the limit is passed. `await
+    # file.read()` with no argument pulls the WHOLE upload into memory
+    # first and only then compares its length, so the 8 MB limit was
+    # advisory: a 2 GB body was fully buffered before being rejected, which
+    # is enough to take the container down on a box this size.
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        chunk = await file.read(1024 * 1024)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > max_bytes:
+            raise HTTPException(
+                status_code=413,
+                detail=f"PDF is too large (max {settings.MAX_CV_UPLOAD_MB} MB).",
+            )
+        chunks.append(chunk)
+
+    contents = b"".join(chunks)
     if not contents:
         raise HTTPException(status_code=422, detail="The uploaded file is empty.")
 

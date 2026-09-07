@@ -46,10 +46,27 @@ def hash_refresh_token(token: str) -> str:
 
 
 def decode_access_token(token: str) -> Optional[str]:
-    """Returns the subject (user id) encoded in the token, or None if invalid/expired."""
+    """Returns the subject (user id) encoded in the token, or None if
+    invalid/expired.
+
+    Rejects anything carrying a `purpose` claim. State tokens (see
+    `create_state_token`) are signed with the same secret and also carry
+    `sub` + `exp`, so without this check an email-verification link's token
+    — which travels through inboxes, browser history and referrer headers —
+    would also work as a Bearer session credential. `create_state_token`'s
+    docstring already claimed that couldn't happen; only the state side
+    actually enforced it, and this closes the other direction.
+
+    Written as "reject tokens that have a purpose" rather than "require
+    purpose == access" on purpose: access tokens issued before this change
+    carry no purpose claim, and invalidating every live session to fix a
+    confusion bug would be a worse trade.
+    """
     try:
         payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
     except JWTError:
+        return None
+    if payload.get("purpose") is not None:
         return None
     return payload.get("sub")
 

@@ -5,6 +5,7 @@ having to open Task Scheduler or `docker compose logs` to check whether
 the sweep/backup/watchdog/stale-check machinery is actually alive.
 """
 
+import secrets
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -27,7 +28,14 @@ def _check_heartbeat_secret(x_heartbeat_secret: Optional[str]) -> None:
     # settings.SYSTEM_HEARTBEAT_SECRET is always populated by get_settings()
     # (env var if set, otherwise an auto-generated + persisted one) — so
     # this endpoint never silently accepts an unauthenticated caller.
-    if x_heartbeat_secret != settings.SYSTEM_HEARTBEAT_SECRET:
+    #
+    # compare_digest, not `!=`: Python's string comparison returns as soon
+    # as two bytes differ, so how long it takes to say "no" leaks how much
+    # of the prefix was right, and a secret can be recovered a character at
+    # a time. The window is small over a network, but a constant-time
+    # comparison is free and removes the question.
+    expected = settings.SYSTEM_HEARTBEAT_SECRET or ""
+    if not x_heartbeat_secret or not secrets.compare_digest(x_heartbeat_secret, expected):
         raise HTTPException(status_code=401, detail="Invalid heartbeat secret.")
 
 

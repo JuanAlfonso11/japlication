@@ -26,6 +26,7 @@ from bs4 import BeautifulSoup
 from fastapi import HTTPException
 
 from app.services.skills_taxonomy import extract_skills_from_text
+from app.services.url_guard import UnsafeUrlError, validate_public_http_url
 
 USER_AGENT = (
     "Mozilla/5.0 (compatible; JobFlowAI/1.0; +https://jobflow.ai/bot) "
@@ -86,16 +87,75 @@ YEARS_REQUIREMENT_RE = re.compile(
 )
 
 
+# Job pages are big, but not this big. Without a ceiling, pointing the
+# importer at a multi-gigabyte file would buffer all of it into the
+# container's memory before anything got parsed.
+MAX_DOWNLOAD_BYTES = 5 * 1024 * 1024
+
+# Enough to get through the usual "www -> apex -> /jobs/123" chains without
+# letting a redirect loop run forever.
+MAX_REDIRECTS = 5
+
+
 async def fetch_html(url: str) -> str:
+    """Downloads a job posting page, refusing anything that points at
+    internal infrastructure.
+
+    Redirects are followed by hand rather than with httpx's
+    `follow_redirects=True`, because that only ever sees the URL the caller
+    passed: a public page answering 302 with `Location: http://localhost:8000`
+    would be fetched without a second thought. Validating every hop is the
+    whole point — see app/services/url_guard.py.
+    """
+    try:
+        current = validate_public_http_url(url)
+    except UnsafeUrlError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
     try:
         async with httpx.AsyncClient(
             timeout=15.0,
-            follow_redirects=True,
+            follow_redirects=False,
             headers={"User-Agent": USER_AGENT, "Accept": "text/html,application/xhtml+xml"},
         ) as client:
-            resp = await client.get(url)
-            resp.raise_for_status()
-            return resp.text
+            for _ in range(MAX_REDIRECTS + 1):
+                resp = await client.get(current)
+
+                if resp.is_redirect:
+                    location = resp.headers.get("location")
+                    if not location:
+                        raise HTTPException(
+                            status_code=422, detail="could not parse job posting"
+                        )
+                    # Relative Locations are normal; resolve against the URL
+                    # we actually fetched before re-validating.
+                    next_url = str(resp.url.join(location))
+                    try:
+                        current = validate_public_http_url(next_url)
+                    except UnsafeUrlError as exc:
+                        raise HTTPException(status_code=422, detail=str(exc)) from exc
+                    continue
+
+                resp.raise_for_status()
+
+                # Trust the declared length when present, and still measure
+                # the body — a lying or absent Content-Length is exactly how
+                # a size cap gets bypassed.
+                declared = resp.headers.get("content-length")
+                if declared and declared.isdigit() and int(declared) > MAX_DOWNLOAD_BYTES:
+                    raise HTTPException(
+                        status_code=422, detail="La página es demasiado grande para importarla."
+                    )
+                if len(resp.content) > MAX_DOWNLOAD_BYTES:
+                    raise HTTPException(
+                        status_code=422, detail="La página es demasiado grande para importarla."
+                    )
+
+                return resp.text
+
+            raise HTTPException(status_code=422, detail="Demasiadas redirecciones.")
+    except HTTPException:
+        raise
     except (httpx.HTTPError, httpx.InvalidURL) as exc:
         raise HTTPException(status_code=422, detail="could not parse job posting") from exc
 

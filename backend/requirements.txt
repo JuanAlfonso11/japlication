@@ -5,7 +5,13 @@ asyncpg==0.30.0
 alembic==1.14.0
 pydantic>=2.9
 pydantic-settings==2.6.1
-python-jose[cryptography]==3.3.0
+# 3.3.0 carries two known advisories: CVE-2024-33663 (algorithm confusion
+# with an OpenSSH ECDSA public key) and CVE-2024-33664 (a compressed JWE
+# that expands to gigabytes — a decompression bomb). This app's usage
+# happens to sidestep both (HS256 with an explicit `algorithms=` allowlist,
+# and no JWE anywhere), but running a version with published CVEs against
+# tokens is not a position worth defending.
+python-jose[cryptography]==3.4.0
 passlib[bcrypt]==1.7.4
 bcrypt==4.0.1
 httpx==0.27.2
