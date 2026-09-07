@@ -21,15 +21,15 @@
     min-height: 100dvh;
     padding: 24px;
     text-align: center;
-    background: linear-gradient(135deg, #4c6ef5 0%, #2547e9 45%, #202c85 100%);
+    background: linear-gradient(135deg, #9c79ff 0%, #6d28f5 45%, #3d1a8a 100%);
     overflow: hidden;
   }
 
-  /* -- Mascot: a sleepy version of the app's own card-stack mark -- */
+  /* -- Mascot: the app's own paper-plane mark, parked for the night -- */
   .mascot {
     position: relative;
-    width: 168px;
-    height: 168px;
+    width: 140px;
+    height: 140px;
     animation: bob 3.2s ease-in-out infinite;
   }
   @keyframes bob {
@@ -37,55 +37,17 @@
     50% { transform: translateY(-10px); }
   }
 
-  .card {
-    position: absolute;
-    border-radius: 22px;
-    background: #fff;
+  .mark {
+    width: 120px;
+    height: 120px;
+    border-radius: 32px;
+    background: rgba(255,255,255,0.14);
+    box-shadow: 0 18px 40px rgba(0,0,0,0.28), inset 0 0 0 1px rgba(255,255,255,0.18);
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
-  .card.back {
-    width: 122px; height: 86px;
-    left: 6px; top: 6px;
-    background: rgba(255,255,255,0.55);
-  }
-  .card.mid {
-    width: 122px; height: 86px;
-    left: 20px; top: 22px;
-    background: rgba(255,255,255,0.78);
-  }
-  .card.front {
-    width: 122px; height: 86px;
-    left: 34px; top: 38px;
-    box-shadow: 0 12px 30px rgba(0,0,0,0.25);
-  }
-  .card.front::before {
-    /* the accent bar, same as the app icon's front card */
-    content: "";
-    position: absolute;
-    top: 14px; left: 16px; right: 16px;
-    height: 8px;
-    border-radius: 4px;
-    background: #2547e9;
-  }
-  /* sleepy face on the front card */
-  .eye {
-    position: absolute;
-    top: 40px;
-    width: 16px;
-    height: 8px;
-    border-bottom: 3px solid #2547e9;
-    border-radius: 0 0 50% 50%;
-  }
-  .eye.left { left: 22px; }
-  .eye.right { left: 54px; }
-  .mouth {
-    position: absolute;
-    top: 56px;
-    left: 41px;
-    width: 20px;
-    height: 10px;
-    border-bottom: 3px solid #2547e9;
-    border-radius: 50%;
-  }
+  .mark svg { width: 74px; height: 74px; }
 
   .zzz {
     position: absolute;
@@ -147,12 +109,11 @@
 </head>
 <body>
   <div class="mascot">
-    <div class="card back"></div>
-    <div class="card mid"></div>
-    <div class="card front">
-      <div class="eye left"></div>
-      <div class="eye right"></div>
-      <div class="mouth"></div>
+    <div class="mark">
+      <svg viewBox="0 0 48 48" aria-hidden="true">
+        <path d="M37 12 L21.5 26.5 L26 37 Z" fill="#ffffff" fill-opacity="0.6"/>
+        <path d="M37 12 L11 22 L21.5 26.5 Z" fill="#ffffff"/>
+      </svg>
     </div>
     <div class="zzz"><span>z</span><span>z</span><span>Z</span></div>
   </div>
