@@ -22,12 +22,15 @@ export default function Logo({ className = "h-8 w-8" }: { className?: string }) 
   return (
     <svg viewBox="0 0 48 48" className={className} role="img" aria-label="JobPilot">
       <rect width="48" height="48" rx="13" fill="#6d28f5" />
-      <circle cx="24" cy="24" r="14" fill="none" stroke="#ffffff" strokeWidth="2.2" opacity="0.45" />
+      {/* r=16 puts the mark at ~67% of the square, the proportion a home
+          screen's other icons sit at; at r=14 it read as noticeably
+          smaller than its neighbours in the launcher grid. */}
+      <circle cx="24" cy="24" r="16" fill="none" stroke="#ffffff" strokeWidth="2.5" opacity="0.45" />
       {/* North half of the needle, bright; south half dimmed — that
           two-tone split is what makes it read as a compass rather than a
           generic arrow once it's down at 20px. */}
-      <path d="M31.07 16.93 L26.83 26.83 L21.17 21.17 Z" fill="#ffffff" />
-      <path d="M16.93 31.07 L26.83 26.83 L21.17 21.17 Z" fill="#ffffff" fillOpacity="0.45" />
+      <path d="M32.08 15.92 L27.23 27.23 L20.77 20.77 Z" fill="#ffffff" />
+      <path d="M15.92 32.08 L27.23 27.23 L20.77 20.77 Z" fill="#ffffff" fillOpacity="0.45" />
     </svg>
   );
 }

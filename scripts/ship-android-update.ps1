@@ -100,7 +100,19 @@ $envContent = $envContent -replace 'ANDROID_UPDATE_NOTES=.*', "ANDROID_UPDATE_NO
 Set-Content -Path $envPath -Value $envContent -NoNewline
 
 Write-Host "[ship] Restarting backend so it picks up the new .env values..."
-docker compose up -d backend
+# `docker compose` writes its progress lines ("Container cld-db-1 Running")
+# to stderr even on success. Under $ErrorActionPreference = "Stop" that
+# turns into a terminating NativeCommandError, so this script reported
+# failure — exit code 1, red text — every single time, *after* having
+# already done all its work. Drop to "Continue" for the native call and
+# judge success the only way that's meaningful here: $LASTEXITCODE.
+$previousPreference = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
+try {
+    docker compose up -d backend 2>&1 | ForEach-Object { Write-Host $_ }
+} finally {
+    $ErrorActionPreference = $previousPreference
+}
 if ($LASTEXITCODE -ne 0) { throw "docker compose up -d backend failed" }
 
 Write-Host ""
