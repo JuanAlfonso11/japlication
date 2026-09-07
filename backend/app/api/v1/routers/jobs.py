@@ -47,6 +47,7 @@ from app.services import (
     usajobs,
     weworkremotely,
 )
+from app.services.job_dedupe import dedupe_external_results
 from app.services.job_importer import import_job_from_url
 from app.services.match_engine import compute_and_persist_match
 
@@ -714,6 +715,13 @@ async def search_jobs_aggregate(
         sources.append(AggregateSourceStatus(provider=provider, count=len(results), error=error))
 
     all_results.sort(key=_aggregate_sort_key, reverse=True)
+    # Sort first, dedupe second: the providers overlap heavily (one vacancy
+    # commonly appears on three or four of them), and deduping the sorted
+    # list means the copy that survives is the newest one. Per-provider
+    # `sources` counts stay pre-dedupe on purpose — they report what each
+    # provider returned, which is what makes them useful for spotting a
+    # provider that quietly went empty.
+    all_results = dedupe_external_results(all_results)
     return AggregateSearchResponse(results=all_results, sources=sources)
 
 
@@ -890,6 +898,12 @@ async def run_auto_import_for_user(user: User, db: AsyncSession) -> AutoImportRe
         all_results.extend(results)
         sources.append(AggregateSourceStatus(provider=provider, count=len(results), error=error))
     all_results.sort(key=_aggregate_sort_key, reverse=True)
+    # Matters even more here than in the search endpoint: without it the
+    # sweep imports each board's copy of one vacancy as its own `jobs` row,
+    # so Home asks the user to swipe on the same job three times. The
+    # existing source_url check in _get_or_create_external_job only catches
+    # copies that happen to share a URL.
+    all_results = dedupe_external_results(all_results)
 
     imported = 0
     # Walk the FULL sorted list (not a pre-sliced all_results[:import_limit])
