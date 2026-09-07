@@ -134,11 +134,38 @@ admin access (port forwarding, master keys) that wasn't available. Tailscale avo
 — it's a fine substitute and, if you ever get WireGuard sorted out later, either works equally
 well; there's no need to revisit this unless Tailscale itself becomes unavailable.
 
+## Firma: debug hoy, release listo para cuando quieras
+
+El APK que se publica hoy va **firmado en modo debug**, que funciona bien para sideload. Lo que no
+es obvio: eso ya depende de un keystore que nadie gestiona (`~/.android/debug.keystore`, con la
+contraseña pública `android`). Si se pierde o se regenera, ninguna instalación existente se puede
+actualizar nunca más. O sea que el riesgo de "perder la clave" ya existe — solo que invisible.
+
+Por eso hay una clave de release preparada:
+
+```powershell
+.\scripts\create-release-keystore.ps1          # una sola vez, ya ejecutado
+.\scripts\ship-android-update.ps1 -Notes "..." -Release
+```
+
+`app/build.gradle` la usa solo si `android/keystore.properties` existe; si no, cae al debug, para
+que un clon fresco siga compilando.
+
+**El cambio de firma es de una sola vez y coordinado.** Android rechaza instalar un APK cuya firma
+difiera de la instalada, así que el primer build de release **no puede actualizar a nadie**: cada
+dispositivo (el tuyo y el de cada tester) tiene que desinstalar JobPilot e instalar de nuevo. No se
+pierde nada — todo el estado vive en el servidor — pero es un paso a coordinar, no algo con lo que
+tropezar. Por eso `-Release` no es el default.
+
+**Respalda fuera de esta PC** `frontend/android/keystore/jobpilot-release.keystore` y
+`frontend/android/keystore.properties`. Ambos están gitignored; perderlos significa no poder
+actualizar nunca más sobre las instalaciones existentes.
+
 ## Notes
 
 - `frontend/android/` is the generated native project — build output, `local.properties` (has a
   machine-specific SDK path), and any keystores are gitignored; the source/config files are
   tracked normally.
-- This produces a **debug-signed** APK, fine for installing on your own device. If you ever want
-  to distribute it more broadly (e.g. Play Store), it would need a proper release signing key —
-  out of scope for personal use.
+- Node **sí** está instalado en esta máquina (`C:\Program Files\nodejs`), que es lo que usa
+  `scripts/ship-android-update.ps1` para `npx cap sync`. La nota anterior decía lo contrario y
+  recomendaba Docker para eso; quedó desactualizada.

@@ -94,10 +94,35 @@ public class MainActivity extends BridgeActivity {
         }
     }
 
+    /** The one host this app is ever allowed to navigate itself to. Mirrors
+     * capacitor.config.ts's `server.url` / `allowNavigation`. */
+    private static final String ALLOWED_HOST = "jobpilot.tailb3d4c1.ts.net";
+
+    /**
+     * True only for `https://<our tailscale host>/...` URIs.
+     *
+     * This activity is `exported="true"` — it has to be, for the LAUNCHER
+     * filter. The manifest's intent-filter constrains what Android will
+     * *route* here, but it does not stop another app on the phone from
+     * sending an explicit intent straight at this component with any URI it
+     * likes. Without this check that URI went directly to
+     * `webView.loadUrl(...)`, and `loadUrl("javascript:...")` executes in
+     * whatever page is currently loaded — i.e. inside the app's own origin,
+     * with the user's session token sitting in localStorage. That's a local
+     * privilege escalation: any installed app could read the JobPilot
+     * session. `file://` URIs were reachable the same way.
+     */
+    private boolean isTrustedAppUri(Uri uri) {
+        if (uri == null) return false;
+        String scheme = uri.getScheme();
+        String host = uri.getHost();
+        return "https".equalsIgnoreCase(scheme) && ALLOWED_HOST.equalsIgnoreCase(host);
+    }
+
     private void handleViewIntent(Intent intent) {
         if (intent == null || !Intent.ACTION_VIEW.equals(intent.getAction())) return;
         Uri data = intent.getData();
-        if (data == null) return;
+        if (!isTrustedAppUri(data)) return;
         if (getBridge() != null && getBridge().getWebView() != null) {
             getBridge().getWebView().loadUrl(data.toString());
         }

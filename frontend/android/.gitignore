@@ -99,3 +99,11 @@ app/src/main/assets/public
 app/src/main/assets/capacitor.config.json
 app/src/main/assets/capacitor.plugins.json
 app/src/main/res/xml/config.xml
+
+# Release signing material. A signing key in version control is a signing
+# key everybody has — and losing it is just as bad, so back these up
+# somewhere off this machine instead (see scripts/create-release-keystore.ps1).
+/keystore/
+keystore.properties
+*.keystore
+*.jks

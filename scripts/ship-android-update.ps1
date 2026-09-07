@@ -27,7 +27,20 @@
 
 param(
     [Parameter(Mandatory)] [string]$Notes,
-    [string]$VersionName
+    [string]$VersionName,
+    # Builds a release-signed APK instead of a debug-signed one.
+    #
+    # NOT the default, and it must stay that way until you decide to switch:
+    # Android refuses to install an APK whose signing certificate differs
+    # from the installed one, so the FIRST release-signed build cannot
+    # update anybody. Every device (yours and every tester's) has to
+    # uninstall JobPilot and install fresh, once. Nothing is lost when they
+    # do - all state lives on the server - but it is a coordinated step, not
+    # something to trip over by accident.
+    #
+    # After that first switch, keep using -Release forever: going back to
+    # debug signing would have the same problem in reverse.
+    [switch]$Release
 )
 
 $ErrorActionPreference = "Stop"
@@ -77,16 +90,29 @@ try {
     Pop-Location
 }
 
-Write-Host "[ship] Building APK (gradlew assembleDebug)..."
+$gradleTask = if ($Release) { "assembleRelease" } else { "assembleDebug" }
+Write-Host "[ship] Building APK (gradlew $gradleTask)..."
+
+if ($Release) {
+    $keystoreProps = Join-Path $repoDir "frontend\android\keystore.properties"
+    if (-not (Test-Path $keystoreProps)) {
+        throw "Falta frontend\android\keystore.properties. Corre .\scripts\create-release-keystore.ps1 primero."
+    }
+}
+
 Push-Location (Join-Path $repoDir "frontend\android")
 try {
-    .\gradlew.bat assembleDebug
-    if ($LASTEXITCODE -ne 0) { throw "gradlew assembleDebug failed" }
+    .\gradlew.bat $gradleTask
+    if ($LASTEXITCODE -ne 0) { throw "gradlew $gradleTask failed" }
 } finally {
     Pop-Location
 }
 
-$apkSource = Join-Path $repoDir "frontend\android\app\build\outputs\apk\debug\app-debug.apk"
+$apkSource = if ($Release) {
+    Join-Path $repoDir "frontend\android\app\build\outputs\apk\release\app-release.apk"
+} else {
+    Join-Path $repoDir "frontend\android\app\build\outputs\apk\debug\app-debug.apk"
+}
 $apkDest = Join-Path $repoDir "scripts\apk-server\jobpilot.apk"
 Copy-Item -Path $apkSource -Destination $apkDest -Force
 Write-Host "[ship] Copied APK to $apkDest"
