@@ -14,10 +14,30 @@ from app.models.job_match import JobMatch
 from app.models.user import User
 from app.schemas.job import Job as JobSchema
 from app.schemas.job import JobListResponse
-from app.schemas.job_match import MatchResult
+from app.models.enums import ApplicationStatus
+from app.schemas.job_match import MatchResult, SkillGapsResponse
 from app.services.match_engine import compute_and_persist_match
+from app.services.skill_gaps import aggregate_skill_gaps, summarize
 
 router = APIRouter(tags=["match"])
+
+# Statuses that mean "the user wanted this job", i.e. everything from a
+# right swipe onward. `queued` is excluded (not decided yet) and so is
+# `passed` (decided against) — counting either would dilute the signal with
+# postings the user never actually wanted.
+_INTERESTED_STATUSES = [
+    ApplicationStatus.saved,
+    ApplicationStatus.applied,
+    ApplicationStatus.interviewing,
+    ApplicationStatus.offer,
+    # Kept deliberately: a rejection doesn't mean the user didn't want the
+    # role, and those are often the most informative gaps of all.
+    ApplicationStatus.rejected,
+]
+
+# Below this, percentages are noise ("100% of your 1 saved job") — so the
+# aggregate falls back to every scored posting and says that it did.
+_MIN_INTERESTED_JOBS = 4
 
 
 async def _get_profile_or_400(user_id: UUID, db: AsyncSession) -> CareerProfile:
@@ -93,3 +113,58 @@ async def list_match_queue(
         items.append(schema)
 
     return JobListResponse(items=items, total=total)
+
+
+@router.get("/match/skill-gaps", response_model=SkillGapsResponse)
+async def get_skill_gaps(
+    limit: int = Query(8, ge=1, le=20),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> SkillGapsResponse:
+    """The skills that keep costing this user points, across the jobs they
+    actually wanted.
+
+    Per-job match results already say why one posting scored what it did;
+    this is the pattern across them, which is what tells you what to learn
+    next. Read-only and derived entirely from data the match engine already
+    persisted, so it costs one query and never calls an LLM.
+    """
+    interested = (
+        select(JobMatch.missing_skills)
+        .join(
+            Application,
+            (Application.job_id == JobMatch.job_id)
+            & (Application.user_id == JobMatch.user_id),
+        )
+        .where(
+            JobMatch.user_id == current_user.id,
+            Application.status.in_(_INTERESTED_STATUSES),
+        )
+    )
+    rows = (await db.execute(interested)).scalars().all()
+
+    based_on_all = False
+    if len(rows) < _MIN_INTERESTED_JOBS:
+        # Not enough decisions yet to talk about "what you're interested in".
+        # Every scored posting is a weaker signal (it includes roles the user
+        # would never take), but it beats an empty card for a new user — and
+        # the flag lets the UI phrase it honestly.
+        based_on_all = True
+        rows = (
+            (
+                await db.execute(
+                    select(JobMatch.missing_skills).where(JobMatch.user_id == current_user.id)
+                )
+            )
+            .scalars()
+            .all()
+        )
+
+    gaps, jobs_considered = aggregate_skill_gaps(rows, limit=limit)
+
+    return SkillGapsResponse(
+        gaps=gaps,
+        jobs_considered=jobs_considered,
+        based_on_all_matches=based_on_all,
+        summary=summarize(gaps, jobs_considered) if not based_on_all else None,
+    )

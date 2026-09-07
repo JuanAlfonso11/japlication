@@ -439,6 +439,22 @@ export interface MatchResult {
   concerns: string[];
 }
 
+/** One skill that keeps costing points across the jobs the user wanted. */
+export interface SkillGap {
+  skill: string;
+  job_count: number;
+  percentage: number;
+}
+
+export interface SkillGapsResponse {
+  gaps: SkillGap[];
+  jobs_considered: number;
+  /** Set when there weren't enough saved jobs and the aggregate fell back to
+   * every scored posting — a weaker signal, and the UI says so. */
+  based_on_all_matches: boolean;
+  summary: string | null;
+}
+
 // ---------- Applications ----------
 
 export type Decision = "right" | "left";

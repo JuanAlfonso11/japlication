@@ -12,7 +12,9 @@ import android.os.Environment;
 import android.provider.Settings;
 import android.webkit.URLUtil;
 import android.widget.Toast;
+import androidx.core.content.FileProvider;
 import com.getcapacitor.BridgeActivity;
+import java.io.File;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 
@@ -235,12 +237,35 @@ public class MainActivity extends BridgeActivity {
         DownloadManager downloadManager = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
         if (downloadManager == null) return;
 
-        // A content:// URI the installer can read without any FileProvider
-        // path config of our own, as long as we pass the read grant below.
         Uri apkUri = downloadManager.getUriForDownloadedFile(downloadId);
         if (apkUri == null) {
             Toast.makeText(getApplicationContext(), "La descarga no se completó.", Toast.LENGTH_LONG).show();
             return;
+        }
+
+        // getUriForDownloadedFile() usually hands back a content:// URI the
+        // installer can read directly, but for downloads written to a public
+        // directory some Android builds return a plain file:// path instead.
+        // Putting a file:// URI in an Intent has thrown FileUriExposedException
+        // since Android 7, so the install would die instead of prompting.
+        // Re-wrapping it through our own FileProvider (already declared in the
+        // manifest; file_paths.xml maps the whole external root, which covers
+        // Downloads) makes both shapes end up as a grantable content:// URI.
+        if ("file".equals(apkUri.getScheme()) && apkUri.getPath() != null) {
+            try {
+                apkUri = FileProvider.getUriForFile(
+                    this,
+                    getPackageName() + ".fileprovider",
+                    new File(apkUri.getPath())
+                );
+            } catch (IllegalArgumentException e) {
+                Toast.makeText(
+                    getApplicationContext(),
+                    "Descarga lista. Ábrela desde tus notificaciones para instalar.",
+                    Toast.LENGTH_LONG
+                ).show();
+                return;
+            }
         }
 
         // On O+ the install intent is refused outright unless the user has

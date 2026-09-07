@@ -22,6 +22,7 @@ import type {
   JobListResponse,
   LoginPayload,
   MatchResult,
+  SkillGapsResponse,
   RegisterPayload,
   CVUploadResult,
   ResendVerificationResponse,
@@ -390,6 +391,8 @@ export const jobsApi = {
     request<MatchResult>(`/jobs/${id}/match`, { query: { refresh } }),
   matches: (params?: { min_score?: number; limit?: number; offset?: number }) =>
     request<{ items: Job[]; total: number }>("/matches", { query: params }),
+  skillGaps: (limit?: number) =>
+    request<SkillGapsResponse>("/match/skill-gaps", { query: { limit } }),
   decide: (id: string, payload: DecisionPayload) =>
     request<Application>(`/jobs/${id}/decision`, { method: "POST", body: payload }),
   generateResume: (id: string, payload?: ResumeGeneratePayload) =>

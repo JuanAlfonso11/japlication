@@ -5,6 +5,7 @@ import RouteGuard from "@/components/RouteGuard";
 import Spinner from "@/components/Spinner";
 import ErrorNotice from "@/components/ErrorNotice";
 import CVEvaluationCard from "@/components/CVEvaluationCard";
+import SkillGapsCard from "@/components/SkillGapsCard";
 import SettingsPanel from "@/components/profile/SettingsPanel";
 import UsedResumesSection from "@/components/profile/UsedResumesSection";
 import SystemStatusPanel from "@/components/profile/SystemStatusPanel";
@@ -388,6 +389,11 @@ function ProfileContent() {
       </div>
 
       <CVEvaluationCard evaluation={evaluation} loading={evalLoading} error={evalError} />
+
+      {/* Right after the CV evaluation, which grades the profile in the
+          abstract — this is the same question answered against the jobs the
+          user actually wants, so the two belong together. */}
+      <SkillGapsCard />
 
       <UsedResumesSection />
 
