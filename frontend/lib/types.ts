@@ -188,8 +188,8 @@ export interface JobCreatePayload {
   requires_cover_letter?: boolean;
 }
 
-// ---------- External job search (12 providers — GET /jobs/search/aggregate).
-// 9 are free/no-auth; adzuna, usajobs and serpapi need API keys set in the
+// ---------- External job search (14 providers — GET /jobs/search/aggregate).
+// 11 are free/no-auth; adzuna, usajobs and serpapi need API keys set in the
 // backend's .env and simply report an error in `sources` (not a hard
 // failure) when unconfigured. ----------
 

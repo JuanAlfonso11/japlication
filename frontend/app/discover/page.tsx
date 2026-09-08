@@ -342,7 +342,7 @@ function DiscoverContent() {
     <div className="space-y-6 pb-4 animate-fade-in">
       <PageHeader
         title="Buscar trabajos"
-        subtitle="Busca en 12 fuentes a la vez y combina todo en una sola lista. Lo que agregues se compara contra tu perfil en Inicio."
+        subtitle="Busca en 14 fuentes a la vez y combina todo en una sola lista, sin repetidos. Lo que agregues se compara contra tu perfil en Inicio."
       />
 
       <div className="rounded-2xl bg-white p-5 shadow-soft ring-1 ring-gray-100 dark:bg-gray-900 dark:ring-gray-800">

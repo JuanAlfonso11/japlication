@@ -314,7 +314,7 @@ toca linkedin.com ni ninguna cuenta — la cuenta del usuario de JobPilot jamás
   tipo "3 days ago", `salary`, `schedule_type`, `work_from_home`), `job_highlights[]` (secciones
   "Qualifications"/"Responsibilities" ya estructuradas), `apply_options[]` y `source_link` (URL real del
   posting en el sitio de origen — se usa como `source_url`)
-- **Ubicación/alcance**: la cobertura más amplia de todas las 12 fuentes — agrega de facto varios boards
+- **Ubicación/alcance**: la cobertura más amplia de todas las 14 fuentes — agrega de facto varios boards
   grandes (incluido LinkedIn) en una sola búsqueda
 - **Nivel de experiencia**: no expone campo nativo → heurística de texto sobre título+descripción
 - **Límites**: sin paginación real (Google Jobs pagina con un `next_page_token` opaco en vez de un número
@@ -418,7 +418,7 @@ documentación oficial vigente (Microsoft Learn para LinkedIn, docs.indeed.com p
 
 ## Cómo se integran (resumen técnico — detalle completo en `backend/README.md`)
 
-- El endpoint **`GET /jobs/search/aggregate`** dispara las 12 fuentes **en paralelo**
+- El endpoint **`GET /jobs/search/aggregate`** dispara las 14 fuentes **en paralelo**
   (`asyncio.gather`) y devuelve un solo listado combinado — así es como Discover muestra "todos los
   resultados de todas las APIs integradas" en una sola búsqueda, sin que el usuario tenga que elegir
   proveedor uno por uno. Un proveedor que falla no tumba a los demás: se reporta por separado — esto
@@ -428,6 +428,6 @@ documentación oficial vigente (Microsoft Learn para LinkedIn, docs.indeed.com p
   (`backend/app/services/experience_level.py`). Himalayas y The Muse lo mandan como parámetro nativo al
   proveedor; Jobicy lo trae en la respuesta (`jobLevel`) y se normaliza; Arbeitnow/Remotive/RemoteJobs.org
   no lo exponen, así que se infiere por heurística de texto sobre título+descripción (mismo enfoque que ya
-  usa `job_importer.py` para seniority) — mismo filtro, aplicado de forma uniforme sobre las 12 fuentes.
+  usa `job_importer.py` para seniority) — mismo filtro, aplicado de forma uniforme sobre las 14 fuentes.
 - **Ubicación por defecto**: el campo de ubicación en el formulario de Discover arranca con `"Remote"`
   precargado (no es una restricción dura — el usuario puede borrarlo o cambiarlo).
