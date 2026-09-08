@@ -203,6 +203,8 @@ export type ExternalProvider =
   | "weworkremotely"
   | "hackernews"
   | "getonbrd"
+  | "workingnomads"
+  | "remoteok"
   | "adzuna"
   | "usajobs"
   | "serpapi";
@@ -217,6 +219,8 @@ export const PROVIDER_LABELS: Record<ExternalProvider, string> = {
   weworkremotely: "We Work Remotely",
   hackernews: "Hacker News",
   getonbrd: "Get on Board",
+  workingnomads: "Working Nomads",
+  remoteok: "Remote OK",
   adzuna: "Adzuna",
   usajobs: "USAJobs",
   serpapi: "Google Jobs (SerpApi)",

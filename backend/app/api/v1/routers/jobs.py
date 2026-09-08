@@ -46,6 +46,8 @@ from app.services import (
     themuse,
     usajobs,
     weworkremotely,
+    workingnomads,
+    remoteok,
 )
 from app.services.job_dedupe import dedupe_external_results
 from app.services.job_importer import import_job_from_url
@@ -59,7 +61,7 @@ router = APIRouter(tags=["jobs"])
 # for LinkedIn/Indeed, can't be) part of this list.
 _NO_AUTH_PROVIDERS = {
     "himalayas", "arbeitnow", "remotive", "jobicy", "remotejobs_org", "themuse",
-    "weworkremotely", "hackernews", "getonbrd",
+    "weworkremotely", "hackernews", "getonbrd", "workingnomads", "remoteok",
 }
 
 # Registration-required providers. Each degrades gracefully when its keys
@@ -321,7 +323,7 @@ async def list_jobs(
 async def search_jobs(
     provider: str = Query(
         "himalayas",
-        pattern="^(himalayas|arbeitnow|remotive|jobicy|remotejobs_org|themuse|weworkremotely|hackernews|getonbrd|adzuna|usajobs|serpapi)$",
+        pattern="^(himalayas|arbeitnow|remotive|jobicy|remotejobs_org|themuse|weworkremotely|hackernews|getonbrd|workingnomads|remoteok|adzuna|usajobs|serpapi)$",
     ),
     q: Optional[str] = Query(None),
     location: Optional[str] = Query(None),
@@ -473,6 +475,36 @@ async def search_jobs(
         ]
         return ExternalJobsSearchResponse(provider="weworkremotely", results=results, has_more=False)
 
+    if provider == "workingnomads":
+        try:
+            data = await workingnomads.search_workingnomads_jobs(
+                q=q, location=location, experience_level_filter=experience_level_filter,
+                remote_type_filter=remote_type_filter,
+            )
+        except workingnomads.WorkingNomadsError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        results = [
+            ExternalJobResult(external_id=r["workingnomads_job_id"], **{k: v for k, v in r.items() if k != "workingnomads_job_id"})
+            for r in data["results"]
+            if r.get("workingnomads_job_id")
+        ]
+        return ExternalJobsSearchResponse(provider="workingnomads", results=results, has_more=False)
+
+    if provider == "remoteok":
+        try:
+            data = await remoteok.search_remoteok_jobs(
+                q=q, location=location, experience_level_filter=experience_level_filter,
+                remote_type_filter=remote_type_filter,
+            )
+        except remoteok.RemoteOkError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        results = [
+            ExternalJobResult(external_id=r["remoteok_job_id"], **{k: v for k, v in r.items() if k != "remoteok_job_id"})
+            for r in data["results"]
+            if r.get("remoteok_job_id")
+        ]
+        return ExternalJobsSearchResponse(provider="remoteok", results=results, has_more=False)
+
     if provider == "hackernews":
         try:
             data = await hackernews.search_hackernews_jobs(
@@ -621,6 +653,18 @@ async def _run_search_provider(
                 remote_type_filter=remote_type_filter,
             )
             id_key = "wwr_job_id"
+        elif provider == "workingnomads":
+            data = await workingnomads.search_workingnomads_jobs(
+                q=q, location=location, experience_level_filter=experience_level_filter,
+                remote_type_filter=remote_type_filter,
+            )
+            id_key = "workingnomads_job_id"
+        elif provider == "remoteok":
+            data = await remoteok.search_remoteok_jobs(
+                q=q, location=location, experience_level_filter=experience_level_filter,
+                remote_type_filter=remote_type_filter,
+            )
+            id_key = "remoteok_job_id"
         elif provider == "hackernews":
             data = await hackernews.search_hackernews_jobs(
                 q=q, location=location, experience_level_filter=experience_level_filter,
@@ -794,6 +838,8 @@ async def import_external_job(
         "weworkremotely": weworkremotely.get_cached_result,
         "hackernews": hackernews.get_cached_result,
         "getonbrd": getonbrd.get_cached_result,
+        "workingnomads": workingnomads.get_cached_result,
+        "remoteok": remoteok.get_cached_result,
         "adzuna": adzuna.get_cached_result,
         "usajobs": usajobs.get_cached_result,
         "serpapi": serpapi_jobs.get_cached_result,

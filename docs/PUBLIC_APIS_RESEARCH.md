@@ -24,6 +24,8 @@ francés); el resto quedó documentado como descartado, con el motivo.
 | 10 | USAJobs | API key gratis (registro instantáneo) | Sí (2026-09) — activa, con clave real del usuario |
 | 11 | Get on Board | Ninguna (facet pública de su API) | Sí (2026-09) |
 | 12 | SerpApi (Google Jobs) | API key gratis (registro instantáneo) | Sí (2026-09) |
+| 13 | Working Nomads | Ninguna | Sí (2026-09) |
+| 14 | Remote OK | Ninguna | Sí (2026-09) — **reevaluada**, ver nota |
 | — | France Travail (ex-Pôle Emploi) | OAuth2 client credentials (registro instantáneo) | **No** — se integró y probó, pero se quitó (ver nota) |
 | — | RemoteOK | Ninguna en teoría | **No** — ver nota |
 | — | Reed.co.uk | API key gratis | **No** — ver nota |
@@ -88,6 +90,41 @@ bloquea agresivamente peticiones sin un `User-Agent` de navegador real y no tien
 estable (los nombres de campo circulan solo por scrapers de terceros). Por confiabilidad no se integró en
 este primer corte — queda documentada como candidata si más adelante se justifica el esfuerzo de
 verificarla en producción.
+
+### Reevaluación de RemoteOK (2026-09) — ahora sí integrada
+
+La nota original la descartó porque su CDN bloquea peticiones sin un `User-Agent` de navegador real.
+Al re-verificarla en vivo resultó que **ese era justamente el caso**: el `USER_AGENT` compartido del
+proyecto ya es una cadena de navegador, así que responde 200 con ~100 vacantes actuales. La otra
+objeción —"los nombres de campo circulan solo por scrapers de terceros"— tampoco se sostuvo: el
+payload es autodescriptivo (`position`, `company`, `tags`, `salary_min`, `epoch`, `url`,
+`apply_url`), no hubo que adivinar nada.
+
+**Sus términos y cómo se cumplen.** El primer elemento de la respuesta trae un aviso `legal` que pide
+enlazar de vuelta a la ficha en Remote OK y nombrarlos como fuente, bajo pena de suspender el acceso.
+Ambas cosas se cumplen: `source_url` apunta a la página de Remote OK (`url`) y **nunca** al
+`apply_url` del empleador, así que el botón "Aplicar en el sitio original" manda tráfico a Remote OK
+—exactamente lo que piden—; y el nombre del proveedor se muestra en cada tarjeta de Discover. La
+parte de "follow, no nofollow" es sobre SEO de un sitio público y no tiene equivalente en una app
+privada de un solo operador.
+
+### Working Nomads (2026-09)
+
+`https://www.workingnomads.com/api/exposed_jobs/` — sin clave, sin registro, sin bloqueo de CDN
+(responde 200 con el `User-Agent` propio del proyecto). Devuelve el board completo en un solo array
+JSON, con empresa, título, descripción, ubicación, tags y URL. No acepta parámetro de búsqueda, así
+que el filtrado se hace localmente sobre el feed cacheado, igual que We Work Remotely y Hacker News.
+
+### Descartadas en esta segunda ronda
+
+- **EU Remote Jobs**: su RSS responde 403 al `User-Agent` del proyecto (mismo bloqueo por el que se
+  había descartado RemoteOK) y el feed de WordPress no trae la empresa como campo estructurado.
+- **SmartRecruiters**: su búsqueda global pública devuelve 404; solo expone los postings por empresa.
+- **Arbeitsagentur (Alemania)**: 403 incluso con la API key pública documentada de su app móvil.
+- **Greenhouse / Ashby**: **funcionan sin auth** (verificado: 200 con datos reales), pero son por
+  empresa, no por búsqueda — habría que curar una lista de compañías. Quedan como la mejor candidata
+  para una próxima ronda, porque son la fuente canónica (el ATS real de la empresa), sin el retraso
+  de un agregador.
 
 ---
 

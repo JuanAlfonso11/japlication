@@ -1,6 +1,6 @@
 # JobFlow AI
 
-Plataforma personal de búsqueda y postulación a empleo: perfil de carrera (CV maestro, con importación desde PDF), búsqueda en vivo agregada contra 6 APIs públicas sin autenticación + importación de vacantes desde URL, motor de coincidencia (match engine) híbrido, evaluador de CV, adaptación de CV, generación de cover letters, verificación de cuenta por correo, y una interfaz de decisión estilo Tinder.
+Plataforma personal de búsqueda y postulación a empleo: perfil de carrera (CV maestro, con importación desde PDF), búsqueda en vivo agregada contra 14 fuentes de empleo + importación de vacantes desde URL, motor de coincidencia (match engine) híbrido, evaluador de CV, adaptación de CV, generación de cover letters, verificación de cuenta por correo, y una interfaz de decisión estilo Tinder.
 
 Uso personal — ver el diseño conceptual completo en [`docs/DESIGN.md`](docs/DESIGN.md), el contrato de API en [`docs/API_CONTRACT.md`](docs/API_CONTRACT.md), y cómo instalarla como app Android en [`docs/ANDROID_APP.md`](docs/ANDROID_APP.md).
 
@@ -106,19 +106,32 @@ npm run dev
 
 ## Búsqueda en vivo
 
-`GET /jobs/search/aggregate` combina en una sola búsqueda **6 APIs públicas que no requieren ningún tipo
-de autenticación** (sin API key, sin OAuth, sin registro) — investigación completa, incluyendo por qué
-Google Jobs y Upwork se removieron y por qué LinkedIn/Indeed no son una opción real para un proyecto
-personal, en [`docs/PUBLIC_APIS_RESEARCH.md`](docs/PUBLIC_APIS_RESEARCH.md):
+`GET /jobs/search/aggregate` combina en una sola búsqueda **14 fuentes**: 11 que no requieren
+ningún tipo de autenticación (sin API key, sin OAuth, sin registro) y 3 con clave gratuita de registro
+instantáneo, que se saltan solas si no están configuradas. Los resultados se deduplican antes de
+devolverse (`backend/app/services/job_dedupe.py`). Investigación completa —incluyendo por qué se
+descartaron varias y por qué LinkedIn/Indeed no son una opción real para un proyecto personal— en
+[`docs/PUBLIC_APIS_RESEARCH.md`](docs/PUBLIC_APIS_RESEARCH.md):
 
-| Proveedor | Servicio | Servicio backend |
+| Proveedor | Auth | Servicio backend |
 |---|---|---|
-| Himalayas (default) | [himalayas.app](https://himalayas.app) | `backend/app/services/himalayas.py` |
-| Arbeitnow | [arbeitnow.com](https://www.arbeitnow.com/api/job-board-api) | `backend/app/services/arbeitnow.py` |
-| Remotive | [remotive.com](https://remotive.com/api/remote-jobs) | `backend/app/services/remotive.py` |
-| Jobicy | [jobicy.com](https://jobicy.com/api/v2/remote-jobs) | `backend/app/services/jobicy.py` |
-| RemoteJobs.org | [remotejobs.org](https://remotejobs.org/api-access) | `backend/app/services/remotejobs_org.py` |
-| The Muse | [themuse.com](https://www.themuse.com/developers/api/v2) | `backend/app/services/themuse.py` |
+| Himalayas | — | `himalayas.py` |
+| Arbeitnow | — | `arbeitnow.py` |
+| Remotive | — | `remotive.py` |
+| Jobicy | — | `jobicy.py` |
+| RemoteJobs.org | — | `remotejobs_org.py` |
+| The Muse | — | `themuse.py` |
+| We Work Remotely | — | `weworkremotely.py` |
+| Hacker News (Who is hiring) | — | `hackernews.py` |
+| Get on Board | — | `getonbrd.py` |
+| Working Nomads | — | `workingnomads.py` |
+| Remote OK | — | `remoteok.py` |
+| Adzuna | clave gratis | `adzuna.py` |
+| USAJobs | clave gratis | `usajobs.py` |
+| Google Jobs (SerpApi) | clave gratis | `serpapi_jobs.py` |
+
+Remote OK pide, en sus términos, que se enlace de vuelta a su ficha y se los nombre como fuente: por
+eso su `source_url` apunta a su página y nunca al `apply_url` del empleador.
 
 ## Kit de aplicación
 
