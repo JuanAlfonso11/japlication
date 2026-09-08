@@ -133,37 +133,110 @@ function isNotConfigured(error: string): boolean {
   return error.includes("is not configured");
 }
 
-function SourcesSummary({ sources }: { sources: AggregateSourceStatus[] }) {
+/** Cuánto aportó cada fuente, y el total.
+ *
+ * Antes esto era solo una fila de chips, uno por proveedor. Con 14 fuentes
+ * eso son 14 chips sin jerarquía, y —más importante— faltaba el número que
+ * en realidad se quiere de un vistazo: cuántas vacantes trajo la búsqueda
+ * en total.
+ *
+ * El detalle de la resta importa: los conteos por fuente son ANTES de
+ * deduplicar (a propósito: reportan lo que devolvió cada proveedor, que es
+ * lo que sirve para notar que una se quedó muda), mientras que la lista de
+ * abajo ya está deduplicada. Sin decirlo, la suma de los chips no cuadra
+ * con lo que se ve y parece un error de la app. Por eso las duplicadas
+ * ocultas se muestran explícitamente.
+ */
+function SourcesSummary({
+  sources,
+  shownCount,
+}: {
+  sources: AggregateSourceStatus[];
+  /** Resultados realmente devueltos, ya deduplicados. */
+  shownCount: number;
+}) {
+  const [open, setOpen] = useState(false);
+
   const failed = sources.filter((s) => s.error && !isNotConfigured(s.error));
   const unconfigured = sources.filter((s) => s.error && isNotConfigured(s.error));
+  const answered = sources.filter((s) => !s.error);
+  const rawTotal = answered.reduce((sum, s) => sum + s.count, 0);
+  const duplicates = Math.max(0, rawTotal - shownCount);
+
+  // Las que más aportaron primero: con 14 fuentes, el orden alfabético
+  // esconde justamente lo que se quiere ver.
+  const ordered = [...sources].sort((a, b) => {
+    if (Boolean(a.error) !== Boolean(b.error)) return a.error ? 1 : -1;
+    return b.count - a.count;
+  });
+
   return (
-    <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500">
-      {sources.map((s) => {
-        const notConfigured = s.error ? isNotConfigured(s.error) : false;
-        return (
-          <span
-            key={s.provider}
-            className={`rounded-full px-2 py-0.5 ${
-              s.error && !notConfigured
-                ? "bg-rose-50 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400"
-                : "bg-gray-50 text-gray-500 dark:bg-gray-800 dark:text-gray-400"
-            }`}
-            title={s.error ?? undefined}
-          >
-            {PROVIDER_LABELS[s.provider] ?? s.provider}: {notConfigured ? "sin clave" : s.error ? "error" : s.count}
-          </span>
-        );
-      })}
-      {failed.length > 0 && (
-        <span className="text-rose-500 dark:text-rose-400">
-          {failed.length} fuente{failed.length > 1 ? "s" : ""} no respondió — el resto de resultados sigue completo.
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-1.5 text-xs">
+        <span className="tabular rounded-full bg-brand-50 px-2.5 py-1 font-bold text-brand-700 dark:bg-brand-500/15 dark:text-brand-300">
+          {shownCount} vacante{shownCount === 1 ? "" : "s"}
         </span>
+        <span className="tabular rounded-full bg-gray-100 px-2.5 py-1 font-semibold text-gray-600 dark:bg-gray-800 dark:text-gray-300">
+          {answered.length} de {sources.length} fuentes
+        </span>
+        {duplicates > 0 && (
+          <span
+            className="tabular rounded-full bg-gray-100 px-2.5 py-1 font-medium text-gray-500 dark:bg-gray-800 dark:text-gray-400"
+            title="La misma vacante publicada en varias fuentes, o repetida por ciudad, se muestra una sola vez."
+          >
+            {duplicates} duplicada{duplicates === 1 ? "" : "s"} oculta{duplicates === 1 ? "" : "s"}
+          </span>
+        )}
+        {failed.length > 0 && (
+          <span className="rounded-full bg-rose-50 px-2.5 py-1 font-semibold text-rose-600 dark:bg-rose-500/15 dark:text-rose-400">
+            {failed.length} sin responder
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          className="rounded-full px-2 py-1 font-bold text-brand-600 transition-colors hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+        >
+          {open ? "Ocultar detalle" : "Ver por fuente"}
+        </button>
+      </div>
+
+      {open && (
+        <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500">
+          {ordered.map((s) => {
+            const notConfigured = s.error ? isNotConfigured(s.error) : false;
+            return (
+              <span
+                key={s.provider}
+                className={`tabular rounded-full px-2 py-0.5 ${
+                  s.error && !notConfigured
+                    ? "bg-rose-50 text-rose-600 dark:bg-rose-500/15 dark:text-rose-400"
+                    : s.count > 0
+                    ? "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300"
+                    : "bg-gray-50 text-gray-400 dark:bg-gray-800/60 dark:text-gray-500"
+                }`}
+                title={s.error ?? undefined}
+              >
+                {PROVIDER_LABELS[s.provider] ?? s.provider}:{" "}
+                {notConfigured ? "sin clave" : s.error ? "error" : s.count}
+              </span>
+            );
+          })}
+        </div>
+      )}
+
+      {failed.length > 0 && (
+        <p className="text-xs text-rose-500 dark:text-rose-400">
+          {failed.length} fuente{failed.length > 1 ? "s" : ""} no respondió — el resto de resultados sigue
+          completo.
+        </p>
       )}
       {failed.length === 0 && unconfigured.length > 0 && (
-        <span className="text-gray-400 dark:text-gray-500">
+        <p className="text-xs text-gray-400 dark:text-gray-500">
           {unconfigured.length} fuente{unconfigured.length > 1 ? "s" : ""} sin clave configurada — el resto
           está completo.
-        </span>
+        </p>
       )}
     </div>
   );
@@ -351,7 +424,7 @@ function DiscoverContent() {
 
           {error && <ErrorNotice message={error} />}
 
-          {sources.length > 0 && <SourcesSummary sources={sources} />}
+          {sources.length > 0 && <SourcesSummary sources={sources} shownCount={results.length} />}
 
           {minSalaryValue && results.length > 0 && (
             <p className="text-xs text-gray-400 dark:text-gray-500">
