@@ -472,3 +472,50 @@ async def test_reuse_never_offers_a_cv_in_the_other_language(
     ).json()
     assert suggestion["resume_version"] is not None
     assert suggestion["source_company"] == "Uno"
+
+
+# --- cost safety -----------------------------------------------------------
+
+
+def test_job_description_sent_to_the_llm_is_capped():
+    """An importer that lands on a careers index page instead of a single
+    posting stores a description hundreds of thousands of characters long
+    (this database has a 490,000-char one). Uncapped, generating one CV for
+    it becomes a ~122,000-token request — real money on a metered key, from
+    one click. cover_letter_generator and interview_prep already cap at
+    1,500; this proves the adapter does too."""
+    from unittest.mock import patch
+
+    from app.services import resume_adapter
+
+    class _Job:
+        title = "Backend Engineer"
+        company = "Acme"
+        description = "x" * 500_000
+        requirements = []
+        skills_required = [{"name": "C#", "importance": "required"}]
+
+    captured = {}
+
+    class _FakeMessages:
+        def create(self, **kwargs):
+            captured.update(kwargs)
+            raise RuntimeError("stop here — we only need the payload")
+
+    class _FakeClient:
+        def __init__(self, **_kwargs):
+            self.messages = _FakeMessages()
+
+    fake_anthropic = type("anthropic", (), {"Anthropic": _FakeClient})
+
+    with patch.dict("sys.modules", {"anthropic": fake_anthropic}), patch.object(
+        resume_adapter.settings, "ANTHROPIC_API_KEY", "test-key"
+    ):
+        # Falls back to the rule-based path once the fake client raises,
+        # which is exactly the behaviour every AI failure gets.
+        result = resume_adapter.adapt_resume(_profile(), _Job(), "en")
+
+    assert result["generated_by"] == "manual"
+    sent = captured["messages"][0]["content"]
+    assert "x" * 8000 in sent, "the description should still be sent, just bounded"
+    assert "x" * 8001 not in sent, "the description was not capped"

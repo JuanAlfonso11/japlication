@@ -19,6 +19,17 @@ from app.services.skills_taxonomy import canonical_skill_set, normalize_skill
 
 ANTHROPIC_MODEL = "claude-sonnet-5"
 
+#: The description is the only field here with no natural size limit, and an
+#: importer that lands on a careers *index* page instead of one posting can
+#: store hundreds of thousands of characters (this database has a 490,000-char
+#: "Careers at Microsoft" row). Sending that verbatim turns one click on
+#: "Generar CV" into a ~122,000-token request. cover_letter_generator and
+#: interview_prep already cap theirs at 1,500; 8,000 is more generous because
+#: the adapter genuinely uses the detail to tailor wording, and it still
+#: covers the 90th percentile of real postings here (9,219 chars) almost
+#: whole while making a runaway row impossible.
+MAX_JOB_DESCRIPTION_CHARS = 8000
+
 SYSTEM_PROMPT = """You are an ATS resume-tailoring assistant for JobFlow AI.
 
 You will be given a candidate's factual career profile (JSON) and a target job
@@ -179,7 +190,7 @@ def _try_anthropic_adapt(profile, job, language: str) -> Optional[dict[str, Any]
     job_json = {
         "title": job.title,
         "company": job.company,
-        "description": job.description,
+        "description": (job.description or "")[:MAX_JOB_DESCRIPTION_CHARS],
         "requirements": job.requirements,
         "skills_required": job.skills_required,
     }
