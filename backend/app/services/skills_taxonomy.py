@@ -51,7 +51,7 @@ SKILLS_TAXONOMY: dict[str, list[str]] = {
     "Django": ["django"],
     "Flask": ["flask"],
     "FastAPI": ["fastapi", "fast api"],
-    "Spring Boot": ["spring boot", "spring"],
+    "Spring Boot": ["spring boot", "spring", "springboot", "spring-boot"],
     ".NET": [".net", "dotnet", "asp.net", "asp.net core", ".net core", ".net framework"],
     "Entity Framework": ["entity framework", "ef core", "entityframework", "efcore"],
     "Blazor": ["blazor"],
@@ -60,7 +60,10 @@ SKILLS_TAXONOMY: dict[str, list[str]] = {
     "Javalin": ["javalin"],
     "Ruby on Rails": ["rails", "ruby on rails"],
     "GraphQL": ["graphql"],
-    "REST APIs": ["rest api", "rest apis", "restful", "rest"],
+    "REST APIs": [
+        "rest api", "rest apis", "restful", "rest",
+        "integracion de apis", "integración de apis", "api integration", "apis",
+    ],
     "gRPC": ["grpc"],
     "Microservices": ["microservices", "microservice architecture"],
 
