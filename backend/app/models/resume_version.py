@@ -33,6 +33,10 @@ class ResumeVersion(Base):
     title: Mapped[str] = mapped_column(Text, nullable=False)
     content: Mapped[dict] = mapped_column(JSONB, nullable=False)
     change_log: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    #: Which language this CV was written in ("en"/"es"). Recorded rather
+    #: than inferred so the reuse suggestion never hands a Spanish CV to an
+    #: English posting.
+    language: Mapped[str] = mapped_column(Text, nullable=False, default="en")
     generated_by: Mapped[GenerationSource] = mapped_column(
         generation_source_enum, nullable=False, default=GenerationSource.ai
     )

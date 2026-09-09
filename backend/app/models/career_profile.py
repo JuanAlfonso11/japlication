@@ -26,6 +26,13 @@ class CareerProfile(Base):
     #: [{question, answer}] — the reusable screening-question answers the
     #: application kit copies from. See db/schema.sql for the rationale.
     screening_answers: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    #: Per-language overrides of the prose fields, keyed by language code:
+    #: {"es": {"headline", "summary", "experience": [{"title", "bullets"}],
+    #: "education": [{"degree", "field"}]}}. The base columns above stay in
+    #: one language (BASE_LANGUAGE) because that is the text the match engine
+    #: scores; translations only surface when a CV is rendered. See
+    #: services/profile_i18n.py.
+    translations: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

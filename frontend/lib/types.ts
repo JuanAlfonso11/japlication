@@ -112,6 +112,53 @@ export const COMMON_SCREENING_QUESTIONS: string[] = [
   "¿Por qué te interesa esta empresa?",
 ];
 
+/** The languages a CV can be produced in. "en" is the BASE: it is what the
+ * base profile fields hold and the only text the match engine scores, so a
+ * profile is never "in Spanish" — it is in English with a Spanish version
+ * attached. See backend/app/services/profile_i18n.py. */
+export type ProfileLanguage = "en" | "es";
+
+export const BASE_PROFILE_LANGUAGE: ProfileLanguage = "en";
+
+export const PROFILE_LANGUAGE_LABELS: Record<ProfileLanguage, string> = {
+  en: "English",
+  es: "Español",
+};
+
+/** Translated prose for one experience entry, matched by POSITION in
+ * `CareerProfile.experience`. Blank fields fall back to the base entry, so
+ * a half-finished translation never blanks a section of the CV. */
+export interface ExperienceTranslation {
+  title?: string;
+  company?: string;
+  location?: string;
+  bullets: string[];
+}
+
+export interface EducationTranslation {
+  degree?: string;
+  field?: string;
+  institution?: string;
+}
+
+export interface ProfileTranslation {
+  headline?: string;
+  summary?: string;
+  experience: ExperienceTranslation[];
+  education: EducationTranslation[];
+}
+
+/** Whether a CV can already be exported in a given language. Computed by
+ * the server so the badge here and the fallback the renderer performs can
+ * never disagree. */
+export interface LanguageStatus {
+  code: ProfileLanguage;
+  name: string;
+  is_base: boolean;
+  complete: boolean;
+  missing: string[];
+}
+
 export interface CareerProfile {
   id?: string;
   user_id?: string;
@@ -124,6 +171,8 @@ export interface CareerProfile {
   certifications: CertificationEntry[];
   languages: LanguageEntry[];
   screening_answers: ScreeningAnswer[];
+  /** Keyed by language code; the base language is never a key here. */
+  translations: Partial<Record<ProfileLanguage, ProfileTranslation>>;
   updated_at?: string;
 }
 
@@ -544,6 +593,9 @@ export interface ResumeVersion {
   title: string;
   content: ResumeContent;
   change_log: string[];
+  /** Which language this CV was written in. Recorded, not inferred, so a
+   * reuse suggestion never hands a Spanish CV to an English posting. */
+  language: ProfileLanguage;
   generated_by: "manual" | "ai";
   /** Null until the user corrects it. An edited version is preferred when a
    * later, similar job looks for a resume to reuse. */
@@ -564,6 +616,8 @@ export interface ResumeVersionUpdatePayload {
 
 export interface ResumeGeneratePayload {
   tone?: string;
+  /** Omit to let the server match the language of the posting itself. */
+  language?: ProfileLanguage;
 }
 
 export interface ReusableResumeSuggestion {

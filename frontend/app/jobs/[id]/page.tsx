@@ -12,7 +12,14 @@ import ApplicationKit from "@/components/ApplicationKit";
 import ResumeEditor from "@/components/ResumeEditor";
 import InterviewPrepCard from "@/components/InterviewPrepCard";
 import { ApiError, coverLetterApi, jobsApi, resumeApi } from "@/lib/api";
-import type { CoverLetter, Job, MatchResult, ResumeVersion, ReusableResumeSuggestion } from "@/lib/types";
+import type {
+  CoverLetter,
+  Job,
+  MatchResult,
+  ProfileLanguage,
+  ResumeVersion,
+  ReusableResumeSuggestion,
+} from "@/lib/types";
 
 function resumeToPlainText(resume: ResumeVersion): string {
   const lines: string[] = [resume.title, ""];
@@ -73,6 +80,10 @@ function JobDetailContent() {
 
   const [resume, setResume] = useState<ResumeVersion | null>(null);
   const [resumeLoading, setResumeLoading] = useState(false);
+  // null = "match the posting": the server detects the ad's language.
+  // An explicit choice is for the case the default gets wrong, e.g. a
+  // Spanish-language ad at a company whose hiring team reads English.
+  const [resumeLanguage, setResumeLanguage] = useState<ProfileLanguage | null>(null);
   const [resumeError, setResumeError] = useState<string | null>(null);
   const [editingResume, setEditingResume] = useState(false);
   const [reusable, setReusable] = useState<ReusableResumeSuggestion | null>(null);
@@ -170,7 +181,7 @@ function JobDetailContent() {
     try {
       let activeResume = resume;
       if (!activeResume) {
-        activeResume = await jobsApi.generateResume(jobId);
+        activeResume = await jobsApi.generateResume(jobId, resumeLanguage ? { language: resumeLanguage } : undefined);
         setResume(activeResume);
       }
       try {
@@ -193,11 +204,25 @@ function JobDetailContent() {
     }
   }
 
+  async function handleChangeResumeLanguage(next: ProfileLanguage | null) {
+    setResumeLanguage(next);
+    // A CV already on screen is in the old language, and so is the reuse
+    // suggestion — keeping either would quietly hand the user the wrong file.
+    setResume(null);
+    setReusable(null);
+    try {
+      const suggestion = await jobsApi.reusableResume(jobId, next ?? undefined);
+      if (suggestion.resume_version) setReusable(suggestion);
+    } catch {
+      // Same as on load: the suggestion is a nice-to-have.
+    }
+  }
+
   async function handleGenerateResume() {
     setResumeLoading(true);
     setResumeError(null);
     try {
-      const res = await jobsApi.generateResume(jobId);
+      const res = await jobsApi.generateResume(jobId, resumeLanguage ? { language: resumeLanguage } : undefined);
       setResume(res);
     } catch (err) {
       setResumeError(
@@ -351,14 +376,30 @@ function JobDetailContent() {
       <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-100 dark:bg-gray-900 dark:ring-gray-800">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="font-semibold text-gray-900 dark:text-gray-100">CV a medida</h2>
-          <button
-            type="button"
-            onClick={handleGenerateResume}
-            disabled={resumeLoading}
-            className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {resumeLoading ? "Generando…" : resume ? "Regenerar" : "Generar CV"}
-          </button>
+          <div className="flex items-center gap-2">
+            <select
+              aria-label="Idioma del CV"
+              value={resumeLanguage ?? "auto"}
+              onChange={(e) =>
+                handleChangeResumeLanguage(
+                  e.target.value === "auto" ? null : (e.target.value as ProfileLanguage)
+                )
+              }
+              className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs font-semibold text-gray-600 outline-none focus:border-brand-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300"
+            >
+              <option value="auto">Idioma de la vacante</option>
+              <option value="en">English</option>
+              <option value="es">Español</option>
+            </select>
+            <button
+              type="button"
+              onClick={handleGenerateResume}
+              disabled={resumeLoading}
+              className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {resumeLoading ? "Generando…" : resume ? "Regenerar" : "Generar CV"}
+            </button>
+          </div>
         </div>
         {resumeError && <ErrorNotice message={resumeError} />}
         {reusable?.resume_version && !resume && (
@@ -382,7 +423,12 @@ function JobDetailContent() {
           <div className="mt-2 space-y-3 rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-gray-800 dark:bg-gray-800/50">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="font-semibold text-gray-900 dark:text-gray-100">{resume.title}</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="font-semibold text-gray-900 dark:text-gray-100">{resume.title}</p>
+                  <span className="rounded-full bg-gray-200 px-2 py-0.5 text-[11px] font-semibold uppercase text-gray-600 dark:bg-gray-700 dark:text-gray-300">
+                    {resume.language === "es" ? "Español" : "English"}
+                  </span>
+                </div>
                 {resume.content.summary && (
                   <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">{resume.content.summary}</p>
                 )}

@@ -19,8 +19,9 @@ import EducationSection from "@/components/profile/EducationSection";
 import CertificationsSection from "@/components/profile/CertificationsSection";
 import LanguagesSection from "@/components/profile/LanguagesSection";
 import ScreeningAnswersSection from "@/components/profile/ScreeningAnswersSection";
+import TranslationsSection from "@/components/profile/TranslationsSection";
 import { ApiError, jobsApi, profileApi } from "@/lib/api";
-import type { CareerProfile, CVEvaluation } from "@/lib/types";
+import type { CareerProfile, CVEvaluation, LanguageStatus } from "@/lib/types";
 
 function mergeCvDraft(current: CareerProfile, draft: CareerProfile): CareerProfile {
   const mergedContact = { ...current.contact_info };
@@ -63,6 +64,7 @@ const EMPTY_PROFILE: CareerProfile = {
   certifications: [],
   languages: [],
   screening_answers: [],
+  translations: {},
 };
 
 type ProfileTab = "cv" | "answers" | "insights";
@@ -98,6 +100,8 @@ function ProfileContent() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+
+  const [languages, setLanguages] = useState<LanguageStatus[] | null>(null);
 
   const [evaluation, setEvaluation] = useState<CVEvaluation | null>(null);
   const [evalLoading, setEvalLoading] = useState(false);
@@ -140,13 +144,24 @@ function ProfileContent() {
     }
   }, []);
 
+  const loadLanguages = useCallback(async () => {
+    try {
+      setLanguages(await profileApi.languages());
+    } catch {
+      // Only drives a "faltan N campos" badge — never worth an error banner.
+      setLanguages(null);
+    }
+  }, []);
+
   const load = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
     try {
       const data = await profileApi.get();
-      setProfile(data);
+      // A profile saved before bilingual support has no `translations` key.
+      setProfile({ ...data, translations: data.translations ?? {} });
       loadEvaluation();
+      loadLanguages();
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) {
         setProfile(EMPTY_PROFILE);
@@ -158,7 +173,7 @@ function ProfileContent() {
     } finally {
       setLoading(false);
     }
-  }, [loadEvaluation]);
+  }, [loadEvaluation, loadLanguages]);
 
   useEffect(() => {
     load();
@@ -177,9 +192,12 @@ function ProfileContent() {
     setSaveError(null);
     try {
       const saved = await profileApi.save(profile);
-      setProfile(saved);
+      setProfile({ ...saved, translations: saved.translations ?? {} });
       setDirty(false);
       setLastSavedAt(new Date());
+      // The "faltan N campos" badge is computed server-side, so it only
+      // becomes true again after the save it is describing.
+      loadLanguages();
 
       if (improvePendingSave) {
         setImprovePendingSave(false);
@@ -554,6 +572,13 @@ function ProfileContent() {
           <LanguagesSection
             languages={profile.languages}
             onChange={(languages) => patch({ languages })}
+          />
+          {/* Last in the CV tab on purpose: you translate what already
+              exists, so everything it mirrors is filled in above it. */}
+          <TranslationsSection
+            profile={profile}
+            status={languages?.find((entry) => entry.code === "es") ?? null}
+            onChange={(translations) => patch({ translations })}
           />
         </>
       )}

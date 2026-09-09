@@ -1,4 +1,6 @@
 import type {
+  ProfileLanguage,
+  LanguageStatus,
   AggregateSearchResponse,
   ApiErrorShape,
   Application,
@@ -372,6 +374,7 @@ export const profileApi = {
   evaluation: () => request<CVEvaluation>("/profile/evaluation"),
   importCv: (file: File) => uploadFile<CVUploadResult>("/profile/import-cv", "file", file),
   improve: () => request<ProfileImprovementResult>("/profile/improve", { method: "POST" }),
+  languages: () => request<LanguageStatus[]>("/profile/languages"),
 };
 
 // ---------- Jobs ----------
@@ -402,8 +405,10 @@ export const jobsApi = {
     request<Application>(`/jobs/${id}/decision`, { method: "POST", body: payload }),
   generateResume: (id: string, payload?: ResumeGeneratePayload) =>
     request<ResumeVersion>(`/jobs/${id}/resume`, { method: "POST", body: payload ?? {} }),
-  reusableResume: (id: string) =>
-    request<ReusableResumeSuggestion>(`/jobs/${id}/resume/reusable`),
+  reusableResume: (id: string, language?: ProfileLanguage) =>
+    request<ReusableResumeSuggestion>(`/jobs/${id}/resume/reusable`, {
+      query: language ? { language } : undefined,
+    }),
   generateCoverLetter: (id: string, payload?: CoverLetterGeneratePayload) =>
     request<CoverLetter>(`/jobs/${id}/cover-letter`, { method: "POST", body: payload ?? {} }),
   search: (params: {

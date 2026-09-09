@@ -76,6 +76,51 @@ class ScreeningAnswer(BaseModel):
     answer: str = Field(default="", max_length=2000)
 
 
+class ExperienceTranslation(BaseModel):
+    """Translated prose for ONE experience entry, matched by list position.
+
+    Dates and skills_used are absent on purpose -- they are the same facts
+    in every language, and duplicating them here is how the two copies
+    drift apart. Anything left blank falls back to the base profile.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    title: Optional[str] = None
+    company: Optional[str] = None
+    location: Optional[str] = None
+    bullets: list[str] = Field(default_factory=list)
+
+
+class EducationTranslation(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    degree: Optional[str] = None
+    field: Optional[str] = None
+    institution: Optional[str] = None
+
+
+class ProfileTranslation(BaseModel):
+    """One language's version of the profile's prose. See profile_i18n.py."""
+
+    model_config = ConfigDict(extra="allow")
+
+    headline: Optional[str] = None
+    summary: Optional[str] = None
+    experience: list[ExperienceTranslation] = Field(default_factory=list)
+    education: list[EducationTranslation] = Field(default_factory=list)
+
+
+class LanguageStatus(BaseModel):
+    """Whether a CV can be exported in this language yet."""
+
+    code: str
+    name: str
+    is_base: bool
+    complete: bool
+    missing: list[str] = Field(default_factory=list)
+
+
 class CareerProfileUpsert(BaseModel):
     headline: Optional[str] = None
     summary: Optional[str] = None
@@ -86,6 +131,9 @@ class CareerProfileUpsert(BaseModel):
     certifications: list[Certification] = Field(default_factory=list)
     languages: list[Language] = Field(default_factory=list)
     screening_answers: list[ScreeningAnswer] = Field(default_factory=list)
+    #: Keyed by language code. The base columns above stay in
+    #: profile_i18n.BASE_LANGUAGE; this holds the others.
+    translations: dict[str, ProfileTranslation] = Field(default_factory=dict)
 
 
 class CVUploadResult(BaseModel):
@@ -124,5 +172,6 @@ class CareerProfile(BaseModel):
     certifications: list[dict[str, Any]] = Field(default_factory=list)
     languages: list[dict[str, Any]] = Field(default_factory=list)
     screening_answers: list[dict[str, Any]] = Field(default_factory=list)
+    translations: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime
     updated_at: datetime

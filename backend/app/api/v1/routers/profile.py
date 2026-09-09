@@ -9,10 +9,16 @@ from app.db.session import get_db
 from app.models.career_profile import CareerProfile
 from app.models.user import User
 from app.schemas.career_profile import CareerProfile as CareerProfileSchema
-from app.schemas.career_profile import CareerProfileUpsert, CVUploadResult, ProfileImprovementResult
+from app.schemas.career_profile import (
+    CareerProfileUpsert,
+    CVUploadResult,
+    LanguageStatus,
+    ProfileImprovementResult,
+)
 from app.schemas.cv_evaluation import CVEvaluation
 from app.services import cv_upload
 from app.services.cv_evaluator import evaluate_cv
+from app.services.profile_i18n import translation_status
 from app.services.profile_improver import improve_profile
 
 router = APIRouter(prefix="/profile", tags=["profile"])
@@ -40,6 +46,13 @@ async def upsert_profile(
 
     data = payload.model_dump(mode="json")
 
+    # An older client that predates bilingual profiles does not send
+    # `translations`, and Pydantic would fill in {} -- which would silently
+    # wipe the Spanish CV of anyone still on the installed APK. Only write
+    # the field when the request actually carried it.
+    if "translations" not in payload.model_fields_set:
+        data.pop("translations", None)
+
     if profile is None:
         profile = CareerProfile(user_id=current_user.id, **data)
         db.add(profile)
@@ -50,6 +63,26 @@ async def upsert_profile(
     await db.commit()
     await db.refresh(profile)
     return CareerProfileSchema.model_validate(profile)
+
+
+@router.get("/languages", response_model=list[LanguageStatus])
+async def get_profile_languages(
+    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+) -> list[LanguageStatus]:
+    """Which languages this profile can already produce a full CV in.
+
+    The completeness rule lives in profile_i18n.translation_status rather
+    than in the frontend so the badge in the UI and the fallback the
+    renderer actually performs can never disagree."""
+    result = await db.execute(select(CareerProfile).where(CareerProfile.user_id == current_user.id))
+    profile = result.scalar_one_or_none()
+    if profile is None:
+        raise HTTPException(status_code=404, detail="Career profile not created yet.")
+
+    return [
+        LanguageStatus(code=code, **status)
+        for code, status in translation_status(profile).items()
+    ]
 
 
 @router.post("/improve", response_model=ProfileImprovementResult)

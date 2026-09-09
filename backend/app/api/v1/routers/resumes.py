@@ -19,6 +19,7 @@ from app.schemas.resume_version import ReusableResumeSuggestion
 from app.schemas.resume_version import ResumeGenerateRequest
 from app.schemas.resume_version import ResumeVersion as ResumeVersionSchema
 from app.schemas.resume_version import ResumeVersionUpdate
+from app.services.profile_i18n import detect_language, labels_for, normalize_language
 from app.services.resume_adapter import adapt_resume
 from app.services.resume_pdf import render_resume_pdf
 from app.services.skills_taxonomy import canonical_skill_set
@@ -42,17 +43,24 @@ def _required_skill_names(job: Job) -> set[str]:
 
 
 async def _find_reusable_resume(
-    db: AsyncSession, user_id: UUID, job: Job
+    db: AsyncSession, user_id: UUID, job: Job, language: str
 ) -> tuple[Optional[ResumeVersion], float, Optional[Job]]:
     target_skills = _required_skill_names(job)
     if not target_skills:
         return None, 0.0, None
 
+    # Same-language only. A Spanish CV offered for an English posting is
+    # worse than no suggestion at all: the skill overlap that made it look
+    # reusable is exactly what hides the problem until it has been sent.
     rows = (
         await db.execute(
             select(ResumeVersion, Job)
             .join(Job, Job.id == ResumeVersion.job_id)
-            .where(ResumeVersion.user_id == user_id, ResumeVersion.job_id != job.id)
+            .where(
+                ResumeVersion.user_id == user_id,
+                ResumeVersion.job_id != job.id,
+                ResumeVersion.language == language,
+            )
             .order_by(ResumeVersion.created_at.desc())
         )
     ).all()
@@ -87,6 +95,7 @@ async def _find_reusable_resume(
 @router.get("/jobs/{job_id}/resume/reusable", response_model=ReusableResumeSuggestion)
 async def suggest_reusable_resume(
     job_id: UUID,
+    language: Optional[str] = None,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> ReusableResumeSuggestion:
@@ -98,7 +107,10 @@ async def suggest_reusable_resume(
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found.")
 
-    resume_version, similarity, source_job = await _find_reusable_resume(db, current_user.id, job)
+    code = normalize_language(language) if language else detect_language(job.description)
+    resume_version, similarity, source_job = await _find_reusable_resume(
+        db, current_user.id, job, code
+    )
     return ReusableResumeSuggestion(
         resume_version=ResumeVersionSchema.model_validate(resume_version) if resume_version else None,
         similarity=round(similarity, 2),
@@ -126,7 +138,11 @@ async def generate_resume(
     if profile is None:
         raise HTTPException(status_code=400, detail="Create your career profile before generating a resume.")
 
-    adapted = adapt_resume(profile, job)
+    # No explicit choice means "write it in the language the ad is in" --
+    # the default a person would pick, and the one that keeps the CV
+    # readable by whoever posted the job.
+    language = (payload.language if payload else None) or detect_language(job.description)
+    adapted = adapt_resume(profile, job, language)
 
     resume_version = ResumeVersion(
         user_id=current_user.id,
@@ -135,6 +151,7 @@ async def generate_resume(
         title=f"{job.title} @ {job.company}",
         content=adapted["content"],
         change_log=adapted["change_log"],
+        language=adapted["language"],
         generated_by=GenerationSource(adapted["generated_by"]),
     )
     db.add(resume_version)
@@ -242,23 +259,27 @@ async def update_resume_version(
 
 
 def _render_ats_text(resume_version: ResumeVersion) -> str:
+    """Plain-text twin of the PDF. Section headers come from the same
+    profile_i18n table the PDF uses, so the two exports of one CV cannot
+    end up in different languages."""
     content = resume_version.content or {}
+    labels = labels_for(resume_version.language)
     lines: list[str] = [resume_version.title, "=" * len(resume_version.title), ""]
 
     summary = content.get("summary")
     if summary:
-        lines += ["SUMMARY", summary, ""]
+        lines += [labels["summary"], summary, ""]
 
     skills = content.get("skills") or []
     if skills:
-        lines += ["SKILLS", ", ".join(skills), ""]
+        lines += [labels["skills"], ", ".join(skills), ""]
 
     experience = content.get("experience") or []
     if experience:
-        lines.append("EXPERIENCE")
+        lines.append(labels["experience"])
         for exp in experience:
             header = f"{exp.get('title', '')} — {exp.get('company', '')}".strip(" —")
-            dates = f"{exp.get('start_date', '') or ''} - {exp.get('end_date') or 'Present'}"
+            dates = f"{exp.get('start_date', '') or ''} - {exp.get('end_date') or labels['present']}"
             lines.append(f"{header} ({dates})")
             if exp.get("location"):
                 lines.append(exp["location"])
@@ -268,9 +289,11 @@ def _render_ats_text(resume_version: ResumeVersion) -> str:
 
     education = content.get("education") or []
     if education:
-        lines.append("EDUCATION")
+        lines.append(labels["education"])
         for edu in education:
-            deg = f"{edu.get('degree', '')} in {edu.get('field', '')}".strip(" in")
+            deg = labels["degree_join"].join(
+                part for part in (edu.get("degree"), edu.get("field")) if part
+            )
             lines.append(f"{deg} — {edu.get('institution', '')}")
         lines.append("")
 
@@ -294,7 +317,7 @@ async def export_resume_version(
         raise HTTPException(status_code=404, detail="Resume version not found.")
 
     text = _render_ats_text(row)
-    filename = f"resume-{row.id}.txt"
+    filename = f"resume-{row.language}-{row.id}.txt"
     return PlainTextResponse(
         content=text,
         media_type="text/plain; charset=utf-8",
@@ -333,9 +356,12 @@ async def export_resume_version_pdf(
     contact_info = profile.contact_info if profile is not None else {}
 
     pdf_bytes = render_resume_pdf(
-        full_name=current_user.full_name, contact_info=contact_info, content=row.content
+        full_name=current_user.full_name,
+        contact_info=contact_info,
+        content=row.content,
+        language=row.language,
     )
-    filename = f"resume-{row.id}.pdf"
+    filename = f"resume-{row.language}-{row.id}.pdf"
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",

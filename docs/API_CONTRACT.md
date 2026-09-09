@@ -40,8 +40,28 @@ sent — the backend logs the verification link instead, so local dev needs no m
     "experience": [{"company": "", "title": "", "start_date": "2021-01", "end_date": null, "location": "", "bullets": ["..."], "skills_used": ["C#", "SQL"]}],
     "education": [{"institution": "", "degree": "", "field": "", "start_date": "", "end_date": ""}],
     "certifications": [{"name": "", "issuer": "", "date": ""}],
-    "languages": [{"name": "English", "level": "C1"}]
+    "languages": [{"name": "English", "level": "C1"}],
+    "translations": {"es": {"headline": "", "summary": "",
+                            "experience": [{"title": "", "company": "", "bullets": ["..."]}],
+                            "education": [{"degree": "", "field": ""}]}}
   }
+  ```
+  `translations` holds the profile's OTHER languages, keyed by code. The base
+  fields above stay in the base language (`en`) because they are the only text
+  the match engine scores — see `backend/app/services/profile_i18n.py`. Entries
+  line up by POSITION with the base `experience`/`education` lists, and any
+  blank field falls back to the base text, so a half-finished translation never
+  blanks a section of the CV.
+
+  **Omitting `translations` entirely leaves the stored value untouched** (an
+  older client that predates the field must not wipe it); sending `{}`
+  explicitly does clear it.
+- `GET /profile/languages` -> `LanguageStatus[]` — whether a CV can already be
+  exported in each language:
+  ```json
+  [{"code": "en", "name": "English", "is_base": true, "complete": true, "missing": []},
+   {"code": "es", "name": "Español", "is_base": false, "complete": false,
+    "missing": ["summary", "experience[0].bullets"]}]
   ```
 - `POST /profile/import-cv` — `multipart/form-data`, field `file` (a PDF, max `MAX_CV_UPLOAD_MB`, default
   8MB) -> `CVUploadResult`:
@@ -157,9 +177,17 @@ options for a personal project at all: `himalayas`, `arbeitnow`, `remotive`, `jo
 - `PATCH /applications/{id}` `{status?, notes?, applied_at?}` -> `Application`
 
 ## Resume adaptation
-- `POST /jobs/{id}/resume` optional `{tone?}` -> generates ATS-safe `resume_versions` tailored to the job from the career profile -> `ResumeVersion`
+- `POST /jobs/{id}/resume` optional `{tone?, language?}` -> generates ATS-safe `resume_versions` tailored to the job from the career profile -> `ResumeVersion`
+  - `language` is `"en"`/`"es"`. **Omit it** to write the CV in the language of
+    the posting itself (detected from its description). The chosen language is
+    stored on the row as `ResumeVersion.language` and drives the section
+    headers of both exports.
+- `GET /jobs/{id}/resume/reusable?language=` -> `ReusableResumeSuggestion`. Only
+  ever suggests a CV in the SAME language; omitting `language` detects the
+  posting's.
 - `GET /resume-versions/{id}` -> `ResumeVersion`
-- `GET /resume-versions/{id}/export` -> ATS-safe plain text/PDF
+- `GET /resume-versions/{id}/export` -> ATS-safe plain text/PDF (filenames carry
+  the language: `resume-es-<id>.pdf`)
 
 ## Cover letters
 - `POST /jobs/{id}/cover-letter` optional `{tone?, resume_version_id?}` -> `CoverLetter`

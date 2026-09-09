@@ -10,6 +10,10 @@ from app.schemas.application import JobSummary
 
 class ResumeGenerateRequest(BaseModel):
     tone: Optional[str] = None
+    #: "en"/"es". Omitted means "match the posting" -- the server detects the
+    #: job description's language, which is the right default: a CV in the
+    #: language the ad was written in is what the reader expects.
+    language: Optional[str] = None
 
 
 class ResumeContentUpdate(BaseModel):
@@ -44,6 +48,7 @@ class ResumeVersion(BaseModel):
     title: str
     content: dict[str, Any]
     change_log: list[Any] = Field(default_factory=list)
+    language: str = "en"
     generated_by: GenerationSource
     #: Null until the user corrects it. Present in the response so the UI can
     #: show "editado por ti" and so reuse can prefer these.

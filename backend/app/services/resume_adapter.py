@@ -14,6 +14,7 @@ import json
 from typing import Any, Optional
 
 from app.core.config import settings
+from app.services.profile_i18n import LANGUAGE_NAMES, localize_profile, normalize_language
 from app.services.skills_taxonomy import canonical_skill_set, normalize_skill
 
 ANTHROPIC_MODEL = "claude-sonnet-5"
@@ -44,6 +45,9 @@ STRICT RULES:
   claim "expert" or "X years of Y" unless the source profile supports it).
 - Do not remove factual content; you may trim wording for concision.
 - Output ONLY the JSON object, no commentary, no markdown fences.
+- Write ALL prose (summary, bullets) in {language_name}. Keep company
+  names, institutions, dates and technology names exactly as given --
+  those are proper nouns, not text to translate.
 """
 
 
@@ -157,7 +161,7 @@ def _rule_based_adapt(profile, job) -> dict[str, Any]:
     }
 
 
-def _try_anthropic_adapt(profile, job) -> Optional[dict[str, Any]]:
+def _try_anthropic_adapt(profile, job, language: str) -> Optional[dict[str, Any]]:
     if not settings.ANTHROPIC_API_KEY:
         return None
     try:
@@ -185,7 +189,7 @@ def _try_anthropic_adapt(profile, job) -> Optional[dict[str, Any]]:
         response = client.messages.create(
             model=ANTHROPIC_MODEL,
             max_tokens=2000,
-            system=SYSTEM_PROMPT,
+            system=SYSTEM_PROMPT.replace("{language_name}", LANGUAGE_NAMES[language]),
             messages=[
                 {
                     "role": "user",
@@ -207,7 +211,8 @@ def _try_anthropic_adapt(profile, job) -> Optional[dict[str, Any]]:
         return {
             "content": content,
             "change_log": [
-                "AI-adapted resume via Anthropic (claude-sonnet-5): reordered/reworded truthfully to match job terminology."
+                f"AI-adapted resume via Anthropic (claude-sonnet-5) in "
+                f"{LANGUAGE_NAMES[language]}: reordered/reworded truthfully to match job terminology."
             ],
         }
     except Exception:
@@ -215,13 +220,26 @@ def _try_anthropic_adapt(profile, job) -> Optional[dict[str, Any]]:
         return None
 
 
-def adapt_resume(profile, job) -> dict[str, Any]:
-    """Returns {"content": {...}, "change_log": [...], "generated_by": "ai"|"manual"}."""
-    ai_result = _try_anthropic_adapt(profile, job)
+def adapt_resume(profile, job, language: str | None = None) -> dict[str, Any]:
+    """Returns {"content", "change_log", "generated_by", "language"}.
+
+    `language` picks which of the profile's languages the CV is written in
+    (see services/profile_i18n.py). The base profile is localized FIRST, so
+    the rule-based path -- which deliberately copies bullets verbatim to
+    guarantee it never fabricates anything -- copies the already-translated
+    bullets, and the AI path is handed source text already in the target
+    language instead of being asked to translate and tailor in one step.
+    """
+    code = normalize_language(language)
+    localized = localize_profile(profile, code)
+
+    ai_result = _try_anthropic_adapt(localized, job, code)
     if ai_result is not None:
         ai_result["generated_by"] = "ai"
+        ai_result["language"] = code
         return ai_result
 
-    rule_result = _rule_based_adapt(profile, job)
+    rule_result = _rule_based_adapt(localized, job)
     rule_result["generated_by"] = "manual"
+    rule_result["language"] = code
     return rule_result

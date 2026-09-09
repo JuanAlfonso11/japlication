@@ -28,6 +28,8 @@ from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
 
+from app.services.profile_i18n import labels_for
+
 _NAME_STYLE = ParagraphStyle("Name", fontName="Helvetica-Bold", fontSize=16, leading=19, alignment=TA_LEFT)
 _CONTACT_STYLE = ParagraphStyle(
     "Contact", fontName="Helvetica", fontSize=9.5, leading=12, spaceAfter=10, textColor="#333333"
@@ -50,7 +52,18 @@ def _join(parts: list[Any], sep: str) -> str:
     return sep.join(_esc(p) for p in parts if p)
 
 
-def render_resume_pdf(*, full_name: str, contact_info: dict[str, Any], content: dict[str, Any]) -> bytes:
+def render_resume_pdf(
+    *,
+    full_name: str,
+    contact_info: dict[str, Any],
+    content: dict[str, Any],
+    language: str = "en",
+) -> bytes:
+    """`language` only swaps the section headers and the "Present"/
+    "Actualidad" marker. The body prose arrives already written in that
+    language by resume_adapter -- this function never translates, so a
+    Spanish CV can never end up with English headers over Spanish text."""
+    labels = labels_for(language)
     buffer = BytesIO()
     doc = SimpleDocTemplate(
         buffer,
@@ -59,10 +72,10 @@ def render_resume_pdf(*, full_name: str, contact_info: dict[str, Any], content: 
         bottomMargin=0.6 * inch,
         leftMargin=0.7 * inch,
         rightMargin=0.7 * inch,
-        title=full_name or "Resume",
+        title=full_name or labels["resume"],
     )
 
-    story: list[Any] = [Paragraph(_esc(full_name) or "Candidate", _NAME_STYLE)]
+    story: list[Any] = [Paragraph(_esc(full_name) or labels["candidate"], _NAME_STYLE)]
 
     contact_line = _join(
         [
@@ -79,23 +92,23 @@ def render_resume_pdf(*, full_name: str, contact_info: dict[str, Any], content: 
 
     summary = content.get("summary")
     if summary:
-        story.append(Paragraph("SUMMARY", _SECTION_STYLE))
+        story.append(Paragraph(labels["summary"], _SECTION_STYLE))
         story.append(Paragraph(_esc(summary), _BODY_STYLE))
 
     skills = [s for s in (content.get("skills") or []) if s]
     if skills:
-        story.append(Paragraph("SKILLS", _SECTION_STYLE))
+        story.append(Paragraph(labels["skills"], _SECTION_STYLE))
         story.append(Paragraph(_join(skills, ", "), _BODY_STYLE))
 
     experience = content.get("experience") or []
     if experience:
-        story.append(Paragraph("EXPERIENCE", _SECTION_STYLE))
+        story.append(Paragraph(labels["experience"], _SECTION_STYLE))
         for entry in experience:
             if not isinstance(entry, dict):
                 continue
             header = _join([entry.get("title"), entry.get("company")], " — ")
-            story.append(Paragraph(header or "Role", _ROLE_STYLE))
-            dates = _join([entry.get("start_date"), entry.get("end_date") or "Present"], " – ")
+            story.append(Paragraph(header or labels["role"], _ROLE_STYLE))
+            dates = _join([entry.get("start_date"), entry.get("end_date") or labels["present"]], " – ")
             meta = _join([dates, entry.get("location")], "  |  ")
             if meta:
                 story.append(Paragraph(meta, _MUTED_STYLE))
@@ -105,7 +118,7 @@ def render_resume_pdf(*, full_name: str, contact_info: dict[str, Any], content: 
 
     education = content.get("education") or []
     if education:
-        story.append(Paragraph("EDUCATION", _SECTION_STYLE))
+        story.append(Paragraph(labels["education"], _SECTION_STYLE))
         for entry in education:
             if not isinstance(entry, dict):
                 continue
