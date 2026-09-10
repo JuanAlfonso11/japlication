@@ -188,6 +188,13 @@ options for a personal project at all: `himalayas`, `arbeitnow`, `remotive`, `jo
 - `GET /resume-versions/{id}` -> `ResumeVersion`
 - `GET /resume-versions/{id}/export` -> ATS-safe plain text/PDF (filenames carry
   the language: `resume-es-<id>.pdf`)
+- `GET /resume-versions/{id}/export/tex` -> the same CV as LaTeX source
+  (`application/x-tex`), for compiling in Overleaf or locally. Overleaf has no
+  public compile API, so the server cannot return a PDF built there; the
+  frontend posts this source into Overleaf's documented snippet endpoint
+  instead. The template is single-column with ordinary headings on purpose —
+  fancy LaTeX CV classes are a common way to make a resume unparseable. See
+  `backend/app/services/resume_latex.py`.
 
 ## Cover letters
 - `POST /jobs/{id}/cover-letter` optional `{tone?, resume_version_id?}` -> `CoverLetter`

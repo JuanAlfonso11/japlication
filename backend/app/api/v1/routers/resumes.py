@@ -21,6 +21,7 @@ from app.schemas.resume_version import ResumeVersion as ResumeVersionSchema
 from app.schemas.resume_version import ResumeVersionUpdate
 from app.services.profile_i18n import detect_language, labels_for, normalize_language
 from app.services.resume_adapter import adapt_resume
+from app.services.resume_latex import render_resume_latex
 from app.services.resume_pdf import render_resume_pdf
 from app.services.skills_taxonomy import canonical_skill_set
 
@@ -324,6 +325,53 @@ async def export_resume_version(
     return PlainTextResponse(
         content=text,
         media_type="text/plain; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/resume-versions/{resume_version_id}/export/tex")
+async def export_resume_version_latex(
+    resume_version_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> PlainTextResponse:
+    """The same CV as LaTeX source, for compiling in Overleaf (or locally).
+
+    Overleaf has no public compile API, so the server cannot hand back a
+    PDF it built there — what it can do is produce the source, which the
+    frontend posts straight into Overleaf's documented snippet endpoint so
+    the user lands on an already-compiling document.
+
+    The template is single-column with ordinary headings on purpose: fancy
+    LaTeX CV classes are a common way to make a resume unparseable, which
+    would undo the ATS work the direct-PDF export exists to guarantee. See
+    services/resume_latex.py.
+    """
+    row = (
+        await db.execute(
+            select(ResumeVersion).where(
+                ResumeVersion.id == resume_version_id, ResumeVersion.user_id == current_user.id
+            )
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Resume version not found.")
+
+    profile = (
+        await db.execute(select(CareerProfile).where(CareerProfile.id == row.career_profile_id))
+    ).scalar_one_or_none()
+
+    source = render_resume_latex(
+        full_name=current_user.full_name,
+        contact_info=profile.contact_info if profile is not None else {},
+        content=row.content,
+        language=row.language,
+        email=current_user.email,
+    )
+    filename = f"resume-{row.language}-{row.id}.tex"
+    return PlainTextResponse(
+        content=source,
+        media_type="application/x-tex; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 

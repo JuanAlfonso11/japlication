@@ -373,6 +373,30 @@ async function saveFileNative(blob: Blob, filename: string): Promise<void> {
   }
 }
 
+/** Fetches a text endpoint (with the same auth + refresh handling every
+ * other call gets) and returns its body instead of saving it. Used for the
+ * LaTeX source, which the caller hands to Overleaf rather than to disk. */
+async function fetchText(path: string): Promise<string> {
+  const token = getToken();
+  let res = await rawFetch(path, "GET", undefined, undefined, token);
+
+  if (res.status === 401 && token) {
+    const newToken = await refreshAccessToken();
+    if (!newToken) {
+      setToken(null);
+      setRefreshToken(null);
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event(AUTH_UNAUTHORIZED_EVENT));
+      }
+      throw new ApiError(401, "Your session expired — sign in again.");
+    }
+    res = await rawFetch(path, "GET", undefined, undefined, newToken);
+  }
+
+  if (!res.ok) throw new ApiError(res.status, `Request failed with status ${res.status}`);
+  return res.text();
+}
+
 async function downloadFile(path: string, filename: string): Promise<void> {
   const token = getToken();
   let res = await rawFetch(path, "GET", undefined, undefined, token);
@@ -535,6 +559,7 @@ export const resumeApi = {
   update: (id: string, payload: ResumeVersionUpdatePayload) =>
     request<ResumeVersion>(`/resume-versions/${id}`, { method: "PATCH", body: payload }),
   downloadPdf: (id: string, filename: string) => downloadFile(`/resume-versions/${id}/export/pdf`, filename),
+  latexSource: (id: string) => fetchText(`/resume-versions/${id}/export/tex`),
 };
 
 export const coverLetterApi = {

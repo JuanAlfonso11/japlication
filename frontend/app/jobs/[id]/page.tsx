@@ -12,6 +12,7 @@ import ApplicationKit from "@/components/ApplicationKit";
 import ResumeEditor from "@/components/ResumeEditor";
 import InterviewPrepCard from "@/components/InterviewPrepCard";
 import { ApiError, coverLetterApi, jobsApi, resumeApi } from "@/lib/api";
+import { openInOverleaf } from "@/lib/overleaf";
 import type {
   CoverLetter,
   Job,
@@ -88,6 +89,7 @@ function JobDetailContent() {
   const [editingResume, setEditingResume] = useState(false);
   const [reusable, setReusable] = useState<ReusableResumeSuggestion | null>(null);
   const [pdfDownloading, setPdfDownloading] = useState(false);
+  const [overleafOpening, setOverleafOpening] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [coverPdfDownloading, setCoverPdfDownloading] = useState(false);
   const [coverPdfError, setCoverPdfError] = useState<string | null>(null);
@@ -143,6 +145,22 @@ function JobDetailContent() {
       setPdfError(err instanceof ApiError ? err.message : "No se pudo descargar el PDF.");
     } finally {
       setPdfDownloading(false);
+    }
+  }
+
+  async function handleOpenInOverleaf() {
+    if (!resume) return;
+    setOverleafOpening(true);
+    setPdfError(null);
+    try {
+      const source = await resumeApi.latexSource(resume.id);
+      openInOverleaf(source, `CV - ${job?.title ?? "JobPilot"}`);
+    } catch (err) {
+      setPdfError(
+        err instanceof ApiError ? err.message : "No se pudo abrir el CV en Overleaf."
+      );
+    } finally {
+      setOverleafOpening(false);
     }
   }
 
@@ -449,6 +467,15 @@ function JobDetailContent() {
                     className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {pdfDownloading ? "Generando…" : "Descargar PDF"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleOpenInOverleaf}
+                    disabled={overleafOpening}
+                    title="Abre el CV en Overleaf como documento LaTeX, ya compilando"
+                    className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+                  >
+                    {overleafOpening ? "Abriendo…" : "LaTeX (Overleaf)"}
                   </button>
                   <CopyButton text={resumeToPlainText(resume)} />
                 </div>
