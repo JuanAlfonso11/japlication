@@ -229,7 +229,7 @@ class TestComputeMatch:
     def test_use_llm_false_never_touches_anthropic(self, monkeypatch):
         import app.services.match_engine as mod
 
-        monkeypatch.setattr(mod.settings, "ANTHROPIC_API_KEY", "fake-key")
+        monkeypatch.setattr(mod, "get_anthropic_client", lambda: object())
 
         def _boom(*args, **kwargs):
             raise AssertionError("compute_match(use_llm=False) must not call the LLM scorer")
@@ -262,13 +262,11 @@ class TestAnthropicSemanticScore:
     def test_returns_none_without_api_key(self, monkeypatch):
         import app.services.match_engine as mod
 
-        monkeypatch.setattr(mod.settings, "ANTHROPIC_API_KEY", None)
+        monkeypatch.setattr(mod, "get_anthropic_client", lambda: None)
         assert mod._try_anthropic_semantic_score("profile text", "job text") is None
 
     def test_parses_a_well_formed_numeric_reply(self, monkeypatch):
         import app.services.match_engine as mod
-
-        monkeypatch.setattr(mod.settings, "ANTHROPIC_API_KEY", "fake-key")
 
         fake_block = SimpleNamespace(type="text", text="87")
         fake_response = SimpleNamespace(content=[fake_block])
@@ -277,58 +275,44 @@ class TestAnthropicSemanticScore:
             def create(self, **kwargs):
                 return fake_response
 
-        class FakeAnthropic:
-            def __init__(self, api_key=None):
-                self.messages = FakeMessages()
-
-        import anthropic
-
-        monkeypatch.setattr(anthropic, "Anthropic", FakeAnthropic)
+        fake_client = SimpleNamespace(messages=FakeMessages())
+        monkeypatch.setattr(mod, "get_anthropic_client", lambda: fake_client)
         score = mod._try_anthropic_semantic_score("backend engineer", "backend role")
         assert score == 87.0
 
     def test_clamps_out_of_range_reply_to_0_100(self, monkeypatch):
         import app.services.match_engine as mod
 
-        monkeypatch.setattr(mod.settings, "ANTHROPIC_API_KEY", "fake-key")
-
         fake_response = SimpleNamespace(content=[SimpleNamespace(type="text", text="140")])
 
-        class FakeAnthropic:
-            def __init__(self, api_key=None):
-                self.messages = SimpleNamespace(create=lambda **kwargs: fake_response)
-
-        import anthropic
-
-        monkeypatch.setattr(anthropic, "Anthropic", FakeAnthropic)
+        fake_client = SimpleNamespace(
+            messages=SimpleNamespace(create=lambda **kwargs: fake_response)
+        )
+        monkeypatch.setattr(mod, "get_anthropic_client", lambda: fake_client)
         assert mod._try_anthropic_semantic_score("a", "b") == 100.0
 
     def test_returns_none_on_unparsable_reply(self, monkeypatch):
         import app.services.match_engine as mod
 
-        monkeypatch.setattr(mod.settings, "ANTHROPIC_API_KEY", "fake-key")
-
         fake_response = SimpleNamespace(content=[SimpleNamespace(type="text", text="not a number")])
 
-        class FakeAnthropic:
-            def __init__(self, api_key=None):
-                self.messages = SimpleNamespace(create=lambda **kwargs: fake_response)
-
-        import anthropic
-
-        monkeypatch.setattr(anthropic, "Anthropic", FakeAnthropic)
+        fake_client = SimpleNamespace(
+            messages=SimpleNamespace(create=lambda **kwargs: fake_response)
+        )
+        monkeypatch.setattr(mod, "get_anthropic_client", lambda: fake_client)
         assert mod._try_anthropic_semantic_score("a", "b") is None
 
-    def test_returns_none_when_client_raises(self, monkeypatch):
+    def test_returns_none_when_the_call_raises(self, monkeypatch):
+        """A network error mid-request must degrade to the offline scorer,
+        not surface. Construction now happens in get_anthropic_client, so
+        the failure this simulates is the call itself — which is also the
+        realistic one: a timeout or a 401 happens on the request, not while
+        building the client object."""
         import app.services.match_engine as mod
 
-        monkeypatch.setattr(mod.settings, "ANTHROPIC_API_KEY", "fake-key")
+        def _boom(**kwargs):
+            raise RuntimeError("network unreachable")
 
-        class FakeAnthropic:
-            def __init__(self, api_key=None):
-                raise RuntimeError("network unreachable")
-
-        import anthropic
-
-        monkeypatch.setattr(anthropic, "Anthropic", FakeAnthropic)
+        fake_client = SimpleNamespace(messages=SimpleNamespace(create=_boom))
+        monkeypatch.setattr(mod, "get_anthropic_client", lambda: fake_client)
         assert mod._try_anthropic_semantic_score("a", "b") is None

@@ -16,7 +16,7 @@ import json
 import re
 from typing import Any, Optional
 
-from app.core.config import settings
+from app.services.anthropic_client import get_anthropic_client
 from app.services.skills_taxonomy import canonical_skill_set, normalize_skill
 
 ANTHROPIC_MODEL = "claude-sonnet-5"
@@ -354,15 +354,11 @@ TWO highest-impact fixes first (prioritize "error" severity, then
 
 
 def _try_ai_summary(evaluation: dict[str, Any]) -> Optional[str]:
-    if not settings.ANTHROPIC_API_KEY:
-        return None
-    try:
-        import anthropic
-    except ImportError:
+    client = get_anthropic_client()
+    if client is None:
         return None
 
     try:
-        client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
         response = client.messages.create(
             model=ANTHROPIC_MODEL,
             max_tokens=300,

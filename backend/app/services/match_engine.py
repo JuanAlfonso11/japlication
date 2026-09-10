@@ -18,7 +18,7 @@ from sqlalchemy import func
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
+from app.services.anthropic_client import get_anthropic_client
 from app.models.job_match import JobMatch
 from app.services.skills_taxonomy import canonical_skill_set, normalize_skill
 
@@ -237,15 +237,11 @@ def _try_anthropic_semantic_score(profile_text: str, job_text: str) -> Optional[
     failure — missing key, missing package, network error, or a reply that
     doesn't parse as a plain number — so the caller always has the offline
     fallback to lean on."""
-    if not settings.ANTHROPIC_API_KEY:
-        return None
-    try:
-        import anthropic
-    except ImportError:
+    client = get_anthropic_client()
+    if client is None:
         return None
 
     try:
-        client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
         response = client.messages.create(
             model=ANTHROPIC_MODEL,
             max_tokens=16,

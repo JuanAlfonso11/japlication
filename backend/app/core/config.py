@@ -34,6 +34,11 @@ class Settings(BaseSettings):
 
     # Optional AI features
     ANTHROPIC_API_KEY: Optional[str] = None
+    #: Only needed when the key is NOT itself scoped to a workspace — those
+    #: keys are rejected with a 400 unless every request carries the
+    #: anthropic-workspace-id header. Sent whenever it is set; see
+    #: services/anthropic_client.py.
+    ANTHROPIC_WORKSPACE_ID: Optional[str] = None
 
     # Email (account verification). Without these set, the backend logs the
     # verification link instead of sending a real email — the app stays

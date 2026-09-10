@@ -244,9 +244,18 @@ def test_cv_labels_differ_per_language_and_cover_every_section():
 
 
 @pytest.mark.asyncio
-async def test_generate_cv_in_each_language(async_client: AsyncClient, user_and_headers):
+async def test_generate_cv_in_each_language(
+    async_client: AsyncClient, user_and_headers, force_offline_adapter
+):
     """The whole point, exercised through the real endpoints: one profile,
-    two CVs, and a PDF for each that carries that language's headers."""
+    two CVs, and a PDF for each that carries that language's headers.
+
+    Pinned to the rule-based adapter, which copies the profile's prose
+    verbatim — that is what makes "the Spanish CV contains the Spanish
+    summary" checkable at all. With a live key the model rewrites the
+    wording and there is nothing exact left to assert, so this test would
+    pass or fail depending on the environment rather than on the code.
+    """
     _user, headers = user_and_headers
 
     profile_payload = {
@@ -329,9 +338,23 @@ async def test_generate_cv_in_each_language(async_client: AsyncClient, user_and_
         assert f"resume-{language}-" in response.headers["content-disposition"]
 
 
+@pytest.fixture
+def force_offline_adapter(monkeypatch):
+    """Pins resume generation to the deterministic rule-based path.
+
+    conftest.py already clears the key for the whole suite, so this is
+    belt-and-braces: it keeps these tests correct even if someone runs them
+    with a key in the environment, and it documents at the point of use
+    which of the two adapters is being asserted on.
+    """
+    from app.services import resume_adapter
+
+    monkeypatch.setattr(resume_adapter, "get_anthropic_client", lambda: None)
+
+
 @pytest.mark.asyncio
 async def test_language_defaults_to_the_language_of_the_posting(
-    async_client: AsyncClient, user_and_headers
+    async_client: AsyncClient, user_and_headers, force_offline_adapter
 ):
     """Omitting `language` should not silently mean English: a Spanish ad
     should get a Spanish CV without the user having to ask."""
@@ -503,14 +526,9 @@ def test_job_description_sent_to_the_llm_is_capped():
             raise RuntimeError("stop here — we only need the payload")
 
     class _FakeClient:
-        def __init__(self, **_kwargs):
-            self.messages = _FakeMessages()
+        messages = _FakeMessages()
 
-    fake_anthropic = type("anthropic", (), {"Anthropic": _FakeClient})
-
-    with patch.dict("sys.modules", {"anthropic": fake_anthropic}), patch.object(
-        resume_adapter.settings, "ANTHROPIC_API_KEY", "test-key"
-    ):
+    with patch.object(resume_adapter, "get_anthropic_client", lambda: _FakeClient()):
         # Falls back to the rule-based path once the fake client raises,
         # which is exactly the behaviour every AI failure gets.
         result = resume_adapter.adapt_resume(_profile(), _Job(), "en")

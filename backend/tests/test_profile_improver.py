@@ -25,7 +25,7 @@ PROFILE = {
 def test_improve_profile_writes_missing_summary_without_ai(monkeypatch):
     import app.services.profile_improver as mod
 
-    monkeypatch.setattr(mod.settings, "ANTHROPIC_API_KEY", None)
+    monkeypatch.setattr(mod, "get_anthropic_client", lambda: None)
     result = improve_profile(PROFILE)
 
     assert result["generated_by"] == "manual"
@@ -37,7 +37,7 @@ def test_improve_profile_writes_missing_summary_without_ai(monkeypatch):
 def test_improve_profile_never_touches_structured_fields(monkeypatch):
     import app.services.profile_improver as mod
 
-    monkeypatch.setattr(mod.settings, "ANTHROPIC_API_KEY", None)
+    monkeypatch.setattr(mod, "get_anthropic_client", lambda: None)
     result = improve_profile(PROFILE)
 
     assert result["profile"]["contact_info"] == PROFILE["contact_info"]
@@ -49,7 +49,7 @@ def test_improve_profile_never_touches_structured_fields(monkeypatch):
 def test_improve_profile_keeps_bullet_count_and_facts(monkeypatch):
     import app.services.profile_improver as mod
 
-    monkeypatch.setattr(mod.settings, "ANTHROPIC_API_KEY", None)
+    monkeypatch.setattr(mod, "get_anthropic_client", lambda: None)
     result = improve_profile(PROFILE)
 
     entry = result["profile"]["experience"][0]
@@ -62,7 +62,7 @@ def test_improve_profile_keeps_bullet_count_and_facts(monkeypatch):
 def test_improve_profile_falls_back_when_anthropic_unavailable(monkeypatch):
     import app.services.profile_improver as mod
 
-    monkeypatch.setattr(mod.settings, "ANTHROPIC_API_KEY", "fake-key")
+    monkeypatch.setattr(mod, "get_anthropic_client", lambda: object())
     monkeypatch.setattr(mod, "_try_anthropic_improve", lambda profile: None)
     result = improve_profile(PROFILE)
 

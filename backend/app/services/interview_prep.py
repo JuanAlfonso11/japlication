@@ -19,7 +19,7 @@ grounded material more fluently.
 
 from typing import Optional
 
-from app.core.config import settings
+from app.services.anthropic_client import get_anthropic_client
 
 ANTHROPIC_MODEL = "claude-sonnet-5"
 
@@ -138,17 +138,13 @@ def _rule_based_questions(profile, job, matched_skills: list[str], missing_skill
 
 
 def _try_anthropic_prep(profile, job, matched_skills, missing_skills, base: list[dict]) -> Optional[list[dict]]:
-    if not settings.ANTHROPIC_API_KEY:
-        return None
-    try:
-        import anthropic
-    except ImportError:
+    client = get_anthropic_client()
+    if client is None:
         return None
 
     try:
         import json
 
-        client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
         experience_text = "\n".join(
             f"- {bullet} ({title} @ {company})" for company, title, bullet in _profile_bullets(profile)
         )[:3000]

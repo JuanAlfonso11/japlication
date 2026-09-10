@@ -12,6 +12,23 @@ import os
 # jobflow_test` + schema-load setup this depends on.
 os.environ["DATABASE_URL"] = "postgresql+asyncpg://jobflow:jobflow@db:5432/jobflow_test"
 
+# Same reasoning as DATABASE_URL above, for the same @lru_cache'd settings
+# object: cleared here, before anything imports app.core.config, so no test
+# can reach the real Anthropic API.
+#
+# This is not only about determinism. Every AI service falls back to an
+# offline path when the key is missing, so with a live key configured the
+# suite silently switched paths: assertions about rule-based output started
+# failing, runtime went from 60s to 286s, and — the part that matters — the
+# test run spent real money on a metered key. A test that costs money to run
+# is a test people stop running.
+#
+# A test that wants to exercise the AI path patches get_anthropic_client in
+# the module under test (see test_anthropic_client.py), which is faster,
+# free, and lets it assert on an exact response.
+os.environ["ANTHROPIC_API_KEY"] = ""
+os.environ["ANTHROPIC_WORKSPACE_ID"] = ""
+
 import sys
 from pathlib import Path
 

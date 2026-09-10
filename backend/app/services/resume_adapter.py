@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 from typing import Any, Optional
 
-from app.core.config import settings
+from app.services.anthropic_client import get_anthropic_client
 from app.services.profile_i18n import LANGUAGE_NAMES, localize_profile, normalize_language
 from app.services.skills_taxonomy import canonical_skill_set, normalize_skill
 
@@ -173,11 +173,8 @@ def _rule_based_adapt(profile, job) -> dict[str, Any]:
 
 
 def _try_anthropic_adapt(profile, job, language: str) -> Optional[dict[str, Any]]:
-    if not settings.ANTHROPIC_API_KEY:
-        return None
-    try:
-        import anthropic
-    except ImportError:
+    client = get_anthropic_client()
+    if client is None:
         return None
 
     profile_json = {
@@ -196,7 +193,6 @@ def _try_anthropic_adapt(profile, job, language: str) -> Optional[dict[str, Any]
     }
 
     try:
-        client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
         response = client.messages.create(
             model=ANTHROPIC_MODEL,
             max_tokens=2000,

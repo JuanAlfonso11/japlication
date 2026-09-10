@@ -27,7 +27,7 @@ from fastapi import HTTPException
 from pypdf import PdfReader
 from pypdf.errors import PdfReadError
 
-from app.core.config import settings
+from app.services.anthropic_client import get_anthropic_client
 from app.services.skills_taxonomy import extract_skills_from_text
 
 ANTHROPIC_MODEL = "claude-sonnet-5"
@@ -146,15 +146,11 @@ STRICT RULES:
 
 
 def _try_ai_parse(text: str) -> Optional[dict[str, Any]]:
-    if not settings.ANTHROPIC_API_KEY:
-        return None
-    try:
-        import anthropic
-    except ImportError:
+    client = get_anthropic_client()
+    if client is None:
         return None
 
     try:
-        client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
         response = client.messages.create(
             model=ANTHROPIC_MODEL,
             max_tokens=4000,

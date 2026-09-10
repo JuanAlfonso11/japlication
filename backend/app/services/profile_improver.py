@@ -19,7 +19,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from app.core.config import settings
+from app.services.anthropic_client import get_anthropic_client
 
 ANTHROPIC_MODEL = "claude-sonnet-5"
 
@@ -122,11 +122,8 @@ def _rule_based_improve(profile: Any) -> dict[str, Any]:
 
 
 def _try_anthropic_improve(profile: Any) -> dict[str, Any] | None:
-    if not settings.ANTHROPIC_API_KEY:
-        return None
-    try:
-        import anthropic
-    except ImportError:
+    client = get_anthropic_client()
+    if client is None:
         return None
 
     experience = list(_profile_field(profile, "experience") or [])
@@ -137,7 +134,6 @@ def _try_anthropic_improve(profile: Any) -> dict[str, Any] | None:
     }
 
     try:
-        client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
         response = client.messages.create(
             model=ANTHROPIC_MODEL,
             max_tokens=2000,
