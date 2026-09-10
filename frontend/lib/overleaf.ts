@@ -1,8 +1,8 @@
 /**
  * Opens a LaTeX document in Overleaf.
  *
- * Contract per https://www.overleaf.com/devs (checked 2026-09-10) and
- * verified against the live endpoint with the real generated CV:
+ * Contract per https://www.overleaf.com/devs (checked 2026-09-10), confirmed
+ * working from a real desktop browser with a generated CV on the same day:
  *
  *   endpoint  https://www.overleaf.com/docs, POST
  *   snip      the raw LaTeX source

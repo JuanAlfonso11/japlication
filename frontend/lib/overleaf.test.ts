@@ -5,9 +5,18 @@ const { toTexFilename } = __testing;
 
 /**
  * The contract these pin comes from https://www.overleaf.com/devs and was
- * verified against the live endpoint. Getting a field name wrong here fails
- * in a particularly unhelpful way: Overleaf answers 200 with a normal-looking
- * page, so the user gets an empty editor rather than an error.
+ * confirmed from a real desktop browser. Getting a field name wrong here
+ * fails in a particularly unhelpful way: Overleaf answers 200 with a
+ * normal-looking page, so the user gets an empty editor rather than an error.
+ *
+ * Why these are unit tests and not a live check: Overleaf refuses scripted
+ * requests to /docs wholesale. From a server, every variant — including a
+ * POST with no fields at all, which should earn a different message —
+ * returns the same "There was an error creating your project". A script
+ * that sees that page has learned nothing about whether the integration
+ * works, so the only real verification is a person clicking the button in
+ * a browser. Do not "fix" that by adding an automated check against the
+ * live endpoint: it will fail forever and prove nothing.
  */
 
 describe("toTexFilename", () => {
