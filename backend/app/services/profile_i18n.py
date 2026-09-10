@@ -33,6 +33,7 @@ in it.
 from __future__ import annotations
 
 import re
+import unicodedata
 from typing import Any, Iterable
 
 #: The language the base columns are written in -- the text the match engine
@@ -58,6 +59,8 @@ CV_LABELS: dict[str, dict[str, str]] = {
         "candidate": "Candidate",
         "role": "Role",
         "degree_join": " in ",
+        "certifications": "CERTIFICATIONS",
+        "languages": "LANGUAGES",
     },
     "es": {
         "summary": "RESUMEN PROFESIONAL",
@@ -69,8 +72,83 @@ CV_LABELS: dict[str, dict[str, str]] = {
         "candidate": "Candidato",
         "role": "Puesto",
         "degree_join": " en ",
+        "certifications": "CERTIFICACIONES",
+        "languages": "IDIOMAS",
     },
 }
+
+
+def _term_key(value: str) -> str:
+    """Lookup key that ignores accents, case and spacing."""
+    decomposed = unicodedata.normalize("NFKD", value)
+    bare = "".join(ch for ch in decomposed if not unicodedata.combining(ch))
+    return " ".join(bare.lower().split())
+
+
+#: Display names for the few profile terms that are ordinary words rather
+#: than names. Skills are facts and normally print exactly as stored:
+#: "ASP.NET" is "ASP.NET" in any language, and the skills taxonomy's
+#: canonical form for it (".NET") would delete the precise keyword an ATS
+#: filters on. But a soft skill typed as "Liderazgo" is a Spanish word, and
+#: printed verbatim it puts Spanish into an English CV. Tailored CVs never
+#: showed this because the AI adapter translates while it tailors; the
+#: master CV is rendered without AI, so the words are spelled out here.
+#:
+#: Aliases match ignoring accents, case and spacing, so "Comunicacion",
+#: "comunicación" and "Communication" all land on the same entry.
+_TERM_TABLE: tuple[tuple[tuple[str, ...], str, str], ...] = (
+    # Soft skills
+    (("communication", "comunicacion"), "Communication", "Comunicación"),
+    (("leadership", "liderazgo"), "Leadership", "Liderazgo"),
+    (("teamwork", "trabajo en equipo"), "Teamwork", "Trabajo en equipo"),
+    (("collaboration", "colaboracion"), "Collaboration", "Colaboración"),
+    (("problem solving", "resolucion de problemas"), "Problem Solving", "Resolución de problemas"),
+    (("time management", "gestion del tiempo"), "Time Management", "Gestión del tiempo"),
+    (("adaptability", "adaptabilidad"), "Adaptability", "Adaptabilidad"),
+    # A technical skill written as ordinary words rather than a product name
+    (("api integration", "integracion de apis", "integracion de api"), "API Integration", "Integración de APIs"),
+    # A product name with the wrong spacing is still that product's name
+    (("springboot", "spring boot"), "Spring Boot", "Spring Boot"),
+    # Spoken languages
+    (("spanish", "espanol"), "Spanish", "Español"),
+    (("english", "ingles"), "English", "Inglés"),
+    (("portuguese", "portugues"), "Portuguese", "Portugués"),
+    (("french", "frances"), "French", "Francés"),
+    (("german", "aleman"), "German", "Alemán"),
+    (("italian", "italiano"), "Italian", "Italiano"),
+    # Proficiency. Feminine forms stay feminine in Spanish rather than being
+    # "corrected": both are valid, and the person's own wording wins.
+    (("native", "nativo", "lengua materna"), "Native", "Nativo"),
+    (("nativa",), "Native", "Nativa"),
+    (("fluent", "fluido"), "Fluent", "Fluido"),
+    (("fluida",), "Fluent", "Fluida"),
+    (("bilingual", "bilingue"), "Bilingual", "Bilingüe"),
+    (("advanced", "avanzado"), "Advanced", "Avanzado"),
+    (("avanzada",), "Advanced", "Avanzada"),
+    (("intermediate", "intermedio"), "Intermediate", "Intermedio"),
+    (("intermedia",), "Intermediate", "Intermedia"),
+    (("basic", "basico", "beginner", "principiante"), "Basic", "Básico"),
+    (("basica",), "Basic", "Básica"),
+)
+
+_TERMS: dict[str, dict[str, str]] = {
+    _term_key(alias): {"en": english, "es": spanish}
+    for aliases, english, spanish in _TERM_TABLE
+    for alias in aliases
+}
+
+
+def localize_term(value: Any, language: str | None) -> str:
+    """Display name of a skill, spoken language or proficiency level.
+
+    Only terms in the table change; anything else prints exactly as stored,
+    minus stray whitespace. That default is the point: a technical skill must
+    never be helpfully renamed on a CV."""
+    text = " ".join(str(value or "").split())
+    if not text:
+        return ""
+    entry = _TERMS.get(_term_key(text))
+    return entry[normalize_language(language)] if entry else text
 
 
 def normalize_language(language: str | None) -> str:

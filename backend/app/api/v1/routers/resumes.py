@@ -19,10 +19,11 @@ from app.schemas.resume_version import ReusableResumeSuggestion
 from app.schemas.resume_version import ResumeGenerateRequest
 from app.schemas.resume_version import ResumeVersion as ResumeVersionSchema
 from app.schemas.resume_version import ResumeVersionUpdate
-from app.services.profile_i18n import detect_language, labels_for, normalize_language
+from app.services.profile_i18n import detect_language, normalize_language
 from app.services.resume_adapter import adapt_resume
 from app.services.resume_latex import render_resume_latex
 from app.services.resume_pdf import render_resume_pdf
+from app.services.resume_text import render_resume_text
 from app.services.skills_taxonomy import canonical_skill_set
 
 router = APIRouter(tags=["resumes"])
@@ -260,48 +261,13 @@ async def update_resume_version(
 
 
 def _render_ats_text(resume_version: ResumeVersion) -> str:
-    """Plain-text twin of the PDF. Section headers come from the same
-    profile_i18n table the PDF uses, so the two exports of one CV cannot
-    end up in different languages."""
-    content = resume_version.content or {}
-    labels = labels_for(resume_version.language)
-    lines: list[str] = [resume_version.title, "=" * len(resume_version.title), ""]
-
-    summary = content.get("summary")
-    if summary:
-        lines += [labels["summary"], summary, ""]
-
-    skills = content.get("skills") or []
-    if skills:
-        lines += [labels["skills"], ", ".join(skills), ""]
-
-    experience = content.get("experience") or []
-    if experience:
-        lines.append(labels["experience"])
-        for exp in experience:
-            header = f"{exp.get('title', '')} — {exp.get('company', '')}".strip(" —")
-            dates = f"{exp.get('start_date', '') or ''} - {exp.get('end_date') or labels['present']}"
-            lines.append(f"{header} ({dates})")
-            if exp.get("location"):
-                lines.append(exp["location"])
-            for bullet in exp.get("bullets") or []:
-                lines.append(f"- {bullet}")
-            lines.append("")
-
-    education = content.get("education") or []
-    if education:
-        lines.append(labels["education"])
-        for edu in education:
-            deg = labels["degree_join"].join(
-                part for part in (edu.get("degree"), edu.get("field")) if part
-            )
-            end = edu.get("end_date") or (labels["present"] if edu.get("start_date") else None)
-            span = " – ".join(str(p) for p in (edu.get("start_date"), end) if p)
-            linea = f"{deg} — {edu.get('institution', '')}"
-            lines.append(f"{linea} ({span})" if span else linea)
-        lines.append("")
-
-    return "\n".join(lines).strip() + "\n"
+    """Plain-text twin of the PDF. The rendering lives in
+    services/resume_text.py so the master CV export uses the same code."""
+    return render_resume_text(
+        title=resume_version.title,
+        content=resume_version.content or {},
+        language=resume_version.language,
+    )
 
 
 @router.get("/resume-versions/{resume_version_id}/export")

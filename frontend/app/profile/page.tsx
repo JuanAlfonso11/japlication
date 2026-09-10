@@ -19,6 +19,8 @@ import EducationSection from "@/components/profile/EducationSection";
 import CertificationsSection from "@/components/profile/CertificationsSection";
 import LanguagesSection from "@/components/profile/LanguagesSection";
 import ScreeningAnswersSection from "@/components/profile/ScreeningAnswersSection";
+import MasterCvDownloads from "@/components/profile/MasterCvDownloads";
+import { useAuth } from "@/context/AuthContext";
 import { ApiError, jobsApi, profileApi } from "@/lib/api";
 import {
   educationFor,
@@ -87,6 +89,10 @@ const TAB_STORAGE_KEY = "jobflow_profile_tab";
 const CV_LANGUAGE_STORAGE_KEY = "jobflow_profile_cv_language";
 
 function ProfileContent() {
+  // Used for the master CV's filename: it is what a recruiter sees when the
+  // file is attached to an application.
+  const { user } = useAuth();
+
   // Remembered across visits: coming back to Perfil to keep filling in the
   // answer bank and landing on the CV form every time is a small, repeated
   // annoyance. Read in an effect rather than in the initial state so the
@@ -525,6 +531,17 @@ function ProfileContent() {
               ? `Faltan ${esStatus.missing.length} campos por escribir en español — lo que dejes en blanco sale en inglés.`
               : "Habilidades, contacto, fechas y certificaciones son los mismos en ambos idiomas: lo que agregues en uno aparece en el otro."}
           </p>
+          <MasterCvDownloads
+            language={cvLanguage}
+            fullName={user?.full_name}
+            blockedReason={
+              dirty
+                ? "Guarda los cambios para descargar la versión actual."
+                : !profile.id
+                  ? "Guarda tu perfil para poder descargarlo."
+                  : null
+            }
+          />
         </div>
       )}
 

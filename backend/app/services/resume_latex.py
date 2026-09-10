@@ -215,10 +215,15 @@ def render_resume_latex(
     # -mode quads leave a gap no extractor misses.
     contact_line = " \\quad\\textbar\\quad ".join(p for p in contact_parts if p)
 
-    body: list[str] = [
-        f"\\begin{{center}}\n{{\\LARGE\\bfseries {escape(full_name) or escape(labels['candidate'])}}}\\\\[4pt]\n"
-        f"{{\\small {contact_line}}}\n\\end{{center}}\n"
-    ]
+    # Name, then the headline when there is one (only the master CV sets it),
+    # then contact. Joined rather than written out so a CV without a headline
+    # produces exactly the header it always did.
+    header_lines = [f"{{\\LARGE\\bfseries {escape(full_name) or escape(labels['candidate'])}}}"]
+    headline = content.get("headline")
+    if headline:
+        header_lines.append(f"{{\\large {escape(headline)}}}")
+    header_lines.append(f"{{\\small {contact_line}}}")
+    body: list[str] = ["\\begin{center}\n" + "\\\\[4pt]\n".join(header_lines) + "\n\\end{center}\n"]
 
     summary = content.get("summary")
     if summary:
@@ -235,6 +240,31 @@ def render_resume_latex(
     education = content.get("education") or []
     if education:
         body.append(_section(labels["education"], _education_block(education, labels)))
+
+    # Certifications and spoken languages: only the master CV carries them,
+    # and each section appears only when it has entries, so a tailored CV is
+    # unaffected.
+    certifications = [
+        cert for cert in (content.get("certifications") or []) if isinstance(cert, dict) and cert.get("name")
+    ]
+    if certifications:
+        cert_lines = []
+        for cert in certifications:
+            line = " --- ".join(escape(p) for p in (cert.get("name"), cert.get("issuer")) if p)
+            if cert.get("date"):
+                line = f"{line} ({escape(cert['date'])})"
+            cert_lines.append(f"\\noindent {line}\\par")
+        body.append(_section(labels["certifications"], "\n".join(cert_lines)))
+
+    languages = [
+        entry for entry in (content.get("languages") or []) if isinstance(entry, dict) and entry.get("name")
+    ]
+    if languages:
+        spoken = ", ".join(
+            " --- ".join(escape(p) for p in (entry.get("name"), entry.get("level")) if p)
+            for entry in languages
+        )
+        body.append(_section(labels["languages"], f"\\noindent {spoken}"))
 
     preamble = PREAMBLE.replace("LANGUAGE_OPTION", babel)
     return (

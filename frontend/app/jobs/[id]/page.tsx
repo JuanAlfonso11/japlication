@@ -12,8 +12,7 @@ import ApplicationKit from "@/components/ApplicationKit";
 import ResumeEditor from "@/components/ResumeEditor";
 import InterviewPrepCard from "@/components/InterviewPrepCard";
 import { ApiError, coverLetterApi, jobsApi, resumeApi } from "@/lib/api";
-import type { DownloadOutcome } from "@/lib/api";
-import { openInOverleaf } from "@/lib/overleaf";
+import { describeSave, exportLatex, safeFilename } from "@/lib/cvExport";
 import { isNativeApp } from "@/lib/platform";
 import type {
   CoverLetter,
@@ -70,14 +69,6 @@ function CopyButton({ text }: { text: string }) {
       {copied ? "¡Copiado!" : "Copiar al portapapeles"}
     </button>
   );
-}
-
-/** Turns "where did it go" into something worth showing. Silent in a
- * browser, which already has its own downloads UI. */
-function describeSave(outcome: DownloadOutcome, what: string): string | null {
-  if (!outcome) return null;
-  if ("savedTo" in outcome) return `${what} guardado en ${outcome.savedTo}`;
-  return `${what} listo — elige dónde guardarlo`;
 }
 
 function JobDetailContent() {
@@ -161,7 +152,7 @@ function JobDetailContent() {
     try {
       const outcome = await resumeApi.downloadPdf(
         resume.id,
-        `${job?.title ?? "resume"}.pdf`.replace(/[/\\?%*:|"<>]/g, "-")
+        `${safeFilename(job?.title ?? "resume")}.pdf`
       );
       setSaveNotice(describeSave(outcome, "PDF"));
     } catch (err) {
@@ -171,32 +162,23 @@ function JobDetailContent() {
     }
   }
 
-  /** Overleaf's snippet endpoint takes the source in a POST body, and
-   * inside the Android shell that body does not survive: the WebView hands
-   * a `target=_blank` navigation to the system browser, which can only
-   * carry a URL. Overleaf then answers "the link was missing some required
-   * parameters" — reported from a real phone.
-   *
-   * So on native the button saves the .tex to the phone's public Documents
-   * folder instead. That is also the honest flow there: Overleaf's editor
-   * is unusable on a phone, and what someone actually wants is the file, to
-   * open on a computer. */
+  /** In a browser this opens Overleaf; in the Android app it saves the .tex,
+   * because the WebView drops the POST body Overleaf needs. The full reason
+   * lives with the shared helper — exportLatex in lib/cvExport.ts — which the
+   * master CV's download buttons use as well. */
   async function handleLatexExport() {
     if (!resume) return;
     setOverleafOpening(true);
     setPdfError(null);
     setSaveNotice(null);
     try {
-      const label = `CV - ${job?.title ?? "JobPilot"}`;
-      if (isNativeApp()) {
-        const outcome = await resumeApi.downloadTex(
-          resume.id,
-          `${label.replace(/[/\\?%*:|"<>]/g, "-")}.tex`
-        );
-        setSaveNotice(describeSave(outcome, "Archivo .tex"));
-      } else {
-        openInOverleaf(await resumeApi.latexSource(resume.id), label);
-      }
+      setSaveNotice(
+        await exportLatex({
+          label: `CV - ${job?.title ?? "JobPilot"}`,
+          getSource: () => resumeApi.latexSource(resume.id),
+          download: (filename) => resumeApi.downloadTex(resume.id, filename),
+        })
+      );
     } catch (err) {
       setPdfError(
         err instanceof ApiError ? err.message : "No se pudo exportar el CV en LaTeX."
@@ -214,7 +196,7 @@ function JobDetailContent() {
     try {
       const outcome = await coverLetterApi.downloadPdf(
         coverLetter.id,
-        `Cover letter - ${job?.title ?? "job"}.pdf`.replace(/[/\\?%*:|"<>]/g, "-")
+        `${safeFilename(`Cover letter - ${job?.title ?? "job"}`)}.pdf`
       );
       setCoverSaveNotice(describeSave(outcome, "Carta en PDF"));
     } catch (err) {

@@ -494,6 +494,16 @@ export const authApi = {
 
 export const profileApi = {
   get: () => request<CareerProfile>("/profile"),
+  /** The master CV: the whole saved profile, rendered by the same code as
+   * the tailored CVs (backend services/master_resume.py). */
+  downloadMasterPdf: (language: ProfileLanguage, filename: string) =>
+    downloadFile(`/profile/export/pdf?language=${language}`, filename),
+  downloadMasterTex: (language: ProfileLanguage, filename: string) =>
+    downloadFile(`/profile/export/tex?language=${language}`, filename),
+  downloadMasterText: (language: ProfileLanguage, filename: string) =>
+    downloadFile(`/profile/export?language=${language}`, filename),
+  masterLatexSource: (language: ProfileLanguage) =>
+    fetchText(`/profile/export/tex?language=${language}`),
   save: (payload: CareerProfile) =>
     request<CareerProfile>("/profile", { method: "PUT", body: payload }),
   evaluation: () => request<CVEvaluation>("/profile/evaluation"),

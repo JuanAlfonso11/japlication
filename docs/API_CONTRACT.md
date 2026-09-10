@@ -63,6 +63,21 @@ sent — the backend logs the verification link instead, so local dev needs no m
    {"code": "es", "name": "Español", "is_base": false, "complete": false,
     "missing": ["summary", "experience[0].bullets"]}]
   ```
+- `GET /profile/export?language=` -> the **master CV** as plain text
+- `GET /profile/export/pdf?language=` -> the master CV as an ATS-safe PDF
+- `GET /profile/export/tex?language=` -> the master CV as LaTeX source, for Overleaf
+
+  The master CV is the whole saved profile rendered as a CV with no job attached,
+  through the same three renderers the tailored CVs use — so the email-first
+  contact line, tracking-free links, in-progress dates and de-duplicated degree
+  line all apply to it. It adds what a tailored CV does not carry: the headline,
+  certifications and spoken languages, each printed only when present.
+  `language` is `en`/`es`; anything else falls back to the base language instead
+  of failing. Soft skills, language names and proficiency levels go through a
+  small glossary (`profile_i18n.localize_term`); technical skills are never
+  renamed. `404` if no profile exists. These render what is **saved**, so unsaved
+  form edits are not included — the frontend disables the buttons until the
+  profile is saved. Filenames: `cv-maestro-<lang>.<ext>`.
 - `POST /profile/import-cv` — `multipart/form-data`, field `file` (a PDF, max `MAX_CV_UPLOAD_MB`, default
   8MB) -> `CVUploadResult`:
   ```json

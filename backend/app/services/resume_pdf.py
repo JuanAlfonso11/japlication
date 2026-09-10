@@ -1,4 +1,5 @@
-"""Renders a resume_versions row as a real, ATS-safe PDF.
+"""Renders a CV as a real, ATS-safe PDF — either a tailored resume_versions
+row or the master CV built from the whole profile (see master_resume.py).
 
 "ATS-safe" here means something specific and achievable: single-column,
 standard section headers ("EXPERIENCE"/"EDUCATION"/"SKILLS"), real
@@ -31,6 +32,9 @@ from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
 from app.services.profile_i18n import labels_for
 
 _NAME_STYLE = ParagraphStyle("Name", fontName="Helvetica-Bold", fontSize=16, leading=19, alignment=TA_LEFT)
+_HEADLINE_STYLE = ParagraphStyle(
+    "Headline", fontName="Helvetica", fontSize=11, leading=14, spaceAfter=2, textColor="#333333"
+)
 _CONTACT_STYLE = ParagraphStyle(
     "Contact", fontName="Helvetica", fontSize=9.5, leading=12, spaceAfter=10, textColor="#333333"
 )
@@ -76,7 +80,11 @@ def render_resume_pdf(
     """`language` only swaps the section headers and the "Present"/
     "Actualidad" marker. The body prose arrives already written in that
     language by resume_adapter -- this function never translates, so a
-    Spanish CV can never end up with English headers over Spanish text."""
+    Spanish CV can never end up with English headers over Spanish text.
+
+    `content` may also carry `headline`, `certifications` and `languages`.
+    Only the master CV sets them, and each is printed only when present, so
+    a tailored CV renders exactly as it did before those sections existed."""
     labels = labels_for(language)
     buffer = BytesIO()
     doc = SimpleDocTemplate(
@@ -90,6 +98,10 @@ def render_resume_pdf(
     )
 
     story: list[Any] = [Paragraph(_esc(full_name) or labels["candidate"], _NAME_STYLE)]
+
+    headline = content.get("headline")
+    if headline:
+        story.append(Paragraph(_esc(headline), _HEADLINE_STYLE))
 
     # Email leads the line on purpose. Every ATS keys its candidate record on
     # the email address, and several use it as the dedup key — a resume it
@@ -160,6 +172,25 @@ def render_resume_pdf(
                 line = f"{line} ({dates})"
             if line:
                 story.append(Paragraph(line, _BODY_STYLE))
+
+    certifications = [
+        cert for cert in (content.get("certifications") or []) if isinstance(cert, dict) and cert.get("name")
+    ]
+    if certifications:
+        story.append(Paragraph(labels["certifications"], _SECTION_STYLE))
+        for cert in certifications:
+            line = _join([cert.get("name"), cert.get("issuer")], " — ")
+            if cert.get("date"):
+                line = f"{line} ({_esc(cert['date'])})"
+            story.append(Paragraph(line, _BODY_STYLE))
+
+    languages = [
+        entry for entry in (content.get("languages") or []) if isinstance(entry, dict) and entry.get("name")
+    ]
+    if languages:
+        story.append(Paragraph(labels["languages"], _SECTION_STYLE))
+        spoken = ", ".join(_join([entry.get("name"), entry.get("level")], " — ") for entry in languages)
+        story.append(Paragraph(spoken, _BODY_STYLE))
 
     doc.build(story)
     return buffer.getvalue()

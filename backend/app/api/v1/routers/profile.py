@@ -1,4 +1,7 @@
+from typing import Any
+
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from fastapi.responses import PlainTextResponse, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,10 +21,101 @@ from app.schemas.career_profile import (
 from app.schemas.cv_evaluation import CVEvaluation
 from app.services import cv_upload
 from app.services.cv_evaluator import evaluate_cv
-from app.services.profile_i18n import translation_status
+from app.services.master_resume import master_resume_content
+from app.services.profile_i18n import labels_for, normalize_language, translation_status
 from app.services.profile_improver import improve_profile
+from app.services.resume_latex import render_resume_latex
+from app.services.resume_pdf import render_resume_pdf
+from app.services.resume_text import render_resume_text
 
 router = APIRouter(prefix="/profile", tags=["profile"])
+
+
+# --- Master CV exports --------------------------------------------------------
+# The whole profile as a downloadable CV, through the same three renderers the
+# tailored CVs use (see services/master_resume.py). They export what is SAVED:
+# the frontend disables the buttons while the form has unsaved edits, because a
+# download that is silently the previous version is the one mistake here nobody
+# notices until the file has already been sent.
+
+
+async def _master_cv(
+    db: AsyncSession, current_user: User, language: str | None
+) -> tuple[CareerProfile, dict[str, Any], str]:
+    result = await db.execute(select(CareerProfile).where(CareerProfile.user_id == current_user.id))
+    profile = result.scalar_one_or_none()
+    if profile is None:
+        raise HTTPException(status_code=404, detail="Create your career profile before downloading it.")
+    code = normalize_language(language)
+    return profile, master_resume_content(profile, code), code
+
+
+def _attachment(filename: str) -> dict[str, str]:
+    return {"Content-Disposition": f'attachment; filename="{filename}"'}
+
+
+@router.get("/export")
+async def export_master_cv_text(
+    language: str | None = None,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> PlainTextResponse:
+    """The master CV as plain text. `language` is "en" or "es"; anything else
+    falls back to the base language instead of failing."""
+    _profile, content, code = await _master_cv(db, current_user, language)
+    return PlainTextResponse(
+        content=render_resume_text(
+            title=current_user.full_name or labels_for(code)["resume"],
+            content=content,
+            language=code,
+        ),
+        media_type="text/plain; charset=utf-8",
+        headers=_attachment(f"cv-maestro-{code}.txt"),
+    )
+
+
+@router.get("/export/pdf")
+async def export_master_cv_pdf(
+    language: str | None = None,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    """The master CV as an ATS-safe PDF — see services/resume_pdf.py."""
+    profile, content, code = await _master_cv(db, current_user, language)
+    pdf_bytes = render_resume_pdf(
+        full_name=current_user.full_name,
+        contact_info=profile.contact_info or {},
+        content=content,
+        language=code,
+        email=current_user.email,
+    )
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers=_attachment(f"cv-maestro-{code}.pdf"),
+    )
+
+
+@router.get("/export/tex")
+async def export_master_cv_latex(
+    language: str | None = None,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> PlainTextResponse:
+    """The master CV as LaTeX source, for Overleaf — see services/resume_latex.py."""
+    profile, content, code = await _master_cv(db, current_user, language)
+    source = render_resume_latex(
+        full_name=current_user.full_name,
+        contact_info=profile.contact_info or {},
+        content=content,
+        language=code,
+        email=current_user.email,
+    )
+    return PlainTextResponse(
+        content=source,
+        media_type="application/x-tex; charset=utf-8",
+        headers=_attachment(f"cv-maestro-{code}.tex"),
+    )
 
 
 @router.get("", response_model=CareerProfileSchema)
