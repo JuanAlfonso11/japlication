@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   AUTH_UNAUTHORIZED_EVENT,
   authApi,
+  resumeApi,
   getRefreshToken,
   getToken,
   setRefreshToken,
@@ -109,5 +110,69 @@ describe("request() transparent access-token refresh", () => {
     expect(a).toEqual({ ok: true });
     expect(b).toEqual({ ok: true });
     expect(refreshCalls).toBe(1);
+  });
+});
+
+describe("downloadFile()", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  /**
+   * This is a regression test for a bug that produced no error anywhere: the
+   * button appeared to work, no exception was thrown, the backend logged
+   * nothing, and no file arrived. Both halves of it are silent, so both are
+   * pinned here.
+   */
+  it("does not revoke the blob URL in the same tick as the click", async () => {
+    vi.useFakeTimers();
+    window.localStorage.clear();
+    setToken("token");
+
+    // Hand-rolled instead of `new Response(blob)`: jsdom's Blob has no
+    // .stream(), which the Response constructor calls.
+    const pdfResponse = {
+      ok: true,
+      status: 200,
+      blob: async () => new Blob(["%PDF-1.4"], { type: "application/pdf" }),
+    } as unknown as Response;
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(pdfResponse));
+
+    const revoke = vi.fn();
+    vi.stubGlobal("URL", {
+      ...URL,
+      createObjectURL: vi.fn(() => "blob:fake"),
+      revokeObjectURL: revoke,
+    });
+
+    const clicked: string[] = [];
+    const realCreate = document.createElement.bind(document);
+    vi.spyOn(document, "createElement").mockImplementation((tag: string) => {
+      const el = realCreate(tag);
+      if (tag === "a") {
+        // click() on a detached anchor is a no-op in jsdom; record instead.
+        (el as HTMLAnchorElement).click = () => clicked.push((el as HTMLAnchorElement).download);
+      }
+      return el;
+    });
+
+    await resumeApi.downloadPdf("resume-id", "cv.pdf");
+
+    expect(clicked).toEqual(["cv.pdf"]);
+    // The whole bug: revoking here can abort a download that click() has
+    // only scheduled, which is why the failure looked intermittent.
+    expect(revoke).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(60_000);
+    expect(revoke).toHaveBeenCalledWith("blob:fake");
+  });
+
+  it("throws a real error when the server rejects the request", async () => {
+    window.localStorage.clear();
+    setToken("token");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("", { status: 404 })));
+
+    await expect(resumeApi.downloadPdf("missing", "cv.pdf")).rejects.toThrow();
   });
 });

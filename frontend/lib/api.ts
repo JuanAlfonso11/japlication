@@ -315,6 +315,64 @@ async function uploadFile<T>(path: string, fieldName: string, file: File): Promi
  * and hands it to the browser as a real save — same transparent-refresh-
  * on-401 behavior as `request`, but the response body is a Blob, never
  * parsed as JSON. */
+/** True only inside the Android shell, never in a normal browser tab.
+ * Imported lazily so a server render never touches Capacitor. */
+function isNativeApp(): boolean {
+  if (typeof window === "undefined") return false;
+  const cap = (window as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
+  return typeof cap?.isNativePlatform === "function" ? cap.isNativePlatform() : false;
+}
+
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("No se pudo leer el archivo descargado."));
+    reader.onload = () => {
+      const result = String(reader.result);
+      // FileReader gives "data:<mime>;base64,<payload>"; Filesystem wants
+      // only the payload.
+      const comma = result.indexOf(",");
+      resolve(comma === -1 ? result : result.slice(comma + 1));
+    };
+    reader.readAsDataURL(blob);
+  });
+}
+
+/** Saving a file inside the Android WebView.
+ *
+ * The browser path below cannot work here at all: Android's WebView does not
+ * implement downloads of `blob:` URLs through an anchor, so `link.click()`
+ * silently does nothing — no file, and no exception either, which is why
+ * this failure showed up as "the button does nothing" with an empty error
+ * log. The fix is to write the bytes with the Filesystem plugin and hand the
+ * resulting file to the system share sheet, which also lets the user open it
+ * in a PDF viewer or send it straight to an application form.
+ *
+ * Both plugins are imported dynamically so the browser bundle never pulls in
+ * native code it will not run. */
+async function saveFileNative(blob: Blob, filename: string): Promise<void> {
+  const [{ Filesystem, Directory }, { Share }] = await Promise.all([
+    import("@capacitor/filesystem"),
+    import("@capacitor/share"),
+  ]);
+
+  const { uri } = await Filesystem.writeFile({
+    path: filename,
+    data: await blobToBase64(blob),
+    directory: Directory.Cache,
+    recursive: true,
+  });
+
+  try {
+    await Share.share({ title: filename, files: [uri] });
+  } catch (err) {
+    // Dismissing the share sheet is a normal user action, not a failure —
+    // the file is already written either way. Anything else is real.
+    const message = err instanceof Error ? err.message : String(err);
+    if (!/cancel/i.test(message)) throw err;
+  }
+}
+
 async function downloadFile(path: string, filename: string): Promise<void> {
   const token = getToken();
   let res = await rawFetch(path, "GET", undefined, undefined, token);
@@ -338,14 +396,29 @@ async function downloadFile(path: string, filename: string): Promise<void> {
   }
 
   const blob = await res.blob();
+
+  if (isNativeApp()) {
+    await saveFileNative(blob, filename);
+    return;
+  }
+
   const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
+  try {
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    link.rel = "noopener";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  } finally {
+    // Revoking in the same tick can abort a download that has not started
+    // yet — click() only *schedules* it. Chrome usually tolerates this and
+    // then intermittently does not, which is what makes the failure look
+    // random. One minute is far longer than any handoff needs and the blob
+    // is freed on navigation anyway.
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  }
 }
 
 // ---------- Auth ----------

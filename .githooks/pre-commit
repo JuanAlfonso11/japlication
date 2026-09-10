@@ -20,14 +20,29 @@ else
 fi
 
 if git diff --cached --name-only | grep -q '^frontend/'; then
-    if [ -d frontend/node_modules ] && command -v npm >/dev/null 2>&1; then
-        echo "[pre-commit] Running frontend tests (local)..."
-        if ! (cd frontend && npm test --silent); then
+    # Docker first, not local npm: this machine has node installed but not
+    # on the PATH a fresh shell inherits, so the local branch silently never
+    # ran and the frontend tests went unexecuted for the life of the repo.
+    # The `test` stage also pins the Node version and uses linux
+    # node_modules — the host's carry Windows-only binaries that cannot run
+    # in a container, and its Node 20 breaks jsdom.
+    if command -v docker >/dev/null 2>&1; then
+        echo "[pre-commit] Running frontend tests (docker build --target test)..."
+        if ! docker build --target test -t cld-frontend-test frontend; then
             echo "[pre-commit] Frontend tests FAILED — commit blocked."
             echo "[pre-commit] Fix the failure, or bypass with: git commit --no-verify"
             exit 1
         fi
         echo "[pre-commit] Frontend tests passed."
+    elif [ -d frontend/node_modules ] && command -v npm >/dev/null 2>&1; then
+        echo "[pre-commit] Running frontend tests (local npm)..."
+        if ! (cd frontend && npm test --silent); then
+            echo "[pre-commit] Frontend tests FAILED — commit blocked."
+            exit 1
+        fi
+        echo "[pre-commit] Frontend tests passed."
+    else
+        echo "[pre-commit] WARNING: no docker and no npm — frontend tests NOT run."
     fi
 
     if command -v docker >/dev/null 2>&1; then
