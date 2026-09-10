@@ -19,9 +19,23 @@ import EducationSection from "@/components/profile/EducationSection";
 import CertificationsSection from "@/components/profile/CertificationsSection";
 import LanguagesSection from "@/components/profile/LanguagesSection";
 import ScreeningAnswersSection from "@/components/profile/ScreeningAnswersSection";
-import TranslationsSection from "@/components/profile/TranslationsSection";
 import { ApiError, jobsApi, profileApi } from "@/lib/api";
-import type { CareerProfile, CVEvaluation, LanguageStatus } from "@/lib/types";
+import {
+  educationFor,
+  experienceFor,
+  headlineFor,
+  setEducation,
+  setExperience,
+  setHeadline,
+  setSummary,
+  summaryFor,
+} from "@/lib/profileLanguage";
+import type {
+  CareerProfile,
+  CVEvaluation,
+  LanguageStatus,
+  ProfileLanguage,
+} from "@/lib/types";
 
 function mergeCvDraft(current: CareerProfile, draft: CareerProfile): CareerProfile {
   const mergedContact = { ...current.contact_info };
@@ -70,6 +84,7 @@ const EMPTY_PROFILE: CareerProfile = {
 type ProfileTab = "cv" | "answers" | "insights";
 
 const TAB_STORAGE_KEY = "jobflow_profile_tab";
+const CV_LANGUAGE_STORAGE_KEY = "jobflow_profile_cv_language";
 
 function ProfileContent() {
   // Remembered across visits: coming back to Perfil to keep filling in the
@@ -102,6 +117,26 @@ function ProfileContent() {
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
 
   const [languages, setLanguages] = useState<LanguageStatus[] | null>(null);
+
+  // Which language the CV form is editing. Remembered for the same reason
+  // the tab is: someone filling in the Spanish version does it over several
+  // visits, and landing back on English every time is a papercut.
+  const [cvLanguage, setCvLanguage] = useState<ProfileLanguage>("es");
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(CV_LANGUAGE_STORAGE_KEY);
+      if (stored === "en" || stored === "es") setCvLanguage(stored);
+    } catch {
+      // localStorage unavailable (private mode) — the default is fine.
+    }
+  }, []);
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(CV_LANGUAGE_STORAGE_KEY, cvLanguage);
+    } catch {
+      // Non-fatal: the choice just won't persist.
+    }
+  }, [cvLanguage]);
 
   const [evaluation, setEvaluation] = useState<CVEvaluation | null>(null);
   const [evalLoading, setEvalLoading] = useState(false);
@@ -184,6 +219,9 @@ function ProfileContent() {
     setProfile((prev) => (prev ? { ...prev, ...update } : prev));
     setDirty(true);
   }
+
+  // Only the non-base language can be incomplete; English IS the profile.
+  const esStatus = languages?.find((entry) => entry.code === "es") ?? null;
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -473,21 +511,45 @@ function ProfileContent() {
       )}
 
       {tab === "cv" && (
+        <div className="space-y-2">
+          <SegmentedTabs
+            tabs={[
+              { id: "es", label: "Español" },
+              { id: "en", label: "English" },
+            ]}
+            value={cvLanguage}
+            onChange={setCvLanguage}
+          />
+          <p className="px-1 text-xs text-gray-500 dark:text-gray-400">
+            {esStatus && !esStatus.complete && cvLanguage === "es"
+              ? `Faltan ${esStatus.missing.length} campos por escribir en español — lo que dejes en blanco sale en inglés.`
+              : "Habilidades, contacto, fechas y certificaciones son los mismos en ambos idiomas: lo que agregues en uno aparece en el otro."}
+          </p>
+        </div>
+      )}
+
+      {tab === "cv" && (
       <SectionCard title="Resumen general" description="Cómo te ven los reclutadores de un vistazo.">
         <FormField label="Titular">
           <input
             className={inputClass}
-            value={profile.headline}
-            onChange={(e) => patch({ headline: e.target.value })}
-            placeholder="Ingeniero Backend Senior"
+            value={headlineFor(profile, cvLanguage)}
+            onChange={(e) => patch(setHeadline(profile, cvLanguage, e.target.value))}
+            placeholder={
+              cvLanguage === "es" ? "Ingeniero Backend Senior" : "Senior Backend Engineer"
+            }
           />
         </FormField>
         <FormField label="Resumen">
           <textarea
             className={textareaClass}
-            value={profile.summary}
-            onChange={(e) => patch({ summary: e.target.value })}
-            placeholder="Un breve resumen profesional…"
+            value={summaryFor(profile, cvLanguage)}
+            onChange={(e) => patch(setSummary(profile, cvLanguage, e.target.value))}
+            placeholder={
+              cvLanguage === "es"
+                ? "Un breve resumen profesional…"
+                : "A short professional summary…"
+            }
           />
         </FormField>
       </SectionCard>
@@ -556,14 +618,18 @@ function ProfileContent() {
 
       {tab === "cv" && (
         <>
+          {/* Shared across languages — a skill is the same fact in both, so
+              there is only one copy and adding it here adds it everywhere. */}
           <SkillsSection skills={profile.skills} onChange={(skills) => patch({ skills })} />
           <ExperienceSection
-            experience={profile.experience}
-            onChange={(experience) => patch({ experience })}
+            key={`exp-${cvLanguage}`}
+            experience={experienceFor(profile, cvLanguage)}
+            onChange={(experience) => patch(setExperience(profile, cvLanguage, experience))}
           />
           <EducationSection
-            education={profile.education}
-            onChange={(education) => patch({ education })}
+            key={`edu-${cvLanguage}`}
+            education={educationFor(profile, cvLanguage)}
+            onChange={(education) => patch(setEducation(profile, cvLanguage, education))}
           />
           <CertificationsSection
             certifications={profile.certifications}
@@ -572,13 +638,6 @@ function ProfileContent() {
           <LanguagesSection
             languages={profile.languages}
             onChange={(languages) => patch({ languages })}
-          />
-          {/* Last in the CV tab on purpose: you translate what already
-              exists, so everything it mirrors is filled in above it. */}
-          <TranslationsSection
-            profile={profile}
-            status={languages?.find((entry) => entry.code === "es") ?? null}
-            onChange={(translations) => patch({ translations })}
           />
         </>
       )}
