@@ -52,12 +52,26 @@ def _join(parts: list[Any], sep: str) -> str:
     return sep.join(_esc(p) for p in parts if p)
 
 
+def _clean_url(value: Any) -> str:
+    """Drops the query string from a contact link.
+
+    A LinkedIn profile copied from the mobile app arrives as
+    ".../in/name-123?utm_source=share_via&utm_content=profile&utm_medium=
+    member_android" — 60 characters of share tracking that serve no one
+    here. Worse than ugly: it pushes the URL past the line width, and a
+    resume parser extracting the wrapped text gets a broken link. A contact
+    link on a CV never needs a query string."""
+    text = str(value or "").strip()
+    return text.split("?", 1)[0] if text else ""
+
+
 def render_resume_pdf(
     *,
     full_name: str,
     contact_info: dict[str, Any],
     content: dict[str, Any],
     language: str = "en",
+    email: str | None = None,
 ) -> bytes:
     """`language` only swaps the section headers and the "Present"/
     "Actualidad" marker. The body prose arrives already written in that
@@ -77,14 +91,20 @@ def render_resume_pdf(
 
     story: list[Any] = [Paragraph(_esc(full_name) or labels["candidate"], _NAME_STYLE)]
 
+    # Email leads the line on purpose. Every ATS keys its candidate record on
+    # the email address, and several use it as the dedup key — a resume it
+    # cannot find one in gets a record with no way to contact the person.
+    # It lives on the user account rather than in contact_info, which is why
+    # it has to be passed in.
     contact_line = _join(
         [
+            email,
+            contact_info.get("phone"),
+            _clean_url(contact_info.get("linkedin")),
+            _clean_url(contact_info.get("github")),
+            _clean_url(contact_info.get("portfolio")),
             contact_info.get("city"),
             contact_info.get("country"),
-            contact_info.get("phone"),
-            contact_info.get("linkedin"),
-            contact_info.get("github"),
-            contact_info.get("portfolio"),
         ],
         "  |  ",
     )
@@ -122,7 +142,14 @@ def render_resume_pdf(
         for entry in education:
             if not isinstance(entry, dict):
                 continue
-            degree_field = _join([entry.get("degree"), entry.get("field")], ", ")
+            degree = str(entry.get("degree") or "")
+            field = str(entry.get("field") or "")
+            # "Bachelor's Degree in Computer Science Engineering" + field
+            # "Computer Science" rendered as "...Engineering, Computer
+            # Science". If the degree already names the field, saying it
+            # twice reads like a formatting bug.
+            redundant = field and field.lower() in degree.lower()
+            degree_field = _join([degree, "" if redundant else field], ", ")
             line = _join([degree_field, entry.get("institution")], " — ")
             # A degree with no end date is in progress, not one that ended
             # the year it started: without this, "2020" alone reads as the

@@ -26,7 +26,13 @@ def _esc(value: Any) -> str:
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
-def render_cover_letter_pdf(*, full_name: str, contact_info: dict[str, Any], content: str) -> bytes:
+def render_cover_letter_pdf(
+    *,
+    full_name: str,
+    contact_info: dict[str, Any],
+    content: str,
+    email: str | None = None,
+) -> bytes:
     buffer = BytesIO()
     doc = SimpleDocTemplate(
         buffer,
@@ -43,10 +49,11 @@ def render_cover_letter_pdf(*, full_name: str, contact_info: dict[str, Any], con
     contact_line = "  |  ".join(
         _esc(p)
         for p in [
+            email,
+            contact_info.get("phone"),
+            str(contact_info.get("linkedin") or "").split("?", 1)[0],
             contact_info.get("city"),
             contact_info.get("country"),
-            contact_info.get("phone"),
-            contact_info.get("linkedin"),
         ]
         if p
     )

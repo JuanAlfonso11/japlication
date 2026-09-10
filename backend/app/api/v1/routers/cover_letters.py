@@ -144,7 +144,10 @@ async def export_cover_letter_pdf(
     contact_info = profile.contact_info if profile is not None else {}
 
     pdf_bytes = render_cover_letter_pdf(
-        full_name=current_user.full_name, contact_info=contact_info, content=row.content
+        full_name=current_user.full_name,
+        contact_info=contact_info,
+        content=row.content,
+        email=current_user.email,
     )
     filename = f"cover-letter-{row.id}.pdf"
     return Response(

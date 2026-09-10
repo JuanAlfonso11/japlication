@@ -363,6 +363,7 @@ async def export_resume_version_pdf(
         contact_info=contact_info,
         content=row.content,
         language=row.language,
+        email=current_user.email,
     )
     filename = f"resume-{row.language}-{row.id}.pdf"
     return Response(
