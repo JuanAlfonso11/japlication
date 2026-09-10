@@ -124,7 +124,11 @@ def render_resume_pdf(
                 continue
             degree_field = _join([entry.get("degree"), entry.get("field")], ", ")
             line = _join([degree_field, entry.get("institution")], " — ")
-            dates = _join([entry.get("start_date"), entry.get("end_date")], " – ")
+            # A degree with no end date is in progress, not one that ended
+            # the year it started: without this, "2020" alone reads as the
+            # graduation year. Same rule the experience block already uses.
+            end = entry.get("end_date") or (labels["present"] if entry.get("start_date") else None)
+            dates = _join([entry.get("start_date"), end], " – ")
             if dates:
                 line = f"{line} ({dates})"
             if line:

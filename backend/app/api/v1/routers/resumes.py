@@ -294,7 +294,10 @@ def _render_ats_text(resume_version: ResumeVersion) -> str:
             deg = labels["degree_join"].join(
                 part for part in (edu.get("degree"), edu.get("field")) if part
             )
-            lines.append(f"{deg} — {edu.get('institution', '')}")
+            end = edu.get("end_date") or (labels["present"] if edu.get("start_date") else None)
+            span = " – ".join(str(p) for p in (edu.get("start_date"), end) if p)
+            linea = f"{deg} — {edu.get('institution', '')}"
+            lines.append(f"{linea} ({span})" if span else linea)
         lines.append("")
 
     return "\n".join(lines).strip() + "\n"

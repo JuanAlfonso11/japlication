@@ -537,3 +537,44 @@ def test_job_description_sent_to_the_llm_is_capped():
     sent = captured["messages"][0]["content"]
     assert "x" * 8000 in sent, "the description should still be sent, just bounded"
     assert "x" * 8001 not in sent, "the description was not capped"
+
+
+def test_education_in_progress_is_not_rendered_as_a_graduation_year():
+    """A degree with a start date and no end date is still being studied.
+
+    Rendering just "(2020)" reads as the year it was awarded — the opposite
+    of the truth, on the one document where that matters. The experience
+    block already resolves a missing end date to "Present"/"Actualidad";
+    education has to do the same or the two halves of the same CV disagree.
+    """
+    from app.services.resume_pdf import render_resume_pdf
+
+    try:
+        from pypdf import PdfReader
+    except ImportError:  # pragma: no cover - depends on which lib is installed
+        from PyPDF2 import PdfReader
+
+    from io import BytesIO
+
+    content = {
+        "summary": "",
+        "skills": [],
+        "experience": [],
+        "education": [
+            {
+                "institution": "PUCMM",
+                "degree": "Computer Science Engineering",
+                "field": "",
+                "start_date": "2020",
+                "end_date": None,
+            }
+        ],
+    }
+
+    for language, expected in (("en", "Present"), ("es", "Actualidad")):
+        pdf = render_resume_pdf(
+            full_name="Test", contact_info={}, content=content, language=language
+        )
+        text = "\n".join(page.extract_text() or "" for page in PdfReader(BytesIO(pdf)).pages)
+        assert f"2020 – {expected}" in text, f"{language}: got {text!r}"
+        assert "(2020)" not in text
