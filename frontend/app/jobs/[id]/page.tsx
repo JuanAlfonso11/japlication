@@ -13,6 +13,7 @@ import ResumeEditor from "@/components/ResumeEditor";
 import InterviewPrepCard from "@/components/InterviewPrepCard";
 import { ApiError, coverLetterApi, jobsApi, resumeApi } from "@/lib/api";
 import { openInOverleaf } from "@/lib/overleaf";
+import { isNativeApp } from "@/lib/platform";
 import type {
   CoverLetter,
   Job,
@@ -90,6 +91,10 @@ function JobDetailContent() {
   const [reusable, setReusable] = useState<ReusableResumeSuggestion | null>(null);
   const [pdfDownloading, setPdfDownloading] = useState(false);
   const [overleafOpening, setOverleafOpening] = useState(false);
+  // Read once on mount: the server render has no window, so calling it
+  // during render would disagree with the first client render.
+  const [nativeApp, setNativeApp] = useState(false);
+  useEffect(() => setNativeApp(isNativeApp()), []);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [coverPdfDownloading, setCoverPdfDownloading] = useState(false);
   const [coverPdfError, setCoverPdfError] = useState<string | null>(null);
@@ -148,16 +153,30 @@ function JobDetailContent() {
     }
   }
 
-  async function handleOpenInOverleaf() {
+  /** Overleaf's snippet endpoint takes the source in a POST body, and
+   * inside the Android shell that body does not survive: the WebView hands
+   * a `target=_blank` navigation to the system browser, which can only
+   * carry a URL. Overleaf then answers "the link was missing some required
+   * parameters" — reported from a real phone.
+   *
+   * So on native the button saves the .tex through the share sheet
+   * instead. That is also the honest flow there: Overleaf's editor is
+   * painful on a phone, and what someone actually wants is the file, to
+   * open on a computer. */
+  async function handleLatexExport() {
     if (!resume) return;
     setOverleafOpening(true);
     setPdfError(null);
     try {
-      const source = await resumeApi.latexSource(resume.id);
-      openInOverleaf(source, `CV - ${job?.title ?? "JobPilot"}`);
+      const label = `CV - ${job?.title ?? "JobPilot"}`;
+      if (isNativeApp()) {
+        await resumeApi.downloadTex(resume.id, `${label.replace(/[/\?%*:|"<>]/g, "-")}.tex`);
+      } else {
+        openInOverleaf(await resumeApi.latexSource(resume.id), label);
+      }
     } catch (err) {
       setPdfError(
-        err instanceof ApiError ? err.message : "No se pudo abrir el CV en Overleaf."
+        err instanceof ApiError ? err.message : "No se pudo exportar el CV en LaTeX."
       );
     } finally {
       setOverleafOpening(false);
@@ -478,12 +497,22 @@ function JobDetailContent() {
                   </button>
                   <button
                     type="button"
-                    onClick={handleOpenInOverleaf}
+                    onClick={handleLatexExport}
                     disabled={overleafOpening}
-                    title="Abre el CV en Overleaf como documento LaTeX, ya compilando"
+                    title={
+                      nativeApp
+                        ? "Guarda el CV en LaTeX (.tex) para abrirlo en Overleaf desde una computadora"
+                        : "Abre el CV en Overleaf como documento LaTeX, ya compilando"
+                    }
                     className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
                   >
-                    {overleafOpening ? "Abriendo…" : "LaTeX (Overleaf)"}
+                    {overleafOpening
+                      ? nativeApp
+                        ? "Guardando…"
+                        : "Abriendo…"
+                      : nativeApp
+                        ? "Guardar .tex"
+                        : "LaTeX (Overleaf)"}
                   </button>
                   <CopyButton text={resumeToPlainText(resume)} />
                 </div>

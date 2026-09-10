@@ -39,6 +39,7 @@ import type {
   ReusableResumeSuggestion,
   User,
 } from "./types";
+import { isNativeApp } from "./platform";
 
 export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
@@ -315,14 +316,6 @@ async function uploadFile<T>(path: string, fieldName: string, file: File): Promi
  * and hands it to the browser as a real save — same transparent-refresh-
  * on-401 behavior as `request`, but the response body is a Blob, never
  * parsed as JSON. */
-/** True only inside the Android shell, never in a normal browser tab.
- * Imported lazily so a server render never touches Capacitor. */
-function isNativeApp(): boolean {
-  if (typeof window === "undefined") return false;
-  const cap = (window as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
-  return typeof cap?.isNativePlatform === "function" ? cap.isNativePlatform() : false;
-}
-
 function blobToBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -560,6 +553,8 @@ export const resumeApi = {
     request<ResumeVersion>(`/resume-versions/${id}`, { method: "PATCH", body: payload }),
   downloadPdf: (id: string, filename: string) => downloadFile(`/resume-versions/${id}/export/pdf`, filename),
   latexSource: (id: string) => fetchText(`/resume-versions/${id}/export/tex`),
+  downloadTex: (id: string, filename: string) =>
+    downloadFile(`/resume-versions/${id}/export/tex`, filename),
 };
 
 export const coverLetterApi = {
