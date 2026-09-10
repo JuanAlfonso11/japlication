@@ -392,9 +392,9 @@ function JobDetailContent() {
       )}
 
       <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-100 dark:bg-gray-900 dark:ring-gray-800">
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 className="font-semibold text-gray-900 dark:text-gray-100">CV a medida</h2>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <select
               aria-label="Idioma del CV"
               value={resumeLanguage ?? "auto"}
@@ -421,8 +421,8 @@ function JobDetailContent() {
         </div>
         {resumeError && <ErrorNotice message={resumeError} />}
         {reusable?.resume_version && !resume && (
-          <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-brand-100 bg-brand-50 p-3 text-sm dark:border-brand-900/40 dark:bg-brand-900/20">
-            <p className="text-brand-800 dark:text-brand-300">
+          <div className="mb-3 flex flex-col gap-3 rounded-xl border border-brand-100 bg-brand-50 p-3 text-sm sm:flex-row sm:items-center sm:justify-between dark:border-brand-900/40 dark:bg-brand-900/20">
+            <p className="min-w-0 text-brand-800 dark:text-brand-300">
               Encontramos un CV ya adaptado para <strong>{reusable.source_job_title}</strong>
               {reusable.source_company ? ` @ ${reusable.source_company}` : ""} con{" "}
               {Math.round(reusable.similarity * 100)}% de requisitos en común — puedes reutilizarlo sin
@@ -431,7 +431,7 @@ function JobDetailContent() {
             <button
               type="button"
               onClick={handleReuseResume}
-              className="shrink-0 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700"
+              className="shrink-0 self-start rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 sm:self-auto"
             >
               Reutilizar
             </button>
@@ -439,10 +439,15 @@ function JobDetailContent() {
         )}
         {resume && (
           <div className="mt-2 space-y-3 rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-gray-800 dark:bg-gray-800/50">
-            <div className="flex items-start justify-between gap-3">
-              <div>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              {/* min-w-0 is what actually lets this column shrink: a flex
+                  item defaults to min-width:auto, so a long unbreakable
+                  title pushes the whole row wider than the card. */}
+              <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <p className="font-semibold text-gray-900 dark:text-gray-100">{resume.title}</p>
+                  <p className="break-words font-semibold text-gray-900 dark:text-gray-100">
+                    {resume.title}
+                  </p>
                   <span className="rounded-full bg-gray-200 px-2 py-0.5 text-[11px] font-semibold uppercase text-gray-600 dark:bg-gray-700 dark:text-gray-300">
                     {resume.language === "es" ? "Español" : "English"}
                   </span>
@@ -451,8 +456,11 @@ function JobDetailContent() {
                   <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">{resume.content.summary}</p>
                 )}
               </div>
-              <div className="flex shrink-0 flex-col items-end gap-1.5">
-                <div className="flex flex-wrap justify-end gap-2">
+              {/* No shrink-0: four buttons demanding their full width is
+                  what squeezed the summary into a narrow ribbon on a phone.
+                  They wrap under the text instead. */}
+              <div className="flex flex-col gap-1.5 sm:items-end">
+                <div className="flex flex-wrap gap-2 sm:justify-end">
                   <button
                     type="button"
                     onClick={() => setEditingResume((v) => !v)}
@@ -521,7 +529,7 @@ function JobDetailContent() {
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                   {entry.title} — {entry.company}
                 </p>
-                <ul className="mt-1 list-inside list-disc space-y-0.5 text-sm text-gray-700 dark:text-gray-300">
+                <ul className="mt-1 list-disc space-y-1 pl-5 text-sm leading-relaxed text-gray-700 dark:text-gray-300">
                   {entry.bullets.map((line, j) => (
                     <li key={j}>{line}</li>
                   ))}
@@ -534,7 +542,7 @@ function JobDetailContent() {
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                   Qué cambió
                 </p>
-                <ul className="mt-1 list-inside list-disc space-y-0.5 text-xs text-gray-500 dark:text-gray-400">
+                <ul className="mt-1 list-disc space-y-1 pl-5 text-xs text-gray-500 dark:text-gray-400">
                   {resume.change_log.map((line, i) => (
                     <li key={i}>{line}</li>
                   ))}
@@ -546,7 +554,7 @@ function JobDetailContent() {
       </div>
 
       <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-100 dark:bg-gray-900 dark:ring-gray-800">
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 className="font-semibold text-gray-900 dark:text-gray-100">Carta de presentación</h2>
           <button
             type="button"
@@ -560,7 +568,7 @@ function JobDetailContent() {
         {coverError && <ErrorNotice message={coverError} />}
         {coverLetter && (
           <div className="mt-2 space-y-3 rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-gray-800 dark:bg-gray-800/50">
-            <div className="flex justify-end gap-2">
+            <div className="flex flex-wrap justify-end gap-2">
               <button
                 type="button"
                 onClick={handleDownloadCoverLetterPdf}
