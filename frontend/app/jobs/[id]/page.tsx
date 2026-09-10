@@ -12,6 +12,7 @@ import ApplicationKit from "@/components/ApplicationKit";
 import ResumeEditor from "@/components/ResumeEditor";
 import InterviewPrepCard from "@/components/InterviewPrepCard";
 import { ApiError, coverLetterApi, jobsApi, resumeApi } from "@/lib/api";
+import type { DownloadOutcome } from "@/lib/api";
 import { openInOverleaf } from "@/lib/overleaf";
 import { isNativeApp } from "@/lib/platform";
 import type {
@@ -71,6 +72,14 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
+/** Turns "where did it go" into something worth showing. Silent in a
+ * browser, which already has its own downloads UI. */
+function describeSave(outcome: DownloadOutcome, what: string): string | null {
+  if (!outcome) return null;
+  if ("savedTo" in outcome) return `${what} guardado en ${outcome.savedTo}`;
+  return `${what} listo — elige dónde guardarlo`;
+}
+
 function JobDetailContent() {
   const params = useParams<{ id: string }>();
   const jobId = params.id;
@@ -96,8 +105,12 @@ function JobDetailContent() {
   const [nativeApp, setNativeApp] = useState(false);
   useEffect(() => setNativeApp(isNativeApp()), []);
   const [pdfError, setPdfError] = useState<string | null>(null);
+  // Where the last export landed. A browser announces its own downloads;
+  // a phone announces nothing, so the app has to.
+  const [saveNotice, setSaveNotice] = useState<string | null>(null);
   const [coverPdfDownloading, setCoverPdfDownloading] = useState(false);
   const [coverPdfError, setCoverPdfError] = useState<string | null>(null);
+  const [coverSaveNotice, setCoverSaveNotice] = useState<string | null>(null);
 
   const [coverLetter, setCoverLetter] = useState<CoverLetter | null>(null);
   const [coverLoading, setCoverLoading] = useState(false);
@@ -144,8 +157,13 @@ function JobDetailContent() {
     if (!resume) return;
     setPdfDownloading(true);
     setPdfError(null);
+    setSaveNotice(null);
     try {
-      await resumeApi.downloadPdf(resume.id, `${job?.title ?? "resume"}.pdf`.replace(/[/\\?%*:|"<>]/g, "-"));
+      const outcome = await resumeApi.downloadPdf(
+        resume.id,
+        `${job?.title ?? "resume"}.pdf`.replace(/[/\\?%*:|"<>]/g, "-")
+      );
+      setSaveNotice(describeSave(outcome, "PDF"));
     } catch (err) {
       setPdfError(err instanceof ApiError ? err.message : "No se pudo descargar el PDF.");
     } finally {
@@ -159,18 +177,23 @@ function JobDetailContent() {
    * carry a URL. Overleaf then answers "the link was missing some required
    * parameters" — reported from a real phone.
    *
-   * So on native the button saves the .tex through the share sheet
-   * instead. That is also the honest flow there: Overleaf's editor is
-   * painful on a phone, and what someone actually wants is the file, to
+   * So on native the button saves the .tex to the phone's public Documents
+   * folder instead. That is also the honest flow there: Overleaf's editor
+   * is unusable on a phone, and what someone actually wants is the file, to
    * open on a computer. */
   async function handleLatexExport() {
     if (!resume) return;
     setOverleafOpening(true);
     setPdfError(null);
+    setSaveNotice(null);
     try {
       const label = `CV - ${job?.title ?? "JobPilot"}`;
       if (isNativeApp()) {
-        await resumeApi.downloadTex(resume.id, `${label.replace(/[/\?%*:|"<>]/g, "-")}.tex`);
+        const outcome = await resumeApi.downloadTex(
+          resume.id,
+          `${label.replace(/[/\\?%*:|"<>]/g, "-")}.tex`
+        );
+        setSaveNotice(describeSave(outcome, "Archivo .tex"));
       } else {
         openInOverleaf(await resumeApi.latexSource(resume.id), label);
       }
@@ -187,11 +210,13 @@ function JobDetailContent() {
     if (!coverLetter) return;
     setCoverPdfDownloading(true);
     setCoverPdfError(null);
+    setCoverSaveNotice(null);
     try {
-      await coverLetterApi.downloadPdf(
+      const outcome = await coverLetterApi.downloadPdf(
         coverLetter.id,
         `Cover letter - ${job?.title ?? "job"}.pdf`.replace(/[/\\?%*:|"<>]/g, "-")
       );
+      setCoverSaveNotice(describeSave(outcome, "Carta en PDF"));
     } catch (err) {
       setCoverPdfError(err instanceof ApiError ? err.message : "No se pudo descargar el PDF.");
     } finally {
@@ -522,6 +547,11 @@ function JobDetailContent() {
                   </span>
                 )}
                 {pdfError && <p className="text-xs text-rose-600 dark:text-rose-400">{pdfError}</p>}
+                {saveNotice && (
+                  <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+                    {saveNotice}
+                  </p>
+                )}
               </div>
             </div>
             <p className="text-xs text-gray-400 dark:text-gray-500">
@@ -609,6 +639,11 @@ function JobDetailContent() {
               <CopyButton text={coverLetter.content} />
             </div>
             {coverPdfError && <p className="text-xs text-rose-600 dark:text-rose-400">{coverPdfError}</p>}
+            {coverSaveNotice && (
+              <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+                {coverSaveNotice}
+              </p>
+            )}
             <p className="whitespace-pre-line text-sm leading-relaxed text-gray-700 dark:text-gray-300">
               {coverLetter.content}
             </p>

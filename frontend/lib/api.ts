@@ -343,26 +343,61 @@ function blobToBase64(blob: Blob): Promise<string> {
  *
  * Both plugins are imported dynamically so the browser bundle never pulls in
  * native code it will not run. */
-async function saveFileNative(blob: Blob, filename: string): Promise<void> {
+/** What happened to a downloaded file, so the UI can say where it went.
+ * `null` is the browser case: the browser's own download UI already tells
+ * the user. On a phone nothing does, which is the whole complaint this
+ * type exists to answer. */
+export type DownloadOutcome = { savedTo: string } | { shared: true } | null;
+
+/** Folder inside the phone's public Documents where exports land. A
+ * subfolder rather than Documents itself: a CV per job adds up, and
+ * "Documentos/JobPilot" is a place someone can be told to look. */
+const NATIVE_SAVE_FOLDER = "JobPilot";
+
+async function saveFileNative(blob: Blob, filename: string): Promise<DownloadOutcome> {
   const [{ Filesystem, Directory }, { Share }] = await Promise.all([
     import("@capacitor/filesystem"),
     import("@capacitor/share"),
   ]);
 
-  const { uri } = await Filesystem.writeFile({
-    path: filename,
-    data: await blobToBase64(blob),
-    directory: Directory.Cache,
-    recursive: true,
-  });
+  const data = await blobToBase64(blob);
 
+  // Directory.Documents is the phone's PUBLIC Documents folder — the file
+  // shows up in the Files app like any other download. Cache, which this
+  // used before, is invisible to the user: it could only be handed to the
+  // share sheet, which is not what "download" means to anyone.
   try {
-    await Share.share({ title: filename, files: [uri] });
-  } catch (err) {
-    // Dismissing the share sheet is a normal user action, not a failure —
-    // the file is already written either way. Anything else is real.
-    const message = err instanceof Error ? err.message : String(err);
-    if (!/cancel/i.test(message)) throw err;
+    const permission = await Filesystem.checkPermissions();
+    if (permission.publicStorage !== "granted") {
+      await Filesystem.requestPermissions();
+    }
+    await Filesystem.writeFile({
+      path: `${NATIVE_SAVE_FOLDER}/${filename}`,
+      data,
+      directory: Directory.Documents,
+      recursive: true,
+    });
+    return { savedTo: `Documentos/${NATIVE_SAVE_FOLDER}` };
+  } catch {
+    // Public storage can be refused (permission denied, or a vendor ROM
+    // being stricter than stock Android). Falling back to the share sheet
+    // keeps the file reachable instead of losing it — the user picks where
+    // it goes. Written to Cache first because Share needs a real file.
+    const { uri } = await Filesystem.writeFile({
+      path: filename,
+      data,
+      directory: Directory.Cache,
+      recursive: true,
+    });
+    try {
+      await Share.share({ title: filename, files: [uri] });
+    } catch (err) {
+      // Dismissing the share sheet is a normal user action, not a failure —
+      // the file is already written either way. Anything else is real.
+      const message = err instanceof Error ? err.message : String(err);
+      if (!/cancel/i.test(message)) throw err;
+    }
+    return { shared: true };
   }
 }
 
@@ -390,7 +425,7 @@ async function fetchText(path: string): Promise<string> {
   return res.text();
 }
 
-async function downloadFile(path: string, filename: string): Promise<void> {
+async function downloadFile(path: string, filename: string): Promise<DownloadOutcome> {
   const token = getToken();
   let res = await rawFetch(path, "GET", undefined, undefined, token);
 
@@ -415,8 +450,7 @@ async function downloadFile(path: string, filename: string): Promise<void> {
   const blob = await res.blob();
 
   if (isNativeApp()) {
-    await saveFileNative(blob, filename);
-    return;
+    return saveFileNative(blob, filename);
   }
 
   const url = URL.createObjectURL(blob);
@@ -436,6 +470,7 @@ async function downloadFile(path: string, filename: string): Promise<void> {
     // is freed on navigation anyway.
     setTimeout(() => URL.revokeObjectURL(url), 60_000);
   }
+  return null;
 }
 
 // ---------- Auth ----------
