@@ -133,10 +133,18 @@ function isNotConfigured(error: string): boolean {
   return error.includes("is not configured");
 }
 
+// LinkedIn tarda más de lo que Discover puede esperar, así que en la primera
+// búsqueda arranca en segundo plano y responde con este aviso en vez de con
+// vacantes (backend/app/services/linkedin_jobs.py). No es una falla: buscar
+// de nuevo un minuto después ya las muestra, por eso lleva un chip neutro.
+function isPending(error: string): boolean {
+  return error.includes("segundo plano");
+}
+
 /** Cuánto aportó cada fuente, y el total.
  *
- * Antes esto era solo una fila de chips, uno por proveedor. Con 14 fuentes
- * eso son 14 chips sin jerarquía, y —más importante— faltaba el número que
+ * Antes esto era solo una fila de chips, uno por proveedor. Con 15 fuentes
+ * eso son 15 chips sin jerarquía, y —más importante— faltaba el número que
  * en realidad se quiere de un vistazo: cuántas vacantes trajo la búsqueda
  * en total.
  *
@@ -157,13 +165,14 @@ function SourcesSummary({
 }) {
   const [open, setOpen] = useState(false);
 
-  const failed = sources.filter((s) => s.error && !isNotConfigured(s.error));
+  const failed = sources.filter((s) => s.error && !isNotConfigured(s.error) && !isPending(s.error));
   const unconfigured = sources.filter((s) => s.error && isNotConfigured(s.error));
+  const pending = sources.filter((s) => s.error && isPending(s.error));
   const answered = sources.filter((s) => !s.error);
   const rawTotal = answered.reduce((sum, s) => sum + s.count, 0);
   const duplicates = Math.max(0, rawTotal - shownCount);
 
-  // Las que más aportaron primero: con 14 fuentes, el orden alfabético
+  // Las que más aportaron primero: con 15 fuentes, el orden alfabético
   // esconde justamente lo que se quiere ver.
   const ordered = [...sources].sort((a, b) => {
     if (Boolean(a.error) !== Boolean(b.error)) return a.error ? 1 : -1;
@@ -192,6 +201,14 @@ function SourcesSummary({
             {failed.length} sin responder
           </span>
         )}
+        {pending.length > 0 && (
+          <span
+            className="rounded-full bg-gray-100 px-2.5 py-1 font-semibold text-gray-600 dark:bg-gray-800 dark:text-gray-300"
+            title={pending[0].error ?? undefined}
+          >
+            {pending.map((s) => PROVIDER_LABELS[s.provider] ?? s.provider).join(", ")} buscando…
+          </span>
+        )}
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
@@ -206,11 +223,12 @@ function SourcesSummary({
         <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500">
           {ordered.map((s) => {
             const notConfigured = s.error ? isNotConfigured(s.error) : false;
+            const searching = s.error ? isPending(s.error) : false;
             return (
               <span
                 key={s.provider}
                 className={`tabular rounded-full px-2 py-0.5 ${
-                  s.error && !notConfigured
+                  s.error && !notConfigured && !searching
                     ? "bg-rose-50 text-rose-600 dark:bg-rose-500/15 dark:text-rose-400"
                     : s.count > 0
                     ? "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300"
@@ -219,7 +237,7 @@ function SourcesSummary({
                 title={s.error ?? undefined}
               >
                 {PROVIDER_LABELS[s.provider] ?? s.provider}:{" "}
-                {notConfigured ? "sin clave" : s.error ? "error" : s.count}
+                {notConfigured ? "sin clave" : searching ? "buscando…" : s.error ? "error" : s.count}
               </span>
             );
           })}
@@ -342,7 +360,7 @@ function DiscoverContent() {
     <div className="space-y-6 pb-4 animate-fade-in">
       <PageHeader
         title="Buscar trabajos"
-        subtitle="Busca en 14 fuentes a la vez y combina todo en una sola lista, sin repetidos. Lo que agregues se compara contra tu perfil en Inicio."
+        subtitle="Busca en 15 fuentes a la vez, LinkedIn incluido, y combina todo en una sola lista, sin repetidos. Lo que agregues se compara contra tu perfil en Inicio."
       />
 
       <div className="rounded-2xl bg-white p-5 shadow-soft ring-1 ring-gray-100 dark:bg-gray-900 dark:ring-gray-800">

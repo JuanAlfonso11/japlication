@@ -39,6 +39,7 @@ from app.services import (
     hackernews,
     himalayas,
     jobicy,
+    linkedin_jobs,
     push_notifications,
     remotejobs_org,
     remotive,
@@ -57,8 +58,8 @@ router = APIRouter(tags=["jobs"])
 
 # Every JobSource enum value that comes from a live search provider (as
 # opposed to url_import/manual) — see docs/PUBLIC_APIS_RESEARCH.md for what
-# was investigated and why Google Jobs/Upwork/LinkedIn/Indeed aren't (and,
-# for LinkedIn/Indeed, can't be) part of this list.
+# was investigated, why Google Jobs/Upwork/Indeed aren't part of this list,
+# and how LinkedIn got in through Bright Data.
 _NO_AUTH_PROVIDERS = {
     "himalayas", "arbeitnow", "remotive", "jobicy", "remotejobs_org", "themuse",
     "weworkremotely", "hackernews", "getonbrd", "workingnomads", "remoteok",
@@ -68,7 +69,8 @@ _NO_AUTH_PROVIDERS = {
 # aren't set in .env: its search_*_jobs() raises a clear *Error, which the
 # single-provider endpoint turns into a 502 and the aggregate fan-out turns
 # into a per-source error message — never a hard failure for the others.
-_KEYED_PROVIDERS = {"adzuna", "usajobs", "serpapi"}
+# linkedin is Bright Data, paid per record — see services/linkedin_jobs.py.
+_KEYED_PROVIDERS = {"adzuna", "usajobs", "serpapi", "linkedin"}
 
 _SEARCH_PROVIDERS = _NO_AUTH_PROVIDERS | _KEYED_PROVIDERS
 
@@ -323,7 +325,7 @@ async def list_jobs(
 async def search_jobs(
     provider: str = Query(
         "himalayas",
-        pattern="^(himalayas|arbeitnow|remotive|jobicy|remotejobs_org|themuse|weworkremotely|hackernews|getonbrd|workingnomads|remoteok|adzuna|usajobs|serpapi)$",
+        pattern="^(himalayas|arbeitnow|remotive|jobicy|remotejobs_org|themuse|weworkremotely|hackernews|getonbrd|workingnomads|remoteok|adzuna|usajobs|serpapi|linkedin)$",
     ),
     q: Optional[str] = Query(None),
     location: Optional[str] = Query(None),
@@ -343,8 +345,8 @@ async def search_jobs(
     """Live-search one provider. Nothing is persisted — pick a
     result and call POST /jobs/search/import to add it to `jobs`.
 
-    See GET /jobs/search/aggregate to query all twelve providers in one
-    call, which is what Discover uses by default. adzuna/usajobs/serpapi
+    See GET /jobs/search/aggregate to query every provider in one call,
+    which is what Discover uses by default. adzuna/usajobs/serpapi/linkedin
     require their own API keys (see .env) — calling them without keys
     configured returns a 502.
     """
@@ -571,6 +573,21 @@ async def search_jobs(
             provider="usajobs", results=results, page=page + 1 if data["has_more"] else None, has_more=data["has_more"]
         )
 
+    if provider == "linkedin":
+        try:
+            data = await linkedin_jobs.search_linkedin_jobs(
+                q=q, location=location, experience_level_filter=experience_level_filter,
+                remote_type_filter=remote_type_filter,
+            )
+        except linkedin_jobs.LinkedInError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        results = [
+            ExternalJobResult(external_id=r["linkedin_job_id"], **{k: v for k, v in r.items() if k != "linkedin_job_id"})
+            for r in data["results"]
+            if r.get("linkedin_job_id")
+        ]
+        return ExternalJobsSearchResponse(provider="linkedin", results=results, has_more=False)
+
     # provider == "serpapi"
     try:
         data = await serpapi_jobs.search_serpapi_jobs(
@@ -604,7 +621,9 @@ async def _run_search_provider(
     checks/consumes today's call budget — once the daily cap is hit, it
     returns an empty result with an explanatory error instead of ever
     reaching the network, same shape as any other provider failure."""
-    if not await api_budget.try_consume_budget(provider):
+    # linkedin consumes its own budget inside its service, and only when it
+    # starts a paid run: a search answered from its cache must not count.
+    if provider != "linkedin" and not await api_budget.try_consume_budget(provider):
         return provider, [], "Límite diario de llamadas alcanzado para proteger la cuota mensual — se reintenta mañana."
     try:
         if provider == "himalayas":
@@ -695,6 +714,12 @@ async def _run_search_provider(
                 remote_type_filter=remote_type_filter,
             )
             id_key = "serpapi_job_id"
+        elif provider == "linkedin":
+            data = await linkedin_jobs.search_linkedin_jobs(
+                q=q, location=location, experience_level_filter=experience_level_filter,
+                remote_type_filter=remote_type_filter,
+            )
+            id_key = "linkedin_job_id"
         else:
             return provider, [], f"Unknown provider '{provider}'."
     except Exception as exc:  # noqa: BLE001 — any provider failure is reported, never raised
@@ -734,7 +759,7 @@ async def search_jobs_aggregate(
 ) -> AggregateSearchResponse:
     """Fans out to every job-search provider at once (Himalayas, Arbeitnow,
     Remotive, Jobicy, RemoteJobs.org, The Muse, We Work Remotely, Hacker
-    News, Get on Board, plus Adzuna/USAJobs/SerpApi
+    News, Get on Board, plus Adzuna/USAJobs/SerpApi/LinkedIn
     whenever their keys are set in .env) and merges the results into one
     list, newest first — this is what the Discover tab's "search all
     sources" action calls. A provider
@@ -843,6 +868,7 @@ async def import_external_job(
         "adzuna": adzuna.get_cached_result,
         "usajobs": usajobs.get_cached_result,
         "serpapi": serpapi_jobs.get_cached_result,
+        "linkedin": linkedin_jobs.get_cached_result,
     }[payload.source]
     cached = cache_lookup(payload.external_id)
     if cached is None:

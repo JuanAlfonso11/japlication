@@ -92,6 +92,14 @@ class Settings(BaseSettings):
     # https://serpapi.com/users/sign_up.
     SERPAPI_API_KEY: Optional[str] = None
 
+    # LinkedIn job search through Bright Data — paid per record; the cost
+    # controls live in services/linkedin_jobs.py. The key is the one
+    # `bdata login` stores, or one from https://brightdata.com/cp/setting/users.
+    BRIGHTDATA_API_KEY: Optional[str] = None
+    # Where to search when Discover sends no location. LinkedIn needs one, and
+    # for remote postings it decides which count as open to you.
+    BRIGHTDATA_LINKEDIN_LOCATION: str = "Worldwide"
+
     # Android in-app update check (GET /app/android-update) — lets the app
     # prompt "there's a newer build" without a cable. Bump
     # ANDROID_LATEST_VERSION_CODE to match android/app/build.gradle's

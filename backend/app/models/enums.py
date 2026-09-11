@@ -2,10 +2,10 @@ import enum
 
 
 class JobSource(str, enum.Enum):
-    """Every value here is a source that needs zero credentials to query —
-    see docs/PUBLIC_APIS_RESEARCH.md for what was investigated (including
-    why Google Jobs/Upwork were removed, and why LinkedIn/Indeed aren't —
-    and likely can't be — options for a personal project at all)."""
+    """Where a `jobs` row came from: a URL or manual import, or one of the
+    live search providers (keyed or not). docs/PUBLIC_APIS_RESEARCH.md covers
+    what was investigated, including why Google Jobs/Upwork were removed and
+    how LinkedIn came in through Bright Data."""
 
     url_import = "url_import"
     himalayas = "himalayas"
@@ -22,6 +22,7 @@ class JobSource(str, enum.Enum):
     workingnomads = "workingnomads"
     remoteok = "remoteok"
     serpapi = "serpapi"
+    linkedin = "linkedin"
     manual = "manual"
 
 

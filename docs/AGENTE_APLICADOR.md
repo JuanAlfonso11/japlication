@@ -57,7 +57,7 @@ el botón de enviar.
 
 | Paso | ¿Automatizable? |
 |---|---|
-| Buscar vacantes en 14 fuentes | Sí — APIs oficiales, ya integradas |
+| Buscar vacantes en 15 fuentes | Sí — ya integradas (LinkedIn vía Bright Data) |
 | Filtrar remotas y viables desde RD | Sí |
 | Puntuar el encaje contra tu CV | Sí |
 | Redactar el CV a medida de esa vacante | Sí |

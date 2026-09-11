@@ -314,7 +314,7 @@ toca linkedin.com ni ninguna cuenta — la cuenta del usuario de JobPilot jamás
   tipo "3 days ago", `salary`, `schedule_type`, `work_from_home`), `job_highlights[]` (secciones
   "Qualifications"/"Responsibilities" ya estructuradas), `apply_options[]` y `source_link` (URL real del
   posting en el sitio de origen — se usa como `source_url`)
-- **Ubicación/alcance**: la cobertura más amplia de todas las 14 fuentes — agrega de facto varios boards
+- **Ubicación/alcance**: la cobertura más amplia de todas las 15 fuentes — agrega de facto varios boards
   grandes (incluido LinkedIn) en una sola búsqueda
 - **Nivel de experiencia**: no expone campo nativo → heurística de texto sobre título+descripción
 - **Límites**: sin paginación real (Google Jobs pagina con un `next_page_token` opaco en vez de un número
@@ -346,6 +346,27 @@ la misma forma que las 11 anteriores. El resultado:
   flexibilidad de ubicación una vez hay una entrevista encaminada, no para traer resultados automáticos.
 
 ---
+
+## 13. LinkedIn vía Bright Data *(integrada, de pago)*
+
+LinkedIn no da una API de búsqueda de empleos a un proyecto personal (sección siguiente). Bright Data
+sí da acceso: su dataset de ofertas de LinkedIn (`gd_lpfll7v5hcqtkxl6l`) busca por palabra clave sobre
+las páginas públicas de LinkedIn, sin sesión, así que no hay ninguna cuenta de LinkedIn en juego.
+
+- **Auth**: `BRIGHTDATA_API_KEY` (la guarda `bdata login`). Ubicación por defecto cuando Discover no
+  manda una: `BRIGHTDATA_LINKEDIN_LOCATION`.
+- **Costo**: por resultado (~$1.50 por 1.000). Controles en `backend/app/services/linkedin_jobs.py`:
+  caché de 6 h por búsqueda; máximo 8 corridas reales al día (`api_budget`, consumido solo al lanzar
+  una corrida, nunca al responder desde caché); 10 ofertas por corrida; sin palabra clave no se busca.
+- **Latencia**: una corrida tarda 45–90 s. Discover no la espera: la primera búsqueda la lanza en
+  segundo plano y esa fuente aparece como "buscando…"; buscar de nuevo un minuto después ya la muestra.
+- **Remoto**: se envía el filtro de modalidad de LinkedIn ("Remote"/"Hybrid"/"On-site"). Los registros
+  no traen un campo de modalidad propio, así que la etiqueta sale de ese filtro; si el título declara
+  otra modalidad, manda el título. Verificado en vivo (2026-09-11): "C# developer" + remoto +
+  República Dominicana devolvió 5 ofertas; 3 claramente remotas, 1 que mezclaba modalidades en la
+  descripción y 1 que no mencionaba ninguna.
+- **Campos útiles**: título, empresa, ubicación, fecha, nivel, tipo de empleo, postulantes, resumen y
+  Easy Apply. `apply_link` y el salario suelen venir vacíos.
 
 ## Investigación adicional: ¿cómo se consigue acceso a las APIs de Indeed y LinkedIn?
 
@@ -418,7 +439,7 @@ documentación oficial vigente (Microsoft Learn para LinkedIn, docs.indeed.com p
 
 ## Cómo se integran (resumen técnico — detalle completo en `backend/README.md`)
 
-- El endpoint **`GET /jobs/search/aggregate`** dispara las 14 fuentes **en paralelo**
+- El endpoint **`GET /jobs/search/aggregate`** dispara las 15 fuentes **en paralelo**
   (`asyncio.gather`) y devuelve un solo listado combinado — así es como Discover muestra "todos los
   resultados de todas las APIs integradas" en una sola búsqueda, sin que el usuario tenga que elegir
   proveedor uno por uno. Un proveedor que falla no tumba a los demás: se reporta por separado — esto
@@ -428,6 +449,6 @@ documentación oficial vigente (Microsoft Learn para LinkedIn, docs.indeed.com p
   (`backend/app/services/experience_level.py`). Himalayas y The Muse lo mandan como parámetro nativo al
   proveedor; Jobicy lo trae en la respuesta (`jobLevel`) y se normaliza; Arbeitnow/Remotive/RemoteJobs.org
   no lo exponen, así que se infiere por heurística de texto sobre título+descripción (mismo enfoque que ya
-  usa `job_importer.py` para seniority) — mismo filtro, aplicado de forma uniforme sobre las 14 fuentes.
+  usa `job_importer.py` para seniority) — mismo filtro, aplicado de forma uniforme sobre las 15 fuentes.
 - **Ubicación por defecto**: el campo de ubicación en el formulario de Discover arranca con `"Remote"`
   precargado (no es una restricción dura — el usuario puede borrarlo o cambiarlo).
