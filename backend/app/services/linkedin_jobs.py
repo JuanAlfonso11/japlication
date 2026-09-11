@@ -1,68 +1,57 @@
-"""LinkedIn job search through Bright Data's LinkedIn job listings dataset.
+"""LinkedIn job search through LinkedIn's public, logged-out job pages.
 
 LinkedIn offers no job search API a personal app can get (see
-docs/PUBLIC_APIS_RESEARCH.md). Bright Data runs the search on LinkedIn's
-public, logged-out job pages and returns structured records, so no LinkedIn
-account is involved and none can be restricted for it. It is paid per
-record, which shapes everything below.
+docs/PUBLIC_APIS_RESEARCH.md). The pages it serves to visitors who aren't
+signed in need no account or key, though: a search returns a page of ten job
+cards as HTML, and each posting has its own page with the full description.
+No LinkedIn account is involved, so none can be restricted for it. Ported
+from the linkedin-search skill in MadsLorentzen/ai-job-search (MIT).
 
-WHY RESULTS ARRIVE ON THE SECOND SEARCH
-A discovery run takes 45-90 seconds (trigger, then poll until the snapshot is
-ready), and Discover waits for every source at once — waiting on LinkedIn
-would stall the other fourteen. So this is stale-while-revalidate: a search
-answers from a per-query cache immediately, and a cache miss starts the run
-in the background and reports LinkedInPending for this source. Searching
-again a minute later shows the postings. The every-2-hours sweep keeps the
-profile's own query warm.
+It replaced Bright Data, which paid per record and took 45-90 seconds a run.
+These pages answer in under a second, so a search waits for them like any
+other source.
 
-COST CONTROLS
-- Results are cached per (keyword, location, work type) for six hours, so a
-  repeated search never pays twice.
-- api_budget caps real Bright Data runs per day. The budget is consumed here,
-  right before a run, not by the router on every search: a cache hit costs
-  nothing and must not use up the day's allowance.
-- Each run asks for at most MAX_RECORDS postings from the past week.
-- No keyword, no run: an empty search returns nothing instead of paying for a
-  generic query.
-- A run that just failed is reported for a few minutes instead of retried, so
-  a broken configuration cannot quietly spend the daily budget.
+KEEPING VOLUME LOW
+LinkedIn's terms forbid automated access. What it can do about a busy IP is
+rate-limit it for a while (HTTP 429), which shows up as this source's error and
+is never retried in a loop. To stay well clear of that:
+- Results are cached per (keyword, location, work type) for an hour.
+- A search reads one page: 10 postings from the past week.
+- Posting pages are fetched a few at a time, not all at once.
+- No keyword, no request.
 
 THE REMOTE TAG
-LinkedIn applies its own workplace-type filter ("Remote"/"Hybrid"/"On-site")
-at search time. That is the structured value the employer set, so a posting
-from a filtered search carries the requested type — the records have no
-work-type field of their own to read it back from. Two exceptions: a title
-that states its own work type wins (a "Hybrid" posting that slipped into a
-remote search is tagged hybrid and filtered out), and a search with no
-work-type filter falls back to the description keyword scan every other
-source uses.
+LinkedIn applies its own workplace-type filter (f_WT) at search time. That is
+the structured value the employer set, so a posting from a filtered search
+carries the requested type — the cards have no work-type field of their own to
+read it back from. Two exceptions: a title that states its own work type wins
+(a "Hybrid" posting that slipped into a remote search is tagged hybrid and
+filtered out), and a search with no work-type filter falls back to the
+description keyword scan every other source uses.
 """
 
 from __future__ import annotations
 
 import asyncio
-import logging
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 import httpx
+from bs4 import BeautifulSoup
 
 from app.core.config import settings
-from app.services import api_budget, experience_level
-from app.services.job_importer import _extract_remote_type, html_to_text, parse_job_text_heuristic
+from app.services import experience_level
+from app.services.job_importer import _extract_remote_type, parse_job_text_heuristic
 
-logger = logging.getLogger(__name__)
+SEARCH_URL = "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search"
+POSTING_URL = "https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/{}"
+_HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; JobPilot/1.0)", "Accept-Language": "en-US,en;q=0.9"}
+_PAST_WEEK = "r604800"  # f_TPR means "posted within N seconds"
+_RESULTS_TTL_SECONDS = 60 * 60
+_POSTINGS_AT_ONCE = 3
 
-API = "https://api.brightdata.com/datasets/v3"
-DATASET_ID = "gd_lpfll7v5hcqtkxl6l"
-MAX_RECORDS = 10
-_RESULTS_TTL_SECONDS = 6 * 60 * 60
-_FAILURE_TTL_SECONDS = 10 * 60
-_POLL_INTERVAL_SECONDS = 10
-_POLL_DEADLINE_SECONDS = 5 * 60
-
-_WORK_TYPES = {"remote": "Remote", "hybrid": "Hybrid", "onsite": "On-site"}
+_WORK_TYPES = {"onsite": "1", "remote": "2", "hybrid": "3"}
 _EMPLOYMENT_TYPES = {
     "full-time": "full_time",
     "part-time": "part_time",
@@ -86,149 +75,133 @@ Key = tuple[str, str, str]  # (keyword, location, work type)
 # more than one process.
 _query_cache: dict[Key, dict[str, Any]] = {}
 _job_cache: dict[str, dict[str, Any]] = {}
-_failures: dict[Key, tuple[float, str]] = {}
-_in_flight: dict[Key, asyncio.Task] = {}
 
 
 class LinkedInError(RuntimeError):
     pass
 
 
-class LinkedInPending(LinkedInError):
-    """A background run is still collecting results. Discover shows this as
-    "buscando…" rather than as a failure — its message must keep the words
-    "segundo plano", which is what the frontend keys on."""
+def _text(node: Any) -> Optional[str]:
+    return (node.get_text(" ", strip=True) or None) if node is not None else None
 
 
-def is_configured() -> bool:
-    return bool(settings.BRIGHTDATA_API_KEY)
+def parse_cards(html: str) -> list[dict[str, Any]]:
+    """The search page: one card per posting, marked with its job-posting URN."""
+    cards = []
+    for card in BeautifulSoup(html, "lxml").select('[data-entity-urn^="urn:li:jobPosting:"]'):
+        title = _text(card.select_one(".base-search-card__title"))
+        if not title:
+            continue
+        job_id = card["data-entity-urn"].rsplit(":", 1)[-1]
+        link = card.select_one("a.base-card__full-link[href]")
+        listed = card.select_one('time[class*="job-search-card__listdate"]')
+        cards.append(
+            {
+                "id": job_id,
+                "title": title,
+                "company": _text(card.select_one(".base-search-card__subtitle")),
+                "location": _text(card.select_one(".job-search-card__location")),
+                # The query string is LinkedIn's own tracking.
+                "url": link["href"].split("?", 1)[0] if link else f"https://www.linkedin.com/jobs/view/{job_id}",
+                "date": listed.get("datetime") if listed else None,
+                "date_text": _text(listed),
+            }
+        )
+    return cards
 
 
-def _posted_at(value: Any) -> Optional[datetime]:
-    if not value:
-        return None
+def parse_posting(html: str) -> dict[str, Optional[str]]:
+    """A posting page: the full description and the job-criteria list."""
+    soup = BeautifulSoup(html, "lxml")
+    criteria = {
+        (_text(item.select_one(".description__job-criteria-subheader")) or "").lower(): _text(
+            item.select_one(".description__job-criteria-text")
+        )
+        for item in soup.select(".description__job-criteria-item")
+    }
+    body = soup.select_one(".show-more-less-html__markup") or soup.select_one(".description__text")
+    return {
+        "description": body.get_text("\n", strip=True) if body else None,
+        "seniority": criteria.get("seniority level"),
+        "employment_type": criteria.get("employment type"),
+    }
+
+
+def _posted_at(value: Optional[str]) -> Optional[datetime]:
     try:
-        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        return datetime.fromisoformat(value).replace(tzinfo=timezone.utc) if value else None
     except ValueError:
         return None
 
 
-def _normalize(raw: dict[str, Any], requested_work_type: Optional[str]) -> Optional[dict[str, Any]]:
-    job_id = raw.get("job_posting_id")
-    title = str(raw.get("job_title") or "").strip()
-    if not job_id or not title or raw.get("error"):
-        return None
-
-    company = raw.get("company_name") or "Unknown company"
-    description = (
-        str(raw.get("job_summary") or "").strip()
-        or html_to_text(raw.get("job_description_formatted") or "")
-        or "No description provided."
-    )
+def _normalize(card: dict[str, Any], posting: dict[str, Optional[str]], requested_work_type: Optional[str]) -> dict[str, Any]:
+    title = card["title"]
+    company = card["company"] or "Unknown company"
+    description = posting.get("description") or "No description provided."
     parsed = parse_job_text_heuristic(description, title_hint=title, company_hint=company)
 
     return {
-        "linkedin_job_id": str(job_id),
+        "linkedin_job_id": card["id"],
         "source": "linkedin",
-        # The job page rather than apply_link, which is empty on most records;
-        # the page is where LinkedIn's "Apply" lives anyway. The query string
-        # is LinkedIn's own tracking.
-        "source_url": str(raw.get("url") or "").split("?", 1)[0] or None,
+        "source_url": card["url"],
         "title": title,
         "company": company,
-        "location": raw.get("job_location"),
+        "location": card["location"],
         # See THE REMOTE TAG in the module docstring.
         "remote_type": _extract_remote_type(title) or requested_work_type or _extract_remote_type(description),
         "employment_type": _EMPLOYMENT_TYPES.get(
-            str(raw.get("job_employment_type") or "").strip().lower(), parsed["employment_type"]
+            (posting.get("employment_type") or "").lower(), parsed["employment_type"]
         ),
-        "seniority": _SENIORITY.get(str(raw.get("job_seniority_level") or "").strip().lower())
-        or experience_level.infer(title, description),
+        # Like the remote tag, a title that states its level wins: employers fill
+        # LinkedIn's field loosely (live results had "Senior ..." roles marked Internship).
+        "seniority": experience_level.infer(title)
+        or _SENIORITY.get((posting.get("seniority") or "").lower())
+        or experience_level.infer(description),
         "description": description,
         "requirements": parsed["requirements"],
         "responsibilities": parsed["responsibilities"],
         "skills_required": parsed["skills_required"],
-        # ponytail: base_salary was empty on every record sampled; parse it when one shows up.
+        # ponytail: salaries are rare on guest cards; parse job-search-card__salary-info when one shows up.
         "salary_min": None,
         "salary_max": None,
         "salary_currency": None,
-        "posted_at": _posted_at(raw.get("job_posted_date")),
-        "posted_at_text": raw.get("job_posted_time"),
+        "posted_at": _posted_at(card["date"]),
+        "posted_at_text": card["date_text"],
         "via": "LinkedIn",
     }
 
 
-async def _run_discovery(key: Key) -> list[dict[str, Any]]:
+async def _fetch(client: httpx.AsyncClient, url: str, params: Optional[dict[str, str]] = None) -> str:
+    resp = await client.get(url, params=params)
+    if resp.status_code == 429:
+        raise LinkedInError("LinkedIn está limitando las búsquedas desde esta conexión: vuelve a intentar en un rato.")
+    resp.raise_for_status()
+    return resp.text
+
+
+async def _search(key: Key) -> list[dict[str, Any]]:
     keyword, location, work_type = key
-    payload = [
-        {
-            "keyword": keyword,
-            "location": location,
-            "country": "",
-            "time_range": "Past week",
-            "job_type": "",
-            "experience_level": "",
-            "remote": _WORK_TYPES.get(work_type, ""),
-            "company": "",
-            "location_radius": "",
-        }
-    ]
-    params = {
-        "dataset_id": DATASET_ID,
-        "type": "discover_new",
-        "discover_by": "keyword",
-        "include_errors": "true",
-        "limit_per_input": MAX_RECORDS,
-    }
-    headers = {"Authorization": f"Bearer {settings.BRIGHTDATA_API_KEY}"}
-    try:
-        async with httpx.AsyncClient(base_url=API, headers=headers, timeout=30.0) as client:
-            resp = await client.post("/trigger", params=params, json=payload)
-            if resp.status_code != 200:
-                raise LinkedInError(f"Bright Data rechazó la búsqueda ({resp.status_code}): {resp.text[:120]}")
-            snapshot = resp.json().get("snapshot_id")
-            if not snapshot:
-                raise LinkedInError("Bright Data no devolvió un snapshot_id.")
+    params = {"keywords": keyword, "location": location, "f_TPR": _PAST_WEEK, "start": "0"}
+    if work_type in _WORK_TYPES:
+        params["f_WT"] = _WORK_TYPES[work_type]
+    slots = asyncio.Semaphore(_POSTINGS_AT_ONCE)
 
-            deadline = time.monotonic() + _POLL_DEADLINE_SECONDS
-            while True:
-                status = (await client.get(f"/progress/{snapshot}")).json().get("status")
-                if status == "ready":
-                    break
-                if status == "failed":
-                    raise LinkedInError("La búsqueda en LinkedIn falló en Bright Data.")
-                if time.monotonic() > deadline:
-                    raise LinkedInError("LinkedIn tardó demasiado en responder.")
-                await asyncio.sleep(_POLL_INTERVAL_SECONDS)
+    async with httpx.AsyncClient(headers=_HEADERS, timeout=15.0, follow_redirects=True) as client:
 
-            data = (await client.get(f"/snapshot/{snapshot}", params={"format": "json"})).json()
-    except httpx.HTTPError as exc:
-        raise LinkedInError("No se pudo contactar a Bright Data.") from exc
+        async def posting(job_id: str) -> dict[str, Optional[str]]:
+            async with slots:
+                try:
+                    return parse_posting(await _fetch(client, POSTING_URL.format(job_id)))
+                except (httpx.HTTPError, LinkedInError):
+                    return {}  # the card still shows, just without its description
 
-    if not isinstance(data, list):
-        raise LinkedInError("Bright Data devolvió una respuesta inesperada.")
-    return data
+        try:
+            cards = parse_cards(await _fetch(client, SEARCH_URL, params))
+        except httpx.HTTPError as exc:
+            raise LinkedInError("No se pudo contactar a LinkedIn.") from exc
+        postings = await asyncio.gather(*(posting(card["id"]) for card in cards))
 
-
-async def _refresh(key: Key) -> None:
-    """Background run for one query. Records its outcome in the caches and
-    never raises: nothing awaits this task, so an exception would vanish."""
-    try:
-        records = await _run_discovery(key)
-        now = time.time()
-        jobs = [job for job in (_normalize(r, key[2] or None) for r in records if isinstance(r, dict)) if job]
-        _query_cache[key] = {"cached_at": now, "results": jobs}
-        for stale_id in [j for j, e in _job_cache.items() if now - e["cached_at"] > _RESULTS_TTL_SECONDS]:
-            _job_cache.pop(stale_id, None)
-        for job in jobs:
-            _job_cache[job["linkedin_job_id"]] = {"cached_at": now, "job": job}
-        _failures.pop(key, None)
-    except Exception as exc:  # noqa: BLE001 — recorded for the next search, see docstring
-        logger.warning("LinkedIn discovery failed for %s: %s", key, exc)
-        message = str(exc) if isinstance(exc, LinkedInError) else "La búsqueda en LinkedIn falló."
-        _failures[key] = (time.time(), message)
-    finally:
-        _in_flight.pop(key, None)
+    return [_normalize(card, info, work_type or None) for card, info in zip(cards, postings)]
 
 
 async def search_linkedin_jobs(
@@ -237,34 +210,20 @@ async def search_linkedin_jobs(
     experience_level_filter: Optional[str] = None,
     remote_type_filter: Optional[str] = None,
 ) -> dict[str, Any]:
-    if not is_configured():
-        raise LinkedInError("LinkedIn (Bright Data) is not configured (missing BRIGHTDATA_API_KEY).")
-
     keyword = " ".join((q or "").split()).lower()
     if not keyword:
         return {"results": [], "has_more": False}
 
-    key: Key = (keyword, (location or settings.BRIGHTDATA_LINKEDIN_LOCATION).strip(), remote_type_filter or "")
+    key: Key = (keyword, (location or settings.LINKEDIN_LOCATION).strip(), remote_type_filter or "")
     now = time.time()
     cached = _query_cache.get(key)
-    fresh = cached is not None and now - cached["cached_at"] < _RESULTS_TTL_SECONDS
-
-    if not fresh and key not in _in_flight:
-        failure = _failures.get(key)
-        if failure is not None and now - failure[0] < _FAILURE_TTL_SECONDS:
-            if cached is None:
-                raise LinkedInError(failure[1])
-        elif await api_budget.try_consume_budget("linkedin"):
-            _in_flight[key] = asyncio.create_task(_refresh(key))
-        elif cached is None:
-            raise LinkedInError(
-                "Límite diario de búsquedas en LinkedIn alcanzado para cuidar el saldo — se reintenta mañana."
-            )
-
-    if cached is None:
-        raise LinkedInPending(
-            "Buscando en LinkedIn en segundo plano (tarda cerca de un minuto): vuelve a buscar en un momento."
-        )
+    if cached is None or now - cached["cached_at"] > _RESULTS_TTL_SECONDS:
+        jobs = await _search(key)
+        cached = _query_cache[key] = {"cached_at": now, "results": jobs}
+        for stale_id in [j for j, e in _job_cache.items() if now - e["cached_at"] > _RESULTS_TTL_SECONDS]:
+            del _job_cache[stale_id]
+        for job in jobs:
+            _job_cache[job["linkedin_job_id"]] = {"cached_at": now, "job": job}
 
     results = [
         job

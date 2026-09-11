@@ -28,11 +28,7 @@ from app.models.api_call_budget import ApiCallBudget
 
 DAILY_CALL_BUDGET = 8
 
-# LinkedIn (Bright Data) is billed per record, and a run is where that money
-# goes. Its service consumes this budget itself, right before starting a run,
-# so a search answered from cache never counts against the day — the router
-# skips it for that reason.
-QUOTA_LIMITED_PROVIDERS = {"adzuna", "serpapi", "linkedin"}
+QUOTA_LIMITED_PROVIDERS = {"adzuna", "serpapi"}
 
 
 async def try_consume_budget(provider: str) -> bool:

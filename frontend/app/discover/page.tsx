@@ -133,10 +133,10 @@ function isNotConfigured(error: string): boolean {
   return error.includes("is not configured");
 }
 
-// LinkedIn tarda más de lo que Discover puede esperar, así que en la primera
-// búsqueda arranca en segundo plano y responde con este aviso en vez de con
-// vacantes (backend/app/services/linkedin_jobs.py). No es una falla: buscar
-// de nuevo un minuto después ya las muestra, por eso lleva un chip neutro.
+// Una fuente que no respondió dentro del plazo de la búsqueda sigue cargando
+// en segundo plano y responde con este aviso en vez de con vacantes
+// (_STILL_LOADING en backend/app/api/v1/routers/jobs.py). No es una falla: la
+// próxima búsqueda ya la trae, por eso lleva un chip neutro.
 function isPending(error: string): boolean {
   return error.includes("segundo plano");
 }

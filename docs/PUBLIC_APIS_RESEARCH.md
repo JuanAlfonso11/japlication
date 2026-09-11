@@ -347,26 +347,31 @@ la misma forma que las 11 anteriores. El resultado:
 
 ---
 
-## 13. LinkedIn vía Bright Data *(integrada, de pago)*
+## 13. LinkedIn por sus páginas públicas *(integrada, gratis)*
 
-LinkedIn no da una API de búsqueda de empleos a un proyecto personal (sección siguiente). Bright Data
-sí da acceso: su dataset de ofertas de LinkedIn (`gd_lpfll7v5hcqtkxl6l`) busca por palabra clave sobre
-las páginas públicas de LinkedIn, sin sesión, así que no hay ninguna cuenta de LinkedIn en juego.
+LinkedIn no da una API de búsqueda de empleos a un proyecto personal (sección siguiente). Las páginas de
+empleo que sirve a visitantes sin sesión sí responden sin cuenta ni clave:
+`jobs-guest/jobs/api/seeMoreJobPostings/search` devuelve 10 tarjetas de vacantes en HTML y
+`jobs-guest/jobs/api/jobPosting/<id>` la ficha con la descripción completa, el nivel y el tipo de empleo.
+Portado de la skill `linkedin-search` de [MadsLorentzen/ai-job-search](https://github.com/MadsLorentzen/ai-job-search)
+(MIT). El 2026-09-11 reemplazó a la integración con Bright Data, que cobraba por resultado y tardaba
+45–90 s por corrida.
 
-- **Auth**: `BRIGHTDATA_API_KEY` (la guarda `bdata login`). Ubicación por defecto cuando Discover no
-  manda una: `BRIGHTDATA_LINKEDIN_LOCATION`.
-- **Costo**: por resultado (~$1.50 por 1.000). Controles en `backend/app/services/linkedin_jobs.py`:
-  caché de 6 h por búsqueda; máximo 8 corridas reales al día (`api_budget`, consumido solo al lanzar
-  una corrida, nunca al responder desde caché); 10 ofertas por corrida; sin palabra clave no se busca.
-- **Latencia**: una corrida tarda 45–90 s. Discover no la espera: la primera búsqueda la lanza en
-  segundo plano y esa fuente aparece como "buscando…"; buscar de nuevo un minuto después ya la muestra.
-- **Remoto**: se envía el filtro de modalidad de LinkedIn ("Remote"/"Hybrid"/"On-site"). Los registros
-  no traen un campo de modalidad propio, así que la etiqueta sale de ese filtro; si el título declara
-  otra modalidad, manda el título. Verificado en vivo (2026-09-11): "C# developer" + remoto +
-  República Dominicana devolvió 5 ofertas; 3 claramente remotas, 1 que mezclaba modalidades en la
-  descripción y 1 que no mencionaba ninguna.
-- **Campos útiles**: título, empresa, ubicación, fecha, nivel, tipo de empleo, postulantes, resumen y
-  Easy Apply. `apply_link` y el salario suelen venir vacíos.
+- **Auth**: ninguna. Ubicación por defecto cuando Discover no manda una: `LINKEDIN_LOCATION`.
+- **Términos**: el acuerdo de usuario de LinkedIn prohíbe el acceso automatizado. No hay ninguna cuenta en
+  juego; lo que LinkedIn puede hacer es limitar esta IP por un rato (HTTP 429), que Discover muestra como
+  error de esa fuente. Por eso el volumen se mantiene bajo (`backend/app/services/linkedin_jobs.py`): caché
+  de 1 h por búsqueda, una sola página de 10 vacantes de la última semana, 3 fichas a la vez, y sin
+  palabra clave no se busca.
+- **Latencia**: la búsqueda completa (página + 10 fichas) tardó 1.6 s; entra de sobra en el plazo de 12 s
+  de Discover.
+- **Remoto**: se envía el filtro de modalidad de LinkedIn (`f_WT`: 1 presencial, 2 remoto, 3 híbrido). Las
+  tarjetas no traen un campo de modalidad propio, así que la etiqueta sale de ese filtro; si el título
+  declara otra modalidad, manda el título.
+- **Verificado en vivo** (2026-09-11): "developer" + remoto + República Dominicana devolvió 10 vacantes
+  (BairesDev, Flatiron Software, FullStack, BlackStone eIT, Truelogic…), 9 con descripción completa.
+- **Campos útiles**: título, empresa, ubicación, fecha, descripción, nivel y tipo de empleo. Las tarjetas
+  no traen salario. Si una ficha falla, la vacante sale igual, sin descripción.
 
 ## Investigación adicional: ¿cómo se consigue acceso a las APIs de Indeed y LinkedIn?
 

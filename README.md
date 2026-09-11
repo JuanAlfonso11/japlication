@@ -1,6 +1,6 @@
 # JobFlow AI
 
-Plataforma personal de búsqueda y postulación a empleo: perfil de carrera (CV maestro, con importación desde PDF), búsqueda en vivo agregada contra 15 fuentes de empleo (LinkedIn incluido, vía Bright Data) + importación de vacantes desde URL, motor de coincidencia (match engine) híbrido, evaluador de CV, adaptación de CV, generación de cover letters, verificación de cuenta por correo, y una interfaz de decisión estilo Tinder.
+Plataforma personal de búsqueda y postulación a empleo: perfil de carrera (CV maestro, con importación desde PDF), búsqueda en vivo agregada contra 15 fuentes de empleo (LinkedIn incluido) + importación de vacantes desde URL, motor de coincidencia (match engine) híbrido, evaluador de CV, adaptación de CV, generación de cover letters, verificación de cuenta por correo, y una interfaz de decisión estilo Tinder.
 
 Uso personal — ver el diseño conceptual completo en [`docs/DESIGN.md`](docs/DESIGN.md), el contrato de API en [`docs/API_CONTRACT.md`](docs/API_CONTRACT.md), y cómo instalarla como app Android en [`docs/ANDROID_APP.md`](docs/ANDROID_APP.md).
 
@@ -106,12 +106,12 @@ npm run dev
 
 ## Búsqueda en vivo
 
-`GET /jobs/search/aggregate` combina en una sola búsqueda **15 fuentes**: 11 que no requieren
-ningún tipo de autenticación (sin API key, sin OAuth, sin registro), 3 con clave gratuita de registro
-instantáneo y LinkedIn vía Bright Data (de pago por resultado). Las que tienen clave se saltan solas si
-no están configuradas. Los resultados se deduplican antes de devolverse
+`GET /jobs/search/aggregate` combina en una sola búsqueda **15 fuentes**: 12 que no requieren
+ningún tipo de autenticación (sin API key, sin OAuth, sin registro; LinkedIn entre ellas, por sus
+páginas públicas de empleo) y 3 con clave gratuita de registro instantáneo. Las que tienen clave se
+saltan solas si no están configuradas. Los resultados se deduplican antes de devolverse
 (`backend/app/services/job_dedupe.py`). Investigación completa —incluyendo por qué se descartaron
-varias y por qué LinkedIn solo es viable a través de Bright Data— en
+varias y cómo entra LinkedIn sin cuenta ni API— en
 [`docs/PUBLIC_APIS_RESEARCH.md`](docs/PUBLIC_APIS_RESEARCH.md):
 
 | Proveedor | Auth | Servicio backend |
@@ -127,10 +127,10 @@ varias y por qué LinkedIn solo es viable a través de Bright Data— en
 | Get on Board | — | `getonbrd.py` |
 | Working Nomads | — | `workingnomads.py` |
 | Remote OK | — | `remoteok.py` |
+| LinkedIn (páginas públicas) | — | `linkedin_jobs.py` |
 | Adzuna | clave gratis | `adzuna.py` |
 | USAJobs | clave gratis | `usajobs.py` |
 | Google Jobs (SerpApi) | clave gratis | `serpapi_jobs.py` |
-| LinkedIn (Bright Data) | clave de pago, por resultado | `linkedin_jobs.py` |
 
 Remote OK pide, en sus términos, que se enlace de vuelta a su ficha y se los nombre como fuente: por
 eso su `source_url` apunta a su página y nunca al `apply_url` del empleador.
