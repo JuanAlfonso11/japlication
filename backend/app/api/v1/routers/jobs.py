@@ -742,6 +742,20 @@ def _aggregate_sort_key(result: ExternalJobResult) -> datetime:
     return posted_at
 
 
+# The aggregate used to wait for its slowest provider, and a slow upstream can
+# take up to its 20-30s httpx timeout — while the frontend gives up at 20s
+# (REQUEST_TIMEOUT_MS). Every retry then started another full fan-out on top of
+# the unfinished ones, so the next attempt was slower still. The deadline
+# answers with whatever finished; the rest are NOT cancelled, so a slow feed
+# still fills its provider cache and the next search gets it instantly. The
+# message keeps "segundo plano" so Discover shows its neutral "buscando…" chip.
+_AGGREGATE_DEADLINE_SECONDS = 12
+_STILL_LOADING = "Tardó en responder; sigue cargando en segundo plano para la próxima búsqueda."
+# Strong references: the event loop only holds tasks weakly, and a pending one
+# with no other reference can be garbage-collected mid-request.
+_stragglers: set[asyncio.Task] = set()
+
+
 @router.get("/jobs/search/aggregate", response_model=AggregateSearchResponse)
 @limiter.limit("10/minute")
 async def search_jobs_aggregate(
@@ -770,12 +784,23 @@ async def search_jobs_aggregate(
     independent and defaults to "remote" to preserve the historical
     default of showing only remote-friendly postings when no filters are
     set."""
-    outcomes = await asyncio.gather(
-        *[
-            _run_search_provider(p, q, location, experience_level_filter, remote_type_filter, category)
-            for p in _SEARCH_PROVIDERS
-        ]
-    )
+    tasks = {
+        provider: asyncio.create_task(
+            _run_search_provider(provider, q, location, experience_level_filter, remote_type_filter, category)
+        )
+        for provider in _SEARCH_PROVIDERS
+    }
+    await asyncio.wait(tasks.values(), timeout=_AGGREGATE_DEADLINE_SECONDS)
+
+    outcomes = []
+    for provider, task in tasks.items():
+        if task.done():
+            # _run_search_provider never raises — failures come back as its error.
+            outcomes.append(task.result())
+        else:
+            _stragglers.add(task)
+            task.add_done_callback(_stragglers.discard)
+            outcomes.append((provider, [], _STILL_LOADING))
 
     all_results: list[ExternalJobResult] = []
     sources: list[AggregateSourceStatus] = []
