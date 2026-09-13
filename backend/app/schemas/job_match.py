@@ -9,8 +9,10 @@ class MatchResult(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     overall_score: float
-    technical_score: float
-    experience_score: float
+    #: None on any sub-score means the posting gave nothing to judge it by —
+    #: the UI hides that bar rather than drawing a 0% or a misleading 100%.
+    technical_score: Optional[float] = None
+    experience_score: Optional[float] = None
     semantic_score: Optional[float] = None
     matched_skills: list[str] = Field(default_factory=list)
     missing_skills: list[str] = Field(default_factory=list)

@@ -109,11 +109,29 @@ class TestTechnicalScore:
         assert score == 100.0
         assert set(matched) == {"JavaScript", "Kubernetes"}
 
-    def test_no_required_skills_scores_100(self):
+    def test_no_required_skills_is_unknown_not_perfect(self):
+        """A posting whose skills never parsed says nothing about technical
+        fit. Scoring it 100 is what put 17 of the 19 highest-scoring jobs on
+        this database — a copywriter and a sales role among them — above every
+        posting the engine could actually read."""
         score, matched, missing = compute_technical_score([{"name": "Python"}], [])
-        assert score == 100.0
+        assert score is None
         assert matched == []
         assert missing == []
+
+    def test_soft_skills_alone_are_unknown_not_a_perfect_match(self):
+        """Every posting wants "Communication". Matching on it and nothing
+        else is not a technical match — it is how a freelance writing job
+        scored technical 100 against a backend profile."""
+        score, matched, missing = compute_technical_score(
+            [{"name": "Python"}, {"name": "Communication"}],
+            [
+                {"name": "Communication", "importance": "required"},
+                {"name": "Collaboration", "importance": "nice_to_have"},
+            ],
+        )
+        assert score is None
+        assert matched == []
 
 
 # ---------------------------------------------------------------------------
@@ -170,6 +188,16 @@ class TestExperienceYears:
         assert required is None
         assert 0 <= score <= 100
 
+    def test_years_without_skills_to_judge_relevance_is_unknown(self):
+        """"2+ years" on a posting with no parsed skills used to score 100%
+        off years of unrelated work — the sales posting the audit flagged."""
+        experience = [{"start_date": "2020-01", "end_date": None, "skills_used": ["Python"]}]
+        score, required, relevant = compute_experience_score(
+            experience, ["2+ years of sales experience"], "", set()
+        )
+        assert score is None
+        assert required == 2.0
+
     def test_experience_score_zero_relevant_years_no_requirement(self):
         score, required, relevant = compute_experience_score([], [], "", {"Python"})
         assert required is None
@@ -218,6 +246,19 @@ class TestComputeMatch:
         assert isinstance(result["matched_skills"], list)
         assert isinstance(result["missing_skills"], list)
         assert isinstance(result["concerns"], list)
+
+    def test_a_posting_with_nothing_parsed_scores_on_semantics_alone(self):
+        """The regression that made Home's queue useless: no parsed skills and
+        no stated years meant technical 100 + experience 100, so the job was
+        already at 80 before a word of the posting was read."""
+        profile = make_profile()
+        job = make_job(skills_required=[], requirements=[], description="Sell our product to new clients.")
+        result = compute_match(profile, job, use_llm=False)
+
+        assert result["technical_score"] is None
+        assert result["experience_score"] is None
+        assert result["overall_score"] == result["semantic_score"]
+        assert result["overall_score"] < 40
 
     def test_missing_skills_produce_concern(self):
         profile = make_profile(skills=[{"name": "Java"}], experience=[])

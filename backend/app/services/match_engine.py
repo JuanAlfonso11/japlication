@@ -1,6 +1,12 @@
 """Hybrid weighted match engine between a user's career_profile and a job.
 
-overall_score = 0.5 * technical_score + 0.3 * experience_score + 0.2 * semantic_score
+overall_score = weighted average of technical (0.5), experience (0.3) and
+semantic (0.2) — taken over the components the posting actually gives
+something to judge. A sub-score of None means unknown (no parsed skills, no
+stated years requirement): it is left out and the remaining weights are
+renormalized, because counting an unknown as a perfect 100 ranked the
+postings nobody could read above every job the engine could.
+
 (each sub-score is 0-100; overall rounded to 2 decimals)
 """
 
@@ -20,7 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.anthropic_client import get_anthropic_client
 from app.models.job_match import JobMatch
-from app.services.skills_taxonomy import canonical_skill_set, normalize_skill
+from app.services.skills_taxonomy import SOFT_SKILLS, canonical_skill_set, normalize_skill
 
 if TYPE_CHECKING:
     from app.models.career_profile import CareerProfile
@@ -81,11 +87,25 @@ def _profile_skill_set(profile_skills: list[dict[str, Any]]) -> set[str]:
 
 def compute_technical_score(
     profile_skills: list[dict[str, Any]], job_skills_required: list[dict[str, Any]]
-) -> tuple[float, list[str], list[str]]:
-    """Returns (technical_score 0-100, matched_skills, missing_skills)."""
+) -> tuple[Optional[float], list[str], list[str]]:
+    """Returns (technical_score 0-100 or None, matched_skills, missing_skills).
+
+    None means unknown, and that distinction is the whole point: a posting
+    whose skills never parsed tells us nothing about technical fit, but it
+    used to score 100 for it. Measured on this database, all 17 such jobs got
+    technical 100 and experience 100, which put them at 80 overall — 17 of the
+    19 jobs scoring 75+, ranked above every posting the engine could actually
+    read. compute_match leaves an unknown component out of the average.
+    """
     job_skill_map = _job_skill_map(job_skills_required)
     if not job_skill_map:
-        return 100.0, [], []
+        return None, [], []
+    # The same reasoning one step further: every posting wants
+    # "Communication". One whose only parsed requirements are soft skills has
+    # said nothing about technical fit either — a freelance writing job
+    # scored a perfect technical 100 here on Communication alone.
+    if all(skill in SOFT_SKILLS for skill in job_skill_map):
+        return None, [], []
 
     profile_set = _profile_skill_set(profile_skills)
 
@@ -176,14 +196,30 @@ def compute_experience_score(
     job_requirements: list[str],
     job_description: str,
     job_required_skills: set[str],
-) -> tuple[float, Optional[float], float]:
-    """Returns (experience_score 0-100, required_years|None, relevant_years)."""
+) -> tuple[Optional[float], Optional[float], float]:
+    """Returns (experience_score 0-100 or None, required_years|None, relevant_years).
+
+    None is "unknown", for the same reason as the technical score: with no
+    stated years requirement AND no parsed skills to measure relevance
+    against, compute_relevant_experience_years falls back to summing *all*
+    experience, so the old curve handed a near-100 to postings nothing was
+    known about.
+    """
     texts = list(job_requirements or []) + [job_description or ""]
     required_years = extract_required_years(*texts)
     relevant_years = compute_relevant_experience_years(experience, job_required_skills)
 
+    # No parsed skills means no way to tell which of the candidate's years are
+    # *relevant* — compute_relevant_experience_years falls back to summing all
+    # of them. A sales posting asking for "2+ years" then scored 100% on years
+    # of backend work, which is how it stayed near the top of the queue with
+    # its technical score already unknown.
+    if not job_required_skills:
+        return None, required_years, relevant_years
+
     if required_years is None or required_years <= 0:
-        # No explicit requirement found: score gracefully based on whether the
+        # The posting names skills but no years: the entries that used those
+        # skills are real evidence, so score gracefully on whether the
         # candidate has *any* relevant experience, capped at 100.
         if relevant_years <= 0:
             return 60.0, required_years, relevant_years  # neutral-ish default
@@ -370,6 +406,10 @@ def compute_match(profile, job, use_llm: bool = True) -> dict[str, Any]:
     """
     job_skill_map = _job_skill_map(job.skills_required or [])
     job_required_skill_set = {s for s, imp in job_skill_map.items() if imp == "required"} or set(job_skill_map)
+    # Soft skills can't tell us which of the candidate's years are relevant
+    # either: a freelance writing job asking only for "Communication" matched
+    # every year of backend work and scored 60 on experience alone.
+    job_required_skill_set -= SOFT_SKILLS
 
     technical_score, matched_skills, missing_skills = compute_technical_score(
         profile.skills or [], job.skills_required or []
@@ -388,11 +428,21 @@ def compute_match(profile, job, use_llm: bool = True) -> dict[str, Any]:
     if semantic_score is None:
         semantic_score = compute_semantic_score(profile_text, job_text)
 
-    overall = (
-        TECHNICAL_WEIGHT * technical_score
-        + EXPERIENCE_WEIGHT * experience_score
-        + SEMANTIC_WEIGHT * semantic_score
-    )
+    # Only the components the posting gave us something to judge count, and
+    # their weights are renormalized over what is left. Counting an unknown
+    # as 100 (what this did before) meant a posting with no parsed skills and
+    # no stated years started at 80 before anything about the actual job was
+    # considered; counting it as 0 would be just as invented, only pessimistic.
+    # With nothing but the semantic score left, that is what the job scores —
+    # which is how a sales posting stops outranking every engineering one.
+    components = [
+        (TECHNICAL_WEIGHT, technical_score),
+        (EXPERIENCE_WEIGHT, experience_score),
+        (SEMANTIC_WEIGHT, semantic_score),
+    ]
+    known = [(weight, score) for weight, score in components if score is not None]
+    known_weight = sum(weight for weight, _ in known)
+    overall = sum(weight * score for weight, score in known) / known_weight if known_weight else 0.0
 
     concerns = build_concerns(
         required_years, relevant_years, missing_skills, job.seniority, profile.experience or []

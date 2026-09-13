@@ -123,6 +123,22 @@ SKILLS_TAXONOMY: dict[str, list[str]] = {
     "Collaboration": ["collaboration", "teamwork", "trabajo en equipo"],
 }
 
+#: The soft-skill block above, named so the match engine can tell "this
+#: posting asks for Communication" from "this posting asks for Python".
+#: Every posting asks for communication; matching on it says nothing about
+#: technical fit, and a posting whose *only* parsed requirements are these
+#: scored a perfect technical 100 (see match_engine.compute_technical_score).
+SOFT_SKILLS: frozenset[str] = frozenset(
+    {
+        "Leadership",
+        "Communication",
+        "Problem Solving",
+        "Project Management",
+        "Mentoring",
+        "Collaboration",
+    }
+)
+
 # Flat lookup: normalized synonym string -> canonical skill name.
 _SYNONYM_TO_CANONICAL: dict[str, str] = {}
 for _canonical, _synonyms in SKILLS_TAXONOMY.items():
@@ -144,6 +160,22 @@ def normalize_skill(raw: str) -> str:
     return raw.strip()
 
 
+#: Spellings that must never match on their own. Every canonical name is
+#: also registered as its own synonym (see the loop above), so these ordinary
+#: English words — and two single letters — fired on prose. Measured on this
+#: database: "Go" was a required skill on 46 of 196 postings, "REST APIs" on
+#: 48 and "C" on 54, the last mostly from "C++"/"C#", since the boundary
+#: guard treats "+" and "#" as separators. This sentence, with nothing
+#: technical in it, extracted five skills: "The rest of the team will go to
+#: the spring offsite."
+#: The longer spellings still match ("golang", "rest api", "spring boot",
+#: "c programming"), so a posting that really asks for them keeps them.
+#: "react" and "swift" stay matchable: unlike these, that is how postings
+#: normally write the technology, and losing them costs more than the
+#: occasional "react to feedback".
+NEVER_MATCH_BARE: frozenset[str] = frozenset({"go", "rest", "spring", "c", "r"})
+
+
 def extract_skills_from_text(text: str) -> list[str]:
     """Scan free text for occurrences of any taxonomy skill/synonym and return
     the deduplicated list of canonical skill names found, in order of first
@@ -154,6 +186,8 @@ def extract_skills_from_text(text: str) -> list[str]:
     found: list[str] = []
     seen: set[str] = set()
     for synonym in _ALL_SYNONYMS_SORTED:
+        if synonym in NEVER_MATCH_BARE:
+            continue
         canonical = _SYNONYM_TO_CANONICAL[synonym]
         if canonical in seen:
             continue

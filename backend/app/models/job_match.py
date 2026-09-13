@@ -20,8 +20,12 @@ class JobMatch(Base):
         UUID(as_uuid=True), ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False
     )
     overall_score: Mapped[float] = mapped_column(Numeric(5, 2), nullable=False)
-    technical_score: Mapped[float] = mapped_column(Numeric(5, 2), nullable=False)
-    experience_score: Mapped[float] = mapped_column(Numeric(5, 2), nullable=False)
+    #: NULL means "unknown", not zero and certainly not 100: a posting whose
+    #: skills never parsed says nothing about technical fit, and a posting
+    #: that states no years requirement says nothing about experience fit.
+    #: See match_engine.compute_match, which leaves them out of the average.
+    technical_score: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)
+    experience_score: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)
     semantic_score: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)
     matched_skills: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     missing_skills: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)

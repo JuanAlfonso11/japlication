@@ -139,8 +139,12 @@ CREATE TABLE job_matches (
     user_id             UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     job_id              UUID NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
     overall_score       NUMERIC(5,2) NOT NULL,      -- 0-100
-    technical_score     NUMERIC(5,2) NOT NULL,
-    experience_score    NUMERIC(5,2) NOT NULL,
+    -- NULL on a sub-score means unknown: the posting listed no skills, or
+    -- stated no years requirement. Storing 100 for that (what this did until
+    -- migration 0008) ranked postings nothing was known about above every
+    -- job the engine could read. See services/match_engine.py.
+    technical_score     NUMERIC(5,2),
+    experience_score    NUMERIC(5,2),
     semantic_score      NUMERIC(5,2),
     matched_skills      JSONB NOT NULL DEFAULT '[]'::jsonb,
     missing_skills      JSONB NOT NULL DEFAULT '[]'::jsonb,
