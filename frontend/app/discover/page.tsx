@@ -377,7 +377,7 @@ function DiscoverContent() {
                 onChange={(e) => setQ(e.target.value)}
                 className="col-span-2 sm:min-w-[180px] sm:flex-1"
               >
-                <option value="">Cualquier puesto</option>
+                <option value="">Puesto</option>
                 {JOB_TITLE_GROUPS.map((group) => (
                   <optgroup key={group.label} label={group.label}>
                     {group.options.map((title) => (
@@ -393,7 +393,7 @@ function DiscoverContent() {
                 onChange={(e) => setLocation(e.target.value)}
                 className="sm:min-w-[160px] sm:flex-1"
               >
-                <option value="">Cualquier ubicación</option>
+                <option value="">Ubicación</option>
                 {LOCATION_OPTIONS.map((loc) => (
                   <option key={loc} value={loc}>
                     {loc}
@@ -405,7 +405,7 @@ function DiscoverContent() {
                 onChange={(e) => setRemoteType(e.target.value as RemoteType | "")}
                 className="sm:min-w-[160px] sm:flex-1"
               >
-                <option value="">Cualquier modalidad</option>
+                <option value="">Modalidad</option>
                 {REMOTE_TYPES.map((rt) => (
                   <option key={rt} value={rt}>
                     {REMOTE_TYPE_LABELS[rt]}
@@ -417,7 +417,7 @@ function DiscoverContent() {
                 onChange={(e) => setExperienceLevelFilter(e.target.value as ExperienceLevel | "")}
                 className="sm:min-w-[160px] sm:flex-1"
               >
-                <option value="">Cualquier nivel</option>
+                <option value="">Nivel</option>
                 {EXPERIENCE_LEVELS.map((lvl) => (
                   <option key={lvl} value={lvl}>
                     {EXPERIENCE_LEVEL_LABELS[lvl]}

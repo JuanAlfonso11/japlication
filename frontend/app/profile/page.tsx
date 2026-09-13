@@ -433,8 +433,8 @@ function ProfileContent() {
           <div className="mt-3 rounded-lg bg-amber-50 p-3 text-xs text-amber-800 ring-1 ring-inset ring-amber-600/20 dark:bg-amber-900/20 dark:text-amber-300 dark:ring-amber-400/30">
             <p className="font-semibold">
               {uploadNotice.generatedBy === "ai"
-                ? "Analizado con IA — revisa los campos rellenados abajo y dale a Guardar."
-                : "Analizado con coincidencia básica de texto (no hay ANTHROPIC_API_KEY configurada) — revisa con cuidado antes de guardar."}
+                ? "Analizado con IA. Revisa los campos rellenados abajo y dale a Guardar."
+                : "Analizado sin IA, con coincidencia básica de texto. Revisa con cuidado antes de guardar."}
             </p>
             {uploadNotice.warnings.map((w, i) => (
               <p key={i} className="mt-1">
@@ -476,8 +476,8 @@ function ProfileContent() {
           <div className="mt-3 rounded-lg bg-amber-50 p-3 text-xs text-amber-800 ring-1 ring-inset ring-amber-600/20 dark:bg-amber-900/20 dark:text-amber-300 dark:ring-amber-400/30">
             <p className="font-semibold">
               {improveNotice.generatedBy === "ai"
-                ? "Reescrito con IA — revisa los campos abajo (Resumen y Experiencia) y dale a Guardar perfil."
-                : "Reescrito con reglas básicas (no hay ANTHROPIC_API_KEY configurada) — revisa antes de guardar."}
+                ? "Reescrito con IA. Revisa los campos abajo (Resumen y Experiencia) y dale a Guardar perfil."
+                : "Reescrito sin IA, con reglas básicas. Revisa antes de guardar."}
             </p>
             {improveNotice.changeLog.map((line, i) => (
               <p key={i} className="mt-1">

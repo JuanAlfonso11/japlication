@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import RouteGuard from "@/components/RouteGuard";
 import Spinner from "@/components/Spinner";
@@ -174,13 +175,24 @@ function ManualJobForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
       {error && <ErrorNotice message={error} />}
+      {/* Título, Empresa and Descripción are the three the form refuses
+          without, and they looked exactly like the optional ones until a
+          submit failed. */}
+      <p className="text-[11px] text-gray-400 dark:text-gray-400">
+        Los campos con <span className="font-bold text-brand-600 dark:text-brand-400">*</span> son
+        obligatorios.
+      </p>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <label className="block">
-          <span className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">Título</span>
+          <span className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+            Título <span className="font-bold text-brand-600 dark:text-brand-400">*</span>
+          </span>
           <input required className={inputClass} value={title} onChange={(e) => setTitle(e.target.value)} />
         </label>
         <label className="block">
-          <span className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">Empresa</span>
+          <span className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+            Empresa <span className="font-bold text-brand-600 dark:text-brand-400">*</span>
+          </span>
           <input required className={inputClass} value={company} onChange={(e) => setCompany(e.target.value)} />
         </label>
         <label className="block sm:col-span-2">
@@ -189,7 +201,9 @@ function ManualJobForm({
         </label>
       </div>
       <label className="block">
-        <span className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">Descripción completa</span>
+        <span className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+          Descripción completa <span className="font-bold text-brand-600 dark:text-brand-400">*</span>
+        </span>
         <textarea
           required
           className={`${textareaClass} min-h-[120px]`}
@@ -274,9 +288,12 @@ function ImportContent() {
         <p className="mt-1 max-w-[52ch] text-sm leading-relaxed text-gray-500 dark:text-gray-400">
           Pega la URL o el texto de una vacante y JobPilot la convierte en un trabajo estructurado,
           comparado contra tu perfil. ¿Buscas vacantes nuevas? Prueba{" "}
-          <a href="/discover" className="font-semibold text-brand-600 hover:underline dark:text-brand-400">
+          {/* A plain <a> reloaded the whole WebView — on the phone that is
+              the app restarting, splash and all, to reach a tab that is one
+              row away in the bottom bar. */}
+          <Link href="/discover" className="font-semibold text-brand-600 hover:underline dark:text-brand-400">
             Buscar
-          </a>
+          </Link>
           .
         </p>
       </div>

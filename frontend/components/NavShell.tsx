@@ -39,6 +39,17 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
   const { user, token } = useAuth();
   const [staleCount, setStaleCount] = useState(0);
 
+  // Every tab change starts at the top. The router keeps the scroll position
+  // when only the route changes inside this layout, so tapping Pipeline
+  // after scrolling Agregar to the bottom opened the list halfway down, with
+  // no title, counter or filters in sight.
+  // Trade-off worth naming: going Back also lands at the top now. Keeping
+  // the old position there needs popstate tracking, which is a bigger change
+  // than the bug being fixed here.
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+
   useEffect(() => {
     if (!token) return;
     let cancelled = false;
