@@ -80,7 +80,7 @@ function ErrorRow({ entry }: { entry: ErrorLogEntry }) {
 
       {open && (
         <div className="border-t border-gray-200 px-3 pb-3 pt-2.5 dark:border-gray-700">
-          <p className="mb-2 font-mono text-[11px] text-gray-400 dark:text-gray-500">
+          <p className="mb-2 font-mono text-[11px] text-gray-400 dark:text-gray-400">
             id: {entry.request_id} · {new Date(entry.created_at).toLocaleString()}
           </p>
           {entry.stack ? (
@@ -88,10 +88,10 @@ function ErrorRow({ entry }: { entry: ErrorLogEntry }) {
               {entry.stack}
             </pre>
           ) : (
-            <p className="text-[11px] text-gray-400 dark:text-gray-500">Sin traza disponible.</p>
+            <p className="text-[11px] text-gray-400 dark:text-gray-400">Sin traza disponible.</p>
           )}
           {entry.user_agent && (
-            <p className="mt-2 break-words text-[10px] text-gray-400 dark:text-gray-500">
+            <p className="mt-2 break-words text-[10px] text-gray-400 dark:text-gray-400">
               {entry.user_agent}
             </p>
           )}

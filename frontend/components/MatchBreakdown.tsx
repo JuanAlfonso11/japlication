@@ -5,7 +5,7 @@ import type { MatchResult } from "@/lib/types";
  * separately-styled panels. */
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.08em] text-gray-400 dark:text-gray-500">
+    <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.08em] text-gray-400 dark:text-gray-400">
       {children}
     </p>
   );
@@ -53,13 +53,41 @@ function SkillPills({ skills, tone }: { skills: string[]; tone: "matched" | "mis
 }
 
 export default function MatchBreakdown({ match }: { match: MatchResult }) {
+  // A null sub-score is the posting telling us nothing, not a zero. Drawing
+  // it would be inventing a number — and drawing it as 100%, which is what
+  // the engine used to store, is how a sales job ended up tied with the
+  // engineering ones.
+  const bars = [
+    { label: "Técnico", value: match.technical_score },
+    { label: "Experiencia", value: match.experience_score },
+    { label: "Afinidad", value: match.semantic_score },
+  ];
+  const known = bars.filter((b) => b.value !== null && b.value !== undefined);
+  const unknown = bars.filter((b) => b.value === null || b.value === undefined);
+
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <ScoreBar label="Técnico" value={match.technical_score} />
-        <ScoreBar label="Experiencia" value={match.experience_score} />
-        <ScoreBar label="Afinidad" value={match.semantic_score} />
-      </div>
+      {known.length > 0 && (
+        <div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            {known.map((b) => (
+              <ScoreBar key={b.label} label={b.label} value={b.value as number} />
+            ))}
+          </div>
+          <p className="mt-2 text-[11px] leading-snug text-gray-400 dark:text-gray-400">
+            Técnico compara las habilidades que pide la vacante con las tuyas; Experiencia, los años que
+            pide con los tuyos; Afinidad, cuánto se parece el texto de la vacante al de tu perfil.
+          </p>
+        </div>
+      )}
+
+      {unknown.length > 0 && (
+        <p className="text-[11px] leading-snug text-gray-400 dark:text-gray-400">
+          Sin datos para {unknown.map((b) => b.label.toLowerCase()).join(" ni ")}: esta vacante no
+          detalla {unknown.some((b) => b.label === "Técnico") ? "requisitos" : "años de experiencia"}, así
+          que el puntaje sale de lo demás.
+        </p>
+      )}
 
       {match.matched_skills.length > 0 && (
         <div>

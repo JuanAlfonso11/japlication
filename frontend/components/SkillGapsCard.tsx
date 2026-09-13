@@ -67,13 +67,13 @@ export default function SkillGapsCard() {
               <span className="truncate text-sm font-semibold text-gray-800 dark:text-gray-200">
                 {gap.skill}
               </span>
-              <span className="tabular shrink-0 text-[11px] font-bold text-gray-400 dark:text-gray-500">
+              <span className="tabular shrink-0 text-[11px] font-bold text-gray-400 dark:text-gray-400">
                 {gap.percentage}%
               </span>
             </div>
             <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800">
               <div
-                className="h-full rounded-full bg-gradient-to-r from-brand-500 to-brand-700 transition-[width] duration-500 ease-out"
+                className="h-full rounded-full bg-brand-600 transition-[width] duration-500 ease-out"
                 /* Scaled against the top gap, not against 100 — with a
                    worst gap of 40% every bar would otherwise be a stub and
                    the comparison, which is the whole point, disappears. */
@@ -84,7 +84,7 @@ export default function SkillGapsCard() {
         ))}
       </ul>
 
-      <p className="mt-4 text-[11px] leading-relaxed text-gray-400 dark:text-gray-500">
+      <p className="mt-4 text-[11px] leading-relaxed text-gray-400 dark:text-gray-400">
         Si ya tienes alguna de estas, agrégala a tus habilidades arriba: el score sube solo.
       </p>
     </section>

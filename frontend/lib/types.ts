@@ -486,9 +486,12 @@ export interface CVEvaluation {
 
 export interface MatchResult {
   overall_score: number;
-  technical_score: number;
-  experience_score: number;
-  semantic_score: number;
+  // null means the posting gave nothing to judge that dimension by (no
+  // parsed skills, no stated years). The breakdown hides that bar instead
+  // of drawing a 0% — or, as it used to, a perfect 100%.
+  technical_score: number | null;
+  experience_score: number | null;
+  semantic_score: number | null;
   matched_skills: string[];
   missing_skills: string[];
   concerns: string[];

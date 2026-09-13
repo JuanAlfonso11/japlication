@@ -149,7 +149,7 @@ export default function RegisterPage() {
               <li
                 key={rule.label}
                 className={`flex items-center gap-1.5 text-[11px] font-medium transition-colors ${
-                  rule.ok ? "text-emerald-600 dark:text-emerald-400" : "text-gray-400 dark:text-gray-500"
+                  rule.ok ? "text-emerald-600 dark:text-emerald-400" : "text-gray-400 dark:text-gray-400"
                 }`}
               >
                 <span

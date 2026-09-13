@@ -88,7 +88,10 @@ export default function InterviewPrepCard({ jobId }: { jobId: string }) {
                 </div>
 
                 {q.why && (
-                  <p className="mb-2 text-[11px] italic text-gray-500 dark:text-gray-400">{q.why}</p>
+                  // Upright, not italic: an italic accent line is decoration
+                  // borrowed from template layouts, and at 11px it is the
+                  // hardest text on the card to read.
+                  <p className="mb-2 text-[11px] text-gray-500 dark:text-gray-400">{q.why}</p>
                 )}
 
                 {q.talking_points.length > 0 && (
@@ -108,9 +111,9 @@ export default function InterviewPrepCard({ jobId }: { jobId: string }) {
             );
           })}
 
-          <p className="text-[11px] leading-relaxed text-gray-400 dark:text-gray-500">
+          <p className="text-[11px] leading-relaxed text-gray-400 dark:text-gray-400">
             {prep.generated_by === "ai"
-              ? "Generado con IA a partir de tu perfil y esta vacante — nunca inventa experiencia que no declaraste."
+              ? "Generado con IA a partir de tu perfil y esta vacante. Nunca inventa experiencia que no declaraste."
               : "Generado a partir de tu perfil y esta vacante, sin IA. Los puntos salen de tus propias viñetas."}
           </p>
         </div>

@@ -118,7 +118,7 @@ export default function ExperienceSection({
                       type="button"
                       onClick={() => removeBullet(i, bi)}
                       aria-label="Eliminar punto"
-                      className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-rose-600 dark:text-gray-500 dark:hover:bg-gray-800 dark:hover:text-rose-400"
+                      className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-rose-600 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-rose-400"
                     >
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
                     </button>

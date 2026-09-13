@@ -49,7 +49,7 @@ export default class ErrorBoundary extends Component<
           Esta pantalla se rompió
         </p>
         <p className="max-w-[38ch] text-sm leading-relaxed text-gray-500 dark:text-gray-400">
-          Ya quedó registrado con el detalle técnico — lo puedes ver en Perfil → Análisis → Errores
+          Ya quedó registrado con el detalle técnico: lo puedes ver en Perfil → Análisis → Errores
           recientes.
         </p>
         <div className="mt-2 flex gap-2">
@@ -68,7 +68,7 @@ export default class ErrorBoundary extends Component<
             Ir al inicio
           </button>
         </div>
-        <p className="mt-1 max-w-[44ch] break-words font-mono text-[11px] text-gray-400 dark:text-gray-500">
+        <p className="mt-1 max-w-[44ch] break-words font-mono text-[11px] text-gray-400 dark:text-gray-400">
           {this.state.error.name}: {this.state.error.message}
         </p>
       </div>

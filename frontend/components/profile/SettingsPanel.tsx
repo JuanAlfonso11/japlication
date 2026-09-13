@@ -87,7 +87,7 @@ export default function SettingsPanel() {
         onClick={() => setOpen((v) => !v)}
         aria-label="Configuración"
         aria-expanded={open}
-        className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-gray-400 shadow-sm ring-1 ring-gray-100 hover:bg-gray-100 hover:text-gray-600 dark:bg-gray-900 dark:text-gray-500 dark:ring-gray-800 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+        className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-gray-400 shadow-sm ring-1 ring-gray-100 hover:bg-gray-100 hover:text-gray-600 dark:bg-gray-900 dark:text-gray-400 dark:ring-gray-800 dark:hover:bg-gray-800 dark:hover:text-gray-300"
       >
         <GearIcon className="h-5 w-5" />
       </button>

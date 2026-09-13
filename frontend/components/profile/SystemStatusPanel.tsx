@@ -45,7 +45,7 @@ export default function SystemStatusPanel() {
       description="Los procesos que corren en segundo plano en tu PC — no necesitas abrir Task Scheduler para saber si siguen vivos."
     >
       {error && <p className="text-xs text-rose-600 dark:text-rose-400">{error}</p>}
-      {heartbeats === null && !error && <p className="text-xs text-gray-400 dark:text-gray-500">Cargando…</p>}
+      {heartbeats === null && !error && <p className="text-xs text-gray-400 dark:text-gray-400">Cargando…</p>}
       {heartbeats && (
         <div className="space-y-2">
           {EXPECTED_JOBS.map((expected) => {
@@ -63,7 +63,7 @@ export default function SystemStatusPanel() {
                   <span className={`h-2 w-2 shrink-0 rounded-full ${dotColor}`} />
                   <span className="text-gray-700 dark:text-gray-300">{expected.label}</span>
                 </div>
-                <span className="shrink-0 text-xs text-gray-400 dark:text-gray-500">
+                <span className="shrink-0 text-xs text-gray-400 dark:text-gray-400">
                   {hb ? relativeTime(hb.last_run_at) : "sin datos aún"}
                 </span>
               </div>

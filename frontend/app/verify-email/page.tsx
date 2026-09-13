@@ -66,18 +66,28 @@ function VerifyEmailContent() {
             sin restricciones.
           </p>
           {token && (
-            <p className="text-xs text-gray-400 dark:text-gray-500">
+            <p className="text-xs text-gray-400 dark:text-gray-400">
               Te llevamos a Home en {redirectIn}s…
             </p>
           )}
         </>
       ) : status === "pending" ? (
         <>
-          <span className="text-4xl">📬</span>
+          {/* The app draws its own icons; a stock emoji rendered in whatever
+              face the OS ships and matched nothing else on screen. */}
+          <span
+            aria-hidden="true"
+            className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-400"
+          >
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="5" width="18" height="14" rx="2" />
+              <path d="m3 7 9 6 9-6" />
+            </svg>
+          </span>
           <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">Revisa tu correo</h1>
           <p className="max-w-sm text-sm text-gray-500 dark:text-gray-400">
             Te mandamos un enlace de verificación{user?.email ? ` a ${user.email}` : ""}. Ábrelo desde tu
-            correo para confirmar tu cuenta — el enlace dura 10 minutos, si se vence puedes pedir uno
+            correo para confirmar tu cuenta. El enlace dura 10 minutos; si se vence puedes pedir uno
             nuevo aquí abajo.
           </p>
         </>

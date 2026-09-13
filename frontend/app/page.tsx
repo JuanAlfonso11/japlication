@@ -84,7 +84,7 @@ function ScopePill({
             onChange={(e) => onChange(Number(e.target.value))}
             className="w-full accent-brand-600"
           />
-          <div className="mt-1 flex justify-between text-[9px] leading-tight text-gray-400 dark:text-gray-500">
+          <div className="mt-1 flex justify-between text-[9px] leading-tight text-gray-400 dark:text-gray-400">
             {SCOPE_LEVELS.map((lvl) => (
               <span key={lvl.scope} className="w-12 text-center first:text-left last:text-right">
                 {lvl.label}
@@ -97,13 +97,22 @@ function ScopePill({
             </p>
           )}
           {locationText && (
-            <p className="mt-1.5 text-[11px] text-gray-400 dark:text-gray-500">Tu ubicación: {locationText}</p>
+            <p className="mt-1.5 text-[11px] text-gray-400 dark:text-gray-400">Tu ubicación: {locationText}</p>
           )}
         </div>
       )}
     </div>
   );
 }
+
+/** Counting words, not status labels. Reusing the labels printed "6
+ * Aplicado", "0 Entrevistando", "0 Oferta" — a number followed by a
+ * singular adjective, which reads as a typo rather than a count. */
+const COUNT_LABELS: Record<string, string> = {
+  applied: "aplicadas",
+  interviewing: "entrevistas",
+  offer: "ofertas",
+};
 
 /** Small muted chips instead of the old bordered/shadowed stat cards —
  * the counts are still all there, just no longer competing with the job
@@ -125,7 +134,7 @@ function StatsRow({ applications, queueCount }: { applications: Application[]; q
           href={`/applications?status=${status}`}
           className="tabular flex min-h-[30px] shrink-0 items-center rounded-full bg-gray-100 px-2.5 text-[11px] font-semibold text-gray-500 transition-colors hover:bg-gray-200 hover:text-gray-700 active:scale-95 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200"
         >
-          {counts[status]} {STATUS_LABELS[status]}
+          {counts[status]} {COUNT_LABELS[status] ?? STATUS_LABELS[status]}
         </Link>
       ))}
     </div>
@@ -212,7 +221,7 @@ function HomeContent() {
           ? `${result.imported} vacante${result.imported === 1 ? "" : "s"} nueva${
               result.imported === 1 ? "" : "s"
             } agregada${result.imported === 1 ? "" : "s"} a tu cola.`
-          : "No hay vacantes nuevas por ahora — prueba de nuevo en un rato."
+          : "No hay vacantes nuevas por ahora. Prueba de nuevo en un rato."
       );
     } catch (err) {
       setPullNotice(err instanceof ApiError ? err.message : "No se pudo buscar más vacantes.");
@@ -334,7 +343,7 @@ function HomeContent() {
 
       {pullNotice && (
         <div className="w-full max-w-md">
-          <p className="text-center text-xs text-gray-400 dark:text-gray-500">{pullNotice}</p>
+          <p className="text-center text-xs text-gray-400 dark:text-gray-400">{pullNotice}</p>
         </div>
       )}
 
@@ -415,7 +424,7 @@ function HomeContent() {
         <div className="w-full max-w-md animate-slide-up rounded-2xl bg-brand-50 p-3.5 ring-1 ring-inset ring-brand-100 dark:bg-brand-500/10 dark:ring-brand-500/20">
           <div className="flex items-start justify-between gap-2">
             <p className="text-xs leading-relaxed text-brand-900 dark:text-brand-200">
-              Guardado en tu pipeline. JobPilot no lo envía por ti — para aplicar de verdad a{" "}
+              Guardado en tu pipeline. JobPilot no lo envía por ti: para aplicar de verdad a{" "}
               <strong className="font-bold">{justApplied.title}</strong> tienes que hacerlo en el sitio
               original.
             </p>
@@ -466,7 +475,7 @@ function HomeContent() {
       )}
 
       {filteredQueue && current && (
-        <p className="tabular text-[11px] font-medium text-gray-400 dark:text-gray-500">
+        <p className="tabular text-[11px] font-medium text-gray-400 dark:text-gray-400">
           Quedan {filteredQueue.length} en tu cola
         </p>
       )}
@@ -515,7 +524,7 @@ function DecisionButton({
       </span>
       <span
         className={`text-[11px] font-bold uppercase tracking-wide ${
-          save ? "text-emerald-600 dark:text-emerald-400" : "text-gray-400 dark:text-gray-500"
+          save ? "text-emerald-600 dark:text-emerald-400" : "text-gray-400 dark:text-gray-400"
         }`}
       >
         {label}

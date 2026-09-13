@@ -20,7 +20,7 @@ function ResumeVersionRow({ resume }: { resume: ResumeVersion }) {
             {resume.generated_by === "ai" ? "generado con IA" : "generado por reglas"}
           </p>
         </div>
-        <span className="shrink-0 text-gray-400 dark:text-gray-500">{expanded ? "−" : "+"}</span>
+        <span className="shrink-0 text-gray-400 dark:text-gray-400">{expanded ? "−" : "+"}</span>
       </button>
       {expanded && (
         <div className="mt-3 space-y-3 border-t border-gray-100 pt-3 dark:border-gray-800">
@@ -36,7 +36,7 @@ function ResumeVersionRow({ resume }: { resume: ResumeVersion }) {
               </ul>
             </div>
           ) : (
-            <p className="text-xs text-gray-400 dark:text-gray-500">Sin cambios registrados.</p>
+            <p className="text-xs text-gray-400 dark:text-gray-400">Sin cambios registrados.</p>
           )}
           {resume.job_id && (
             <Link
@@ -69,9 +69,9 @@ export default function UsedResumesSection() {
       description="Tu CV base es el que subiste/editaste arriba. Cada vez que generas un CV a medida para una vacante, queda guardado aquí — puedes revisar qué se le cambió, y reutilizarlo directamente desde la descripción de una vacante con requisitos parecidos en vez de generar uno nuevo."
     >
       {error && <p className="text-xs text-rose-600 dark:text-rose-400">{error}</p>}
-      {resumes === null && !error && <p className="text-xs text-gray-400 dark:text-gray-500">Cargando…</p>}
+      {resumes === null && !error && <p className="text-xs text-gray-400 dark:text-gray-400">Cargando…</p>}
       {resumes && resumes.length === 0 && (
-        <p className="text-xs text-gray-400 dark:text-gray-500">
+        <p className="text-xs text-gray-400 dark:text-gray-400">
           Todavía no has generado ningún CV a medida — hazlo desde la descripción de una vacante con el
           botón &quot;Generar CV&quot;.
         </p>

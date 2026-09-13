@@ -1,16 +1,19 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, Plus_Jakarta_Sans } from "next/font/google";
+import { Plus_Jakarta_Sans, Source_Sans_3 } from "next/font/google";
 import "./globals.css";
 import Providers from "./providers";
 import { THEME_NO_FLASH_SCRIPT } from "@/context/ThemeContext";
 
-/* Two faces, each doing one job: Inter for UI/body text (built for small
- * sizes and dense forms), Plus Jakarta Sans for headings and numerals,
- * where its wider, more geometric shapes give the app a voice of its own.
+/* Two faces, each doing one job: Source Sans 3 for UI/body text (humanist,
+ * built for small sizes and dense forms), Plus Jakarta Sans for headings and
+ * numerals, where its wider, more geometric shapes give the app a voice of
+ * its own. The body face was Inter, which is fine type and also the default
+ * every generated UI ships with — the point of changing it is that the app
+ * should look chosen rather than scaffolded.
  * Both are variable + latin-subset only, self-hosted by next/font at build
- * time — no runtime request to Google, which also matters here because the
+ * time: no runtime request to Google, which also matters here because the
  * app is served over a private Tailscale hostname. */
-const inter = Inter({
+const sans = Source_Sans_3({
   subsets: ["latin"],
   display: "swap",
   variable: "--font-sans",
@@ -56,7 +59,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es" className={`${inter.variable} ${jakarta.variable}`} suppressHydrationWarning>
+    <html lang="es" className={`${sans.variable} ${jakarta.variable}`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_NO_FLASH_SCRIPT }} />
       </head>

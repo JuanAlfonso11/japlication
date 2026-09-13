@@ -64,7 +64,7 @@ export default function ScreeningAnswersSection({
         </div>
       ) : (
         <>
-          <p className="tabular text-xs font-medium text-gray-400 dark:text-gray-500">
+          <p className="tabular text-xs font-medium text-gray-400 dark:text-gray-400">
             {answered} de {answers.length} respondidas
           </p>
           <div className="space-y-3">

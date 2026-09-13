@@ -66,8 +66,8 @@ export default function CVEvaluationCard({
           <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
             Chequeo de salud del CV
           </div>
-          <p className="mt-0.5 text-xs text-gray-400 dark:text-gray-500">
-            Independiente de cualquier trabajo — esto trata sobre el CV en sí.
+          <p className="mt-0.5 text-xs text-gray-400 dark:text-gray-400">
+            Independiente de cualquier trabajo: esto trata sobre el CV en sí.
           </p>
         </div>
         {evaluation && (
@@ -82,10 +82,10 @@ export default function CVEvaluationCard({
         )}
       </div>
 
-      {loading && <p className="text-sm text-gray-400 dark:text-gray-500">Evaluando tu CV…</p>}
+      {loading && <p className="text-sm text-gray-400 dark:text-gray-400">Evaluando tu CV…</p>}
       {error && <p className="text-sm text-rose-600 dark:text-rose-400">{error}</p>}
       {!loading && !error && !evaluation && (
-        <p className="text-sm text-gray-400 dark:text-gray-500">Guarda tu perfil abajo para ver el chequeo de salud de tu CV.</p>
+        <p className="text-sm text-gray-400 dark:text-gray-400">Guarda tu perfil abajo para ver el chequeo de salud de tu CV.</p>
       )}
 
       {evaluation && (
@@ -99,7 +99,7 @@ export default function CVEvaluationCard({
               {evaluation.band}
             </span>
             {evaluation.summary_generated_by === "ai" && (
-              <span className="text-[11px] font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">
+              <span className="text-[11px] font-medium uppercase tracking-wide text-gray-400 dark:text-gray-400">
                 Resumen generado por IA
               </span>
             )}

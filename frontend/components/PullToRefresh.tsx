@@ -113,14 +113,29 @@ export default function PullToRefresh({
         style={{ height: pull, transition: active.current ? "none" : "height 200ms ease-out" }}
       >
         <div
-          className="flex items-center gap-1.5 text-xs font-medium text-gray-400 dark:text-gray-500"
+          className="flex items-center gap-1.5 text-xs font-medium text-gray-400 dark:text-gray-400"
           style={{ opacity: indicatorOpacity }}
         >
+          {/* The app draws its own icons in one stroke weight; a stock emoji
+              here rendered in whatever the OS ships and never matched. */}
           <span
             className={refreshing ? "animate-spin" : ""}
             style={!refreshing ? { display: "inline-block", transform: `rotate(${pull * 3}deg)` } : undefined}
           >
-            🔄
+            <svg
+              aria-hidden="true"
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+              <path d="M21 3v6h-6" />
+            </svg>
           </span>
           {refreshing
             ? "Buscando nuevas vacantes…"

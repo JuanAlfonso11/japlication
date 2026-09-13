@@ -71,7 +71,10 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
       {/* Top nav (desktop) */}
       <header className="sticky top-0 z-40 hidden border-b border-gray-200/80 bg-white/80 backdrop-blur-xl md:block dark:border-gray-800/80 dark:bg-gray-950/80">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-3">
-          <Link href="/" className="transition-opacity hover:opacity-80">
+          {/* Pressing feedback, not a fade: everything else in the app
+              responds with scale/color, and fading on hover is the stock
+              "it needed some interactivity" gesture. */}
+          <Link href="/" className="rounded-lg transition-transform active:scale-95">
             <Wordmark />
           </Link>
           <nav className="flex items-center gap-1">
@@ -147,8 +150,11 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
                 key={item.href}
                 href={item.href}
                 aria-current={active ? "page" : undefined}
-                className={`group relative flex min-h-[58px] flex-col items-center justify-center gap-1 pt-1.5 text-[10px] font-semibold transition-colors ${
-                  active ? "text-brand-600 dark:text-brand-400" : "text-gray-400 dark:text-gray-500"
+                /* 11px, not 10: at 10px these five labels were the smallest
+                   text in the app on a 6.7" screen, and they are the app's
+                   primary navigation. */
+                className={`group relative flex min-h-[58px] flex-col items-center justify-center gap-1 pt-1.5 text-[11px] font-semibold transition-colors ${
+                  active ? "text-brand-600 dark:text-brand-400" : "text-gray-400 dark:text-gray-400"
                 }`}
               >
                 {/* A short bar riding the top edge marks the active tab.

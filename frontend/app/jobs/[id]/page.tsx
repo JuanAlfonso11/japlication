@@ -308,7 +308,7 @@ function JobDetailContent() {
           <div className="flex min-w-0 flex-1 items-start gap-3">
             <span
               aria-hidden="true"
-              className="mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 font-display text-lg font-extrabold text-white shadow-brand"
+              className="mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-600 font-display text-lg font-extrabold text-white shadow-brand"
             >
               {job.company?.trim()?.[0]?.toUpperCase() ?? "?"}
             </span>
@@ -539,7 +539,7 @@ function JobDetailContent() {
                 )}
               </div>
             </div>
-            <p className="text-xs text-gray-400 dark:text-gray-500">
+            <p className="text-xs text-gray-400 dark:text-gray-400">
               El PDF usa formato de una columna con encabezados estándar (sin tablas ni imágenes) para que
               el &quot;autocompletar desde CV&quot; de la mayoría de formularios de aplicación lo lea bien.
             </p>

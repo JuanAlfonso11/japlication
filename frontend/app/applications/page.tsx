@@ -239,7 +239,7 @@ function ApplicationRow({
               placeholder="Notas de la entrevista, contactos, seguimientos…"
               className={textareaClass}
             />
-            <p className="mt-1 text-[11px] text-gray-400 dark:text-gray-500">
+            <p className="mt-1 text-[11px] text-gray-400 dark:text-gray-400">
               {saving ? "Guardando…" : "Las notas se guardan solas al salir del campo."}
             </p>
           </div>

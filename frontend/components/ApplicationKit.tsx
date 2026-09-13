@@ -42,7 +42,7 @@ function CopyField({ label, value }: { label: string; value: string }) {
       className="group flex w-full items-center gap-2 rounded-xl bg-gray-50 px-3 py-2 text-left transition-colors hover:bg-gray-100 active:scale-[0.99] dark:bg-gray-800/60 dark:hover:bg-gray-800"
     >
       <span className="min-w-0 flex-1">
-        <span className="block text-[10px] font-bold uppercase tracking-[0.06em] text-gray-400 dark:text-gray-500">
+        <span className="block text-[10px] font-bold uppercase tracking-[0.06em] text-gray-400 dark:text-gray-400">
           {label}
         </span>
         <span className="block truncate text-sm text-gray-800 dark:text-gray-200">{value}</span>
@@ -175,7 +175,7 @@ export default function ApplicationKit({ job }: { job: Job }) {
         <div className="space-y-4">
           {contactFields.length > 0 && (
             <div>
-              <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.08em] text-gray-400 dark:text-gray-500">
+              <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.08em] text-gray-400 dark:text-gray-400">
                 Datos de contacto
               </p>
               <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
@@ -188,7 +188,7 @@ export default function ApplicationKit({ job }: { job: Job }) {
 
           {answers.length > 0 && (
             <div>
-              <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.08em] text-gray-400 dark:text-gray-500">
+              <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.08em] text-gray-400 dark:text-gray-400">
                 Respuestas frecuentes
               </p>
               <div className="space-y-2">

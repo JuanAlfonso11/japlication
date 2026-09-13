@@ -39,7 +39,10 @@ export default function AuthLayout({
           </div>
         </div>
 
-        <div className="rounded-3xl bg-white/90 p-6 shadow-card ring-1 ring-gray-200/80 backdrop-blur-sm dark:bg-gray-900/80 dark:ring-gray-800">
+        {/* Solid, not frosted: a translucent card over a blurred backdrop is
+            the single most recognizable "AI-generated landing page" texture,
+            and here it also dragged the form's own contrast down. */}
+        <div className="rounded-3xl bg-white p-6 shadow-card ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-gray-800">
           {children}
         </div>
       </div>

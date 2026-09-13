@@ -94,7 +94,7 @@ function ExternalResultCard({
             {result.location ? ` · ${result.location}` : ""}
           </p>
           {(budget || result.posted_at_text) && (
-            <p className="mt-1 text-[11px] font-medium text-gray-400 dark:text-gray-500">
+            <p className="mt-1 text-[11px] font-medium text-gray-400 dark:text-gray-400">
               {budget && <span className="text-emerald-600 dark:text-emerald-400">{budget}</span>}
               {budget && result.posted_at_text ? " · " : ""}
               {result.posted_at_text}
@@ -220,7 +220,7 @@ function SourcesSummary({
       </div>
 
       {open && (
-        <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500">
+        <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-400 dark:text-gray-400">
           {ordered.map((s) => {
             const notConfigured = s.error ? isNotConfigured(s.error) : false;
             const searching = s.error ? isPending(s.error) : false;
@@ -232,7 +232,7 @@ function SourcesSummary({
                     ? "bg-rose-50 text-rose-600 dark:bg-rose-500/15 dark:text-rose-400"
                     : s.count > 0
                     ? "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300"
-                    : "bg-gray-50 text-gray-400 dark:bg-gray-800/60 dark:text-gray-500"
+                    : "bg-gray-50 text-gray-400 dark:bg-gray-800/60 dark:text-gray-400"
                 }`}
                 title={s.error ?? undefined}
               >
@@ -245,15 +245,20 @@ function SourcesSummary({
       )}
 
       {failed.length > 0 && (
-        <p className="text-xs text-rose-500 dark:text-rose-400">
-          {failed.length} fuente{failed.length > 1 ? "s" : ""} no respondió — el resto de resultados sigue
-          completo.
+        // Grey, not alarm-red, and with the verb agreeing: "2 fuentes no
+        // respondió" in red read as a broken search when the rest of the
+        // results are complete.
+        <p className="text-xs text-gray-500 dark:text-gray-400">
+          {failed.length === 1 ? "1 fuente no respondió" : `${failed.length} fuentes no respondieron`}. El
+          resto de resultados sigue completo.
         </p>
       )}
       {failed.length === 0 && unconfigured.length > 0 && (
-        <p className="text-xs text-gray-400 dark:text-gray-500">
-          {unconfigured.length} fuente{unconfigured.length > 1 ? "s" : ""} sin clave configurada — el resto
-          está completo.
+        <p className="text-xs text-gray-400 dark:text-gray-400">
+          {unconfigured.length === 1
+            ? "1 fuente sin clave configurada"
+            : `${unconfigured.length} fuentes sin clave configurada`}
+          . El resto está completo.
         </p>
       )}
     </div>
@@ -272,17 +277,17 @@ function ExternalPlatformsSection() {
         <div>
           <h2 className="font-semibold text-gray-900 dark:text-gray-100">Otras plataformas para buscar</h2>
           <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-            No tienen API pública, así que no aparecen en la búsqueda de arriba — pero son buenas opciones
+            No tienen API pública, así que no aparecen en la búsqueda de arriba, pero son buenas opciones
             para revisar y aplicar manualmente desde RD.
           </p>
         </div>
-        <span className="shrink-0 text-gray-400 dark:text-gray-500">{open ? "−" : "+"}</span>
+        <span className="shrink-0 text-gray-400 dark:text-gray-400">{open ? "−" : "+"}</span>
       </button>
       {open && (
         <div className="mt-4 space-y-4">
           {EXTERNAL_PLATFORM_GROUPS.map((group) => (
             <div key={group.label}>
-              <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
+              <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-400">
                 {group.label}
               </h3>
               <div className="flex flex-wrap gap-2">
@@ -427,7 +432,7 @@ function DiscoverContent() {
                 value={minSalary}
                 onChange={(e) => setMinSalary(e.target.value)}
                 placeholder="Salario mínimo (USD)"
-                title="Filtra los resultados ya cargados — no cambia la búsqueda en sí"
+                title="Filtra los resultados ya cargados: no cambia la búsqueda en sí"
                 className="col-span-2 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 sm:col-span-1 sm:min-w-[160px] sm:flex-1"
               />
             </div>
@@ -445,7 +450,7 @@ function DiscoverContent() {
           {sources.length > 0 && <SourcesSummary sources={sources} shownCount={results.length} />}
 
           {minSalaryValue && results.length > 0 && (
-            <p className="text-xs text-gray-400 dark:text-gray-500">
+            <p className="text-xs text-gray-400 dark:text-gray-400">
               {filteredResults.length} de {results.length} muestran ${minSalaryValue.toLocaleString()}+ de
               salario (se ocultan los que no publican salario).
             </p>
@@ -458,19 +463,19 @@ function DiscoverContent() {
           </div>
 
           {!loading && searched && results.length > 0 && filteredResults.length === 0 && !error && (
-            <p className="py-6 text-center text-sm text-gray-400 dark:text-gray-500">
-              Nada cumple ese salario mínimo — prueba bajarlo.
+            <p className="py-6 text-center text-sm text-gray-400 dark:text-gray-400">
+              Nada cumple ese salario mínimo: prueba bajarlo.
             </p>
           )}
 
           {!loading && searched && results.length === 0 && !error && (
-            <p className="py-6 text-center text-sm text-gray-400 dark:text-gray-500">
-              No encontramos resultados — prueba otra palabra clave o quita el filtro de ubicación.
+            <p className="py-6 text-center text-sm text-gray-400 dark:text-gray-400">
+              No encontramos resultados: prueba otra palabra clave o quita el filtro de ubicación.
             </p>
           )}
 
           {!loading && !searched && (
-            <p className="py-6 text-center text-sm text-gray-400 dark:text-gray-500">
+            <p className="py-6 text-center text-sm text-gray-400 dark:text-gray-400">
               Busca algo para ver resultados combinados de todas las fuentes sin login.
             </p>
           )}

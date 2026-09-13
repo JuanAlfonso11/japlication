@@ -185,7 +185,7 @@ export default function SwipeCard({
                   instead of ragged. */}
               <span
                 aria-hidden="true"
-                className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 font-display text-base font-extrabold text-white shadow-brand"
+                className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-600 font-display text-base font-extrabold text-white shadow-brand"
               >
                 {job.company?.trim()?.[0]?.toUpperCase() ?? "?"}
               </span>
@@ -232,7 +232,7 @@ export default function SwipeCard({
                 </span>
               ))}
               {job.skills_required.length > 7 && (
-                <span className="rounded-full px-2 py-1 text-[11px] font-medium text-gray-400 dark:text-gray-500">
+                <span className="rounded-full px-2 py-1 text-[11px] font-medium text-gray-400 dark:text-gray-400">
                   +{job.skills_required.length - 7}
                 </span>
               )}
@@ -241,7 +241,7 @@ export default function SwipeCard({
 
           {job.requirements?.length > 0 && (
             <div className="mt-5">
-              <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.08em] text-gray-400 dark:text-gray-500">
+              <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.08em] text-gray-400 dark:text-gray-400">
                 Requisitos clave
               </p>
               <ul className="space-y-1.5">

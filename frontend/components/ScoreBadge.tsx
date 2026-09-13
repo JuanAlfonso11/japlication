@@ -89,7 +89,7 @@ export default function ScoreBadge({
           <span className="tabular font-display text-lg font-extrabold leading-none text-gray-900 dark:text-gray-100">
             {rounded}
           </span>
-          <span className="text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
+          <span className="text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-400">
             match
           </span>
         </span>

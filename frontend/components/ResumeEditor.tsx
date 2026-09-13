@@ -107,12 +107,12 @@ export default function ResumeEditor({
           className={inputClass}
           placeholder="Python, PostgreSQL, Docker"
         />
-        <p className="mt-1 text-[11px] text-gray-400 dark:text-gray-500">Separadas por comas.</p>
+        <p className="mt-1 text-[11px] text-gray-400 dark:text-gray-400">Separadas por comas.</p>
       </div>
 
       {(resume.content.experience ?? []).map((entry, entryIndex) => (
         <div key={entryIndex}>
-          <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.08em] text-gray-400 dark:text-gray-500">
+          <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.08em] text-gray-400 dark:text-gray-400">
             {entry.title} — {entry.company}
           </p>
           <div className="space-y-2">
@@ -153,7 +153,7 @@ export default function ResumeEditor({
         </Button>
       </div>
 
-      <p className="text-[11px] leading-relaxed text-gray-400 dark:text-gray-500">
+      <p className="text-[11px] leading-relaxed text-gray-400 dark:text-gray-400">
         Tus correcciones se reutilizan: la próxima vacante parecida partirá de esta versión en vez de
         generar una nueva desde cero.
       </p>
