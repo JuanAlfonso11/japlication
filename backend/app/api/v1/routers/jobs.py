@@ -51,7 +51,7 @@ from app.services import (
     remoteok,
 )
 from app.services.job_dedupe import dedupe_external_results
-from app.services.job_importer import import_job_from_url
+from app.services.job_importer import _extract_remote_type, import_job_from_url
 from app.services.match_engine import compute_and_persist_match
 
 router = APIRouter(tags=["jobs"])
@@ -728,6 +728,19 @@ async def _run_search_provider(
         for r in data["results"]
         if r.get(id_key)
     ]
+    # Every provider is asked for the work type, and several answer with
+    # postings that contradict it: a remote search led with "Hybrid - San
+    # Francisco, New York City, Austin", then a Berlin and a Köln role. The
+    # posting's own words win over the source's filter — the same rule
+    # linkedin_jobs already applies to its cards. A posting that says nothing
+    # about where the work happens is left alone rather than guessed at.
+    if remote_type_filter:
+        results = [
+            r
+            for r in results
+            if (_extract_remote_type(f"{r.title} {r.location or ''}") or remote_type_filter)
+            == remote_type_filter
+        ]
     return provider, results, None
 
 

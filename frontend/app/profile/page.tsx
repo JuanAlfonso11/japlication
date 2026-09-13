@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import RouteGuard from "@/components/RouteGuard";
-import Spinner from "@/components/Spinner";
+import { ListSkeleton } from "@/components/ui/Skeleton";
 import ErrorNotice from "@/components/ErrorNotice";
 import CVEvaluationCard from "@/components/CVEvaluationCard";
 import SkillGapsCard from "@/components/SkillGapsCard";
@@ -269,7 +269,7 @@ function ProfileContent() {
               ? `Encontramos ${result.imported} vacante${result.imported === 1 ? "" : "s"} nueva${
                   result.imported === 1 ? "" : "s"
                 } que hacen match — ya están en tu cola de Inicio.`
-              : "Buscamos vacantes que hagan match con tu perfil, pero no encontramos nada nuevo por ahora — prueba Discover más tarde."
+              : "Buscamos vacantes que hagan match con tu perfil, pero no encontramos nada nuevo por ahora. Prueba en Buscar más tarde."
           );
         } catch {
           // Non-fatal — the profile itself saved fine; the user can still
@@ -332,7 +332,9 @@ function ProfileContent() {
     }
   }
 
-  if (loading) return <Spinner label="Cargando tu perfil…" />;
+  // A skeleton, not a centered spinner: globals.css says why — a spinner
+  // reads as "stuck", and this screen takes 2.3-4.2s to load.
+  if (loading) return <ListSkeleton rows={5} />;
   if (loadError) return <ErrorNotice message={loadError} onRetry={load} />;
   if (!profile) return null;
 
@@ -340,8 +342,10 @@ function ProfileContent() {
     <form onSubmit={handleSave} className="space-y-6 pb-4 animate-fade-in">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
+          {/* The tab is called "Perfil" and holds more than the CV (answers,
+              analysis), so the screen it opens should say the same thing. */}
           <h1 className="font-display text-[26px] font-extrabold leading-tight tracking-display-tight text-gray-900 dark:text-gray-50">
-            CV Maestro
+            Perfil
           </h1>
           <p className="mt-1 max-w-[52ch] text-sm leading-relaxed text-gray-500 dark:text-gray-400">
             Mantén tu perfil actualizado — de aquí salen el match, los CVs a medida y las cartas de

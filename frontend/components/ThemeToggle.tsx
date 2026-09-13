@@ -15,20 +15,22 @@ export default function ThemeToggle({ compact = false }: { compact?: boolean }) 
   const { theme, setTheme } = useTheme();
 
   if (compact) {
-    function cycle() {
-      const order: ThemePreference[] = ["light", "dark", "system"];
-      setTheme(order[(order.indexOf(theme) + 1) % order.length]);
-    }
-    const current = OPTIONS.find((o) => o.value === theme) ?? OPTIONS[2];
-    const Icon = current.icon;
+    // Claro/Oscuro only, at a 44px target. Cycling through three states put
+    // "Sistema" between them, and on a phone already in dark mode that looks
+    // identical to "Oscuro" — so the first tap appeared to do nothing, on a
+    // 32px button. "Seguir al sistema" still lives in the full control below
+    // (Perfil → Ajustes).
+    const isDark = theme === "dark";
+    const next: ThemePreference = isDark ? "light" : "dark";
+    const Icon = isDark ? SunIcon : MoonIcon;
     return (
       <button
         type="button"
-        onClick={cycle}
-        aria-label={`Tema: ${current.label}. Toca para cambiar.`}
-        className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+        onClick={() => setTheme(next)}
+        aria-label={isDark ? "Cambiar a tema claro" : "Cambiar a tema oscuro"}
+        className="flex h-11 w-11 items-center justify-center rounded-xl border border-gray-200 text-gray-600 transition-colors hover:bg-gray-100 active:scale-95 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
       >
-        <Icon className="h-4 w-4" />
+        <Icon className="h-5 w-5" />
       </button>
     );
   }

@@ -191,17 +191,27 @@
   </div>
 
   <div>
-    <h1>JobPilot no se puede conectar</h1>
-    <p>Esta pantalla vive dentro de la app, así que aparece incluso sin conexión al servidor. Revisa:</p>
-    <ul>
+    <h1 id="title">Conectando con tu PC…</h1>
+    <p id="lead">Buscando tu servidor de JobPilot. Si Tailscale acaba de despertar, tarda unos segundos.</p>
+    <ul id="hints" hidden>
       <li>Que Tailscale esté conectado en tu teléfono (su interruptor activo).</li>
       <li>Que la PC con JobPilot esté encendida.</li>
     </ul>
+    <div id="actions" hidden style="display:flex; gap:10px; justify-content:center; margin-top:16px; flex-wrap:wrap;">
+      <button type="button" onclick="retryNow()"
+        style="min-height:44px; padding:0 18px; border:0; border-radius:12px; background:#fff; color:#3d1a8a; font-size:14px; font-weight:700; font-family:inherit;">
+        Reintentar ahora
+      </button>
+      <button type="button" onclick="openTailscale()"
+        style="min-height:44px; padding:0 18px; border:1px solid rgba(255,255,255,0.55); border-radius:12px; background:transparent; color:#fff; font-size:14px; font-weight:600; font-family:inherit;">
+        Abrir Tailscale
+      </button>
+    </div>
   </div>
 
   <div class="checking">
     <span class="dot"></span>
-    Reintentando…
+    <span id="checkingText">Reintentando sola…</span>
   </div>
 
   <script>
@@ -217,9 +227,44 @@
     // local page automatically, so this keeps retrying on its own with no
     // extra logic needed on that side.
     var REAL_APP_URL = "https://jobpilot.tailb3d4c1.ts.net";
-    setTimeout(function () {
+    var RETRY_MS = 5000;
+    // A cold start with Tailscale still waking up took 31 seconds on the
+    // phone, and this screen announced a failure for all of them. The first
+    // stretch is just "connecting"; only after it do we claim something is
+    // wrong. Each retry reloads THIS page, so the clock has to survive the
+    // reload — hence sessionStorage rather than a plain timer. Anything
+    // older than two minutes counts as a fresh start.
+    var GRACE_MS = 12000;
+    var KEY = "jobpilot-offline-since";
+    var since = 0;
+    try { since = Number(sessionStorage.getItem(KEY)) || 0; } catch (e) {}
+    if (!since || Date.now() - since > 120000) {
+      since = Date.now();
+      try { sessionStorage.setItem(KEY, String(since)); } catch (e) {}
+    }
+
+    function retryNow() {
       location.href = REAL_APP_URL;
-    }, 5000);
+    }
+
+    function openTailscale() {
+      // Opens the Tailscale app when it is installed; a no-op otherwise.
+      location.href = "intent://#Intent;package=com.tailscale.ipn;end";
+    }
+
+    function showProblem() {
+      document.getElementById("title").textContent = "JobPilot no se puede conectar";
+      document.getElementById("lead").textContent = "Sigue sin responder. Revisa:";
+      document.getElementById("hints").hidden = false;
+      document.getElementById("actions").hidden = false;
+      document.getElementById("checkingText").textContent = "Seguimos reintentando solos…";
+    }
+
+    var waited = Date.now() - since;
+    if (waited >= GRACE_MS) showProblem();
+    else setTimeout(showProblem, GRACE_MS - waited);
+
+    setTimeout(retryNow, RETRY_MS);
   </script>
 </body>
 </html>

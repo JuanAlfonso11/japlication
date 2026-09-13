@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import RouteGuard from "@/components/RouteGuard";
-import Spinner from "@/components/Spinner";
+import CollapsibleText from "@/components/CollapsibleText";
+import { ListSkeleton } from "@/components/ui/Skeleton";
 import ErrorNotice from "@/components/ErrorNotice";
 import MatchBreakdown from "@/components/MatchBreakdown";
 import ScoreBadge from "@/components/ScoreBadge";
@@ -297,7 +298,9 @@ function JobDetailContent() {
     }
   }
 
-  if (loading) return <Spinner label="Cargando trabajo…" />;
+  // Same reason as Pipeline and Home: the shape of what is coming, not a
+  // spinner that collapses the layout and then shoves it back into place.
+  if (loading) return <ListSkeleton rows={4} />;
   if (error) return <ErrorNotice message={error} onRetry={load} />;
   if (!job) return null;
 
@@ -344,14 +347,23 @@ function JobDetailContent() {
         )}
 
         <div className="mt-4 rounded-xl bg-brand-50 p-3 dark:bg-brand-900/20">
-          <p className="text-xs font-medium text-brand-800 dark:text-brand-300">
-            {job.source_url
-              ? "Un clic hace todo: genera (si falta) y descarga tu CV en PDF, abre la vacante real en una " +
-                "pestaña nueva para que subas ese PDF ahí, y lo registra en tu pipeline. JobPilot no envía " +
-                "la solicitud por ti — el paso de completar y mandar el formulario en el sitio real sigue " +
-                "siendo tuyo."
-              : "Esta vacante no tiene un link al sitio original — solo puedo generar el CV/carta y registrar " +
-                "la decisión en tu pipeline."}
+          {/* Three steps instead of a six-line paragraph: this sits between
+              the user and the button they came to press, and what it says is
+              a sequence, not prose. */}
+          {job.source_url ? (
+            <ol className="space-y-1 text-xs font-medium text-brand-800 dark:text-brand-300">
+              <li>1. Descarga tu CV en PDF, y lo genera si falta.</li>
+              <li>2. Abre la vacante real en otra pestaña para que subas ese PDF ahí.</li>
+              <li>3. La registra en tu pipeline como aplicada.</li>
+            </ol>
+          ) : (
+            <p className="text-xs font-medium text-brand-800 dark:text-brand-300">
+              Esta vacante no trae link al sitio original: solo genero el CV y la carta, y registro la
+              decisión en tu pipeline.
+            </p>
+          )}
+          <p className="mt-2 text-[11px] leading-snug text-brand-700 dark:text-brand-400">
+            Completar y mandar el formulario sigue siendo tuyo: JobPilot nunca lo envía por ti.
           </p>
           {applyError && (
             <div className="mt-2">
@@ -384,18 +396,23 @@ function JobDetailContent() {
           is what you come back for once someone replies. */}
       <InterviewPrepCard jobId={job.id} />
 
-      {match && (
-        <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-100 dark:bg-gray-900 dark:ring-gray-800">
-          <h2 className="mb-3 font-semibold text-gray-900 dark:text-gray-100">Desglose del match</h2>
-          <MatchBreakdown match={match} />
-        </div>
-      )}
+      {/* Only when it adds something to the card the user already saw on
+          Home: the same three bars a second time is a section that costs a
+          scroll and answers nothing. Skills and concerns are the part that
+          only exists here. */}
+      {match &&
+        (match.matched_skills.length > 0 ||
+          match.missing_skills.length > 0 ||
+          match.concerns.length > 0) && (
+          <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-100 dark:bg-gray-900 dark:ring-gray-800">
+            <h2 className="mb-3 font-semibold text-gray-900 dark:text-gray-100">Desglose del match</h2>
+            <MatchBreakdown match={match} />
+          </div>
+        )}
 
       <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-100 dark:bg-gray-900 dark:ring-gray-800">
         <h2 className="mb-2 font-semibold text-gray-900 dark:text-gray-100">Descripción</h2>
-        <p className="whitespace-pre-line text-sm leading-relaxed text-gray-700 dark:text-gray-300">
-          {job.description}
-        </p>
+        <CollapsibleText text={job.description} />
       </div>
 
       {job.requirements?.length > 0 && (

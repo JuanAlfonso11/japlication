@@ -12,7 +12,10 @@ import { applicationsApi } from "@/lib/api";
 const NAV_ITEMS = [
   { href: "/", label: "Inicio", icon: HomeIcon },
   { href: "/discover", label: "Buscar", icon: DiscoverIcon },
-  { href: "/jobs/import", label: "Importar", icon: ImportIcon },
+  // "Agregar", not "Importar": the screen it opens is titled "Agregar una
+  // vacante" and its button says "Agregar", and the same action was also
+  // called "Importar" here — one action, three names.
+  { href: "/jobs/import", label: "Agregar", icon: ImportIcon },
   { href: "/applications", label: "Pipeline", icon: PipelineIcon },
   { href: "/profile", label: "Perfil", icon: ProfileIcon },
 ];

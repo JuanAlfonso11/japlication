@@ -330,7 +330,10 @@ function HomeContent() {
         </p>
       </div>
 
-      <div className="flex w-full max-w-md items-center gap-1.5">
+      {/* The scope pill gets its own line. Sharing a row with the counting
+          chips, which wrap to two lines, left it vertically centered against
+          them — that reads as a layout bug rather than as a control. */}
+      <div className="flex w-full max-w-md">
         <ScopePill
           scopeIndex={scopeIndex}
           onChange={handleScopeChange}
@@ -338,8 +341,13 @@ function HomeContent() {
           geoError={geoError}
           userLocation={userLocation}
         />
-        {applications && <StatsRow applications={applications} queueCount={filteredQueue?.length ?? 0} />}
       </div>
+
+      {applications && (
+        <div className="-mt-1 flex w-full max-w-md">
+          <StatsRow applications={applications} queueCount={filteredQueue?.length ?? 0} />
+        </div>
+      )}
 
       {pullNotice && (
         <div className="w-full max-w-md">
@@ -474,11 +482,10 @@ function HomeContent() {
         </div>
       )}
 
-      {filteredQueue && current && (
-        <p className="tabular text-[11px] font-medium text-gray-400 dark:text-gray-400">
-          Quedan {filteredQueue.length} en tu cola
-        </p>
-      )}
+      {/* The queue count lives in the chip row at the top, which says the
+          same number. Down here it landed under the fixed bottom nav, so it
+          was never read — and its height is what pushed GUARDAR against the
+          bar's edge. */}
       </div>
     </PullToRefresh>
   );
