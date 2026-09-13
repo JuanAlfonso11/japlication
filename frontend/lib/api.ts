@@ -575,8 +575,13 @@ export const jobsApi = {
 // ---------- Applications ----------
 
 export const applicationsApi = {
-  list: (status?: string, limit?: number, offset?: number) =>
-    request<ApplicationListResponse>("/applications", { query: { status, limit, offset } }),
+  // `active` is what Pipeline opens on: everything still in play. Without
+  // it the default view is every row ever decided, where a long tail of
+  // discarded jobs buries the handful being chased.
+  list: (status?: string, limit?: number, offset?: number, active?: boolean) =>
+    request<ApplicationListResponse>("/applications", {
+      query: { status, limit, offset, active: active ? true : undefined },
+    }),
   get: (id: string) => request<Application>(`/applications/${id}`),
   update: (id: string, payload: ApplicationUpdatePayload) =>
     request<Application>(`/applications/${id}`, { method: "PATCH", body: payload }),

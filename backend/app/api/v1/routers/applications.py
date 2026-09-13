@@ -24,12 +24,14 @@ from app.services.cover_letter_generator import generate_cover_letter
 
 router = APIRouter(tags=["applications"])
 
-# A right swipe means "apply" — it goes straight to `applied` (with
-# `applied_at` stamped below) rather than parking at `saved`, since the
-# swipe itself is the user's application decision, not a bookmark step
-# that needs a separate manual "mark as applied" action afterward.
+# A right swipe only SAVES to the pipeline. It used to go straight to
+# `applied`, but nothing in JobPilot submits anything to an employer and the
+# button the user presses says "Guardar" — so `applied` was the app claiming
+# an application that had not happened, which then fed the stale-application
+# reminders. The job-detail page's "Apply" button, which opens the real
+# posting, is what marks it applied (DecisionRequest.mark_applied).
 DECISION_TO_STATUS = {
-    SwipeDecision.right: ApplicationStatus.applied,
+    SwipeDecision.right: ApplicationStatus.saved,
     SwipeDecision.left: ApplicationStatus.passed,
 }
 
@@ -120,6 +122,8 @@ async def swipe_decision(
     ).scalar_one_or_none()
 
     new_status = DECISION_TO_STATUS[payload.decision]
+    if payload.mark_applied and new_status == ApplicationStatus.saved:
+        new_status = ApplicationStatus.applied
     applied_at = datetime.now(timezone.utc) if new_status == ApplicationStatus.applied else None
 
     resume_version_id = payload.resume_version_id
@@ -197,9 +201,20 @@ async def swipe_decision(
     return _serialize(app_row)
 
 
+#: What Pipeline's "Activas" view leaves out — the decisions that are over.
+#: Its default used to be every row, which on this database means 120
+#: discards burying the handful of applications actually in play.
+ARCHIVED_STATUSES = (
+    ApplicationStatus.passed,
+    ApplicationStatus.rejected,
+    ApplicationStatus.withdrawn,
+)
+
+
 @router.get("/applications", response_model=ApplicationListResponse)
 async def list_applications(
     status_filter: Optional[ApplicationStatus] = Query(None, alias="status"),
+    active: bool = Query(False, description="Only the statuses still in play (ARCHIVED_STATUSES excluded)."),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     current_user: User = Depends(get_current_user),
@@ -210,6 +225,9 @@ async def list_applications(
     if status_filter is not None:
         stmt = stmt.where(Application.status == status_filter)
         count_stmt = count_stmt.where(Application.status == status_filter)
+    elif active:
+        stmt = stmt.where(Application.status.notin_(ARCHIVED_STATUSES))
+        count_stmt = count_stmt.where(Application.status.notin_(ARCHIVED_STATUSES))
 
     total = (await db.execute(count_stmt)).scalar_one()
 
@@ -284,6 +302,13 @@ async def update_application(
     data = payload.model_dump(exclude_unset=True)
     for field, value in data.items():
         setattr(row, field, value)
+
+    # Moving a row to "Aplicado" by hand is the other way an application
+    # becomes real (the first is the detail page's Apply button), and the
+    # stale-application reminder only ever counts rows that have an
+    # applied_at — without this, one marked here would never be chased up.
+    if row.status == ApplicationStatus.applied and row.applied_at is None:
+        row.applied_at = datetime.now(timezone.utc)
 
     await db.commit()
     row = (

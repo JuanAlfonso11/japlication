@@ -155,15 +155,21 @@ export default function SwipeCard({
         />
         {isTop && (
           <>
+            {/* Each stamp sits on the edge the card is moving AWAY from: a
+                card dragged right is half off-screen by the time the stamp
+                is fully opaque, so a right-hand stamp gets cut off exactly
+                when it becomes readable. The word matches the button below
+                the deck — the swipe saves to the pipeline, it never applies
+                anywhere. */}
             <motion.div
               style={{ opacity: rightOpacity }}
-              className="pointer-events-none absolute right-5 top-5 z-20 rotate-[8deg] rounded-xl bg-emerald-500 px-4 py-1.5 text-lg font-extrabold uppercase tracking-wide text-white shadow-lg"
+              className="pointer-events-none absolute left-5 top-5 z-20 -rotate-[8deg] rounded-xl bg-emerald-500 px-4 py-1.5 text-lg font-extrabold uppercase tracking-wide text-white shadow-lg"
             >
-              Aplicar
+              Guardar
             </motion.div>
             <motion.div
               style={{ opacity: leftOpacity }}
-              className="pointer-events-none absolute left-5 top-5 z-20 -rotate-[8deg] rounded-xl bg-rose-500 px-4 py-1.5 text-lg font-extrabold uppercase tracking-wide text-white shadow-lg"
+              className="pointer-events-none absolute right-5 top-5 z-20 rotate-[8deg] rounded-xl bg-rose-500 px-4 py-1.5 text-lg font-extrabold uppercase tracking-wide text-white shadow-lg"
             >
               Pasar
             </motion.div>

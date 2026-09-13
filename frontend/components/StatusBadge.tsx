@@ -14,7 +14,8 @@ const STATUS_STYLES: Record<string, string> = {
 export const STATUS_LABELS: Record<string, string> = {
   queued: "En cola",
   saved: "Guardado",
-  passed: "Pasado",
+  // "Pasado" reads as "in the past" in Spanish, not "I passed on it".
+  passed: "Descartada",
   applied: "Aplicado",
   interviewing: "Entrevistando",
   offer: "Oferta",

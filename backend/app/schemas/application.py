@@ -29,6 +29,11 @@ class DecisionRequest(BaseModel):
     # reused) server-side — see swipe_decision in applications.py.
     resume_version_id: Optional[UUID] = None
     cover_letter_id: Optional[UUID] = None
+    #: A right swipe only saves to the pipeline. This is the job-detail
+    #: page's "Apply" button saying the user is applying right now (it opens
+    #: the employer's posting), which is what stamps applied_at and
+    #: auto-attaches a cover letter.
+    mark_applied: bool = False
 
 
 class ApplicationUpdate(BaseModel):

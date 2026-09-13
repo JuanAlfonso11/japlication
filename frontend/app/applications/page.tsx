@@ -14,26 +14,36 @@ import PageHeader from "@/components/ui/PageHeader";
 import { ApiError, applicationsApi } from "@/lib/api";
 import type { Application, ApplicationStatus } from "@/lib/types";
 
-const FILTERS: { value: ApplicationStatus | "all"; label: string }[] = [
+/** "Activas" is everything still in play and is what this screen opens on:
+ * with 120 discarded jobs in the table, "Todas" first shows a wall of
+ * decisions that are already over and buries the ones being chased. */
+type Filter = ApplicationStatus | "all" | "active";
+
+const FILTERS: { value: Filter; label: string }[] = [
+  { value: "active", label: "Activas" },
   { value: "all", label: "Todas" },
   { value: "queued", label: STATUS_LABELS.queued },
   { value: "saved", label: STATUS_LABELS.saved },
-  { value: "passed", label: STATUS_LABELS.passed },
   { value: "applied", label: STATUS_LABELS.applied },
   { value: "interviewing", label: STATUS_LABELS.interviewing },
   { value: "offer", label: STATUS_LABELS.offer },
+  { value: "passed", label: STATUS_LABELS.passed },
   { value: "rejected", label: STATUS_LABELS.rejected },
   { value: "withdrawn", label: STATUS_LABELS.withdrawn },
 ];
 
 const PAGE_SIZE = 50;
 
+/** Every status the dropdown can show, "passed" included: leaving it out
+ * made a discarded row display the *first* option ("En cola") instead of
+ * its real status, one tap away from silently reviving it. */
 const EDITABLE_STATUSES: ApplicationStatus[] = [
   "queued",
   "saved",
   "applied",
   "interviewing",
   "offer",
+  "passed",
   "rejected",
   "withdrawn",
 ];
@@ -52,6 +62,9 @@ function ApplicationRow({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [undoing, setUndoing] = useState(false);
+  // The status dropdown saves the moment it changes, with no confirmation —
+  // so the previous value is kept here to offer one tap back.
+  const [previousStatus, setPreviousStatus] = useState<ApplicationStatus | null>(null);
 
   async function handleUndo() {
     setUndoing(true);
@@ -65,12 +78,14 @@ function ApplicationRow({
     }
   }
 
-  async function updateStatus(status: ApplicationStatus) {
+  async function updateStatus(status: ApplicationStatus, isUndo = false) {
+    const before = application.status;
     setSaving(true);
     setError(null);
     try {
       const updated = await applicationsApi.update(application.id, { status });
       onUpdated(updated);
+      setPreviousStatus(isUndo ? null : before);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "No se pudo actualizar el estado.");
     } finally {
@@ -115,7 +130,10 @@ function ApplicationRow({
             {job?.company?.trim()?.[0]?.toUpperCase() ?? "?"}
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block truncate font-semibold text-gray-900 dark:text-gray-100">
+            {/* Two lines, not one truncated one: at this width a single line
+                cut "Backend Software Engineer" down to "Backend Software …"
+                on every row, so different jobs read as duplicates. */}
+            <span className="line-clamp-2 font-semibold text-gray-900 dark:text-gray-100">
               {job?.title ?? "Trabajo sin título"}
             </span>
             <span className="mt-0.5 block truncate text-[13px] text-gray-500 dark:text-gray-400">
@@ -159,6 +177,22 @@ function ApplicationRow({
       {error && (
         <div className="mt-2">
           <ErrorNotice message={error} />
+        </div>
+      )}
+
+      {previousStatus && (
+        <div className="mt-2 flex items-center justify-between gap-2 rounded-xl bg-gray-900 px-3 py-1.5 dark:bg-gray-800">
+          <p className="min-w-0 truncate text-[11px] text-gray-300">
+            Movida a <strong className="font-semibold text-white">{STATUS_LABELS[application.status]}</strong>
+          </p>
+          <button
+            type="button"
+            onClick={() => updateStatus(previousStatus, true)}
+            disabled={saving}
+            className="shrink-0 text-[11px] font-bold text-white hover:underline disabled:opacity-60"
+          >
+            Deshacer
+          </button>
         </div>
       )}
 
@@ -217,20 +251,25 @@ function ApplicationRow({
 
 function ApplicationsContent() {
   const searchParams = useSearchParams();
-  const initialStatus = (searchParams.get("status") as ApplicationStatus | null) ?? "all";
+  const initialStatus = (searchParams.get("status") as ApplicationStatus | null) ?? "active";
 
-  const [filter, setFilter] = useState<ApplicationStatus | "all">(initialStatus);
+  const [filter, setFilter] = useState<Filter>(initialStatus);
   const [applications, setApplications] = useState<Application[] | null>(null);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async (status: ApplicationStatus | "all") => {
+  const load = useCallback(async (status: Filter) => {
     setLoading(true);
     setError(null);
     try {
-      const data = await applicationsApi.list(status === "all" ? undefined : status, PAGE_SIZE, 0);
+      const data = await applicationsApi.list(
+        status === "all" || status === "active" ? undefined : status,
+        PAGE_SIZE,
+        0,
+        status === "active"
+      );
       setApplications(data.items);
       setTotal(data.total);
     } catch (err) {
@@ -245,9 +284,10 @@ function ApplicationsContent() {
     setLoadingMore(true);
     try {
       const data = await applicationsApi.list(
-        filter === "all" ? undefined : filter,
+        filter === "all" || filter === "active" ? undefined : filter,
         PAGE_SIZE,
-        applications.length
+        applications.length,
+        filter === "active"
       );
       setApplications((prev) => (prev ? [...prev, ...data.items] : data.items));
       setTotal(data.total);
@@ -287,10 +327,11 @@ function ApplicationsContent() {
         }
       />
 
-      {/* Always wraps (never a hidden horizontal scroll) — with 8 filters,
-          a scrollable single row cut off the last couple off-screen with
-          no visual hint there was more to see. Wrapping keeps every
-          filter visible up front, at the cost of taking 2-3 lines. */}
+      {/* Always wraps (never a hidden horizontal scroll) — with these
+          filters, a scrollable single row cut off the last couple
+          off-screen with no visual hint there was more to see. Wrapping
+          keeps every filter visible up front, at the cost of taking 2-3
+          lines. */}
       <div className="flex flex-wrap gap-1.5 pt-1">
         {FILTERS.map((f) => (
           <button
@@ -324,7 +365,7 @@ function ApplicationsContent() {
             Nada por aquí todavía
           </p>
           <p className="mx-auto mt-1 max-w-[38ch] text-sm text-gray-500 dark:text-gray-400">
-            {filter === "all"
+            {filter === "all" || filter === "active"
               ? "Cuando guardes una vacante desde Inicio, aparecerá en esta lista."
               : `No tienes vacantes en "${FILTERS.find((f) => f.value === filter)?.label}".`}
           </p>

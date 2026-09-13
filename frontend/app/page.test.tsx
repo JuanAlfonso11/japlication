@@ -75,7 +75,7 @@ describe("Home swipe/decision flow", () => {
 
   it("removes the current job from the queue after a successful decision", async () => {
     matches.mockResolvedValue({ items: [job("a", "Backend Engineer"), job("b", "Frontend Engineer")], total: 2 });
-    decide.mockResolvedValue({ id: "app1", status: "applied" });
+    decide.mockResolvedValue({ id: "app1", status: "saved" });
 
     renderHome();
 
@@ -112,7 +112,7 @@ describe("Home swipe/decision flow", () => {
 
   it("shows the empty state once every job has been decided on", async () => {
     matches.mockResolvedValue({ items: [job("a", "Only Job")], total: 1 });
-    decide.mockResolvedValue({ id: "app1", status: "applied" });
+    decide.mockResolvedValue({ id: "app1", status: "saved" });
 
     renderHome();
     await waitFor(() => expect(screen.getByText("mock-save")).toBeInTheDocument());

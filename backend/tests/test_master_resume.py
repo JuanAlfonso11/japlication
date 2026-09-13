@@ -115,6 +115,11 @@ def _profile(**overrides):
         ("Leadership", "Leadership", "Liderazgo"),
         ("  Trabajo   en equipo ", "Teamwork", "Trabajo en equipo"),
         ("Integracion de APIs", "API Integration", "Integración de APIs"),
+        # Ordinary-word skills too: without these the Spanish CV printed
+        # "Liderazgo, Comunicación, Team coordination, Technical documentation".
+        ("Team coordination", "Team Coordination", "Coordinación de equipos"),
+        ("Technical documentation", "Technical Documentation", "Documentación técnica"),
+        ("Data pipelines", "Data Pipelines", "Pipelines de datos"),
         ("SpringBoot", "Spring Boot", "Spring Boot"),
         ("Espanol", "Spanish", "Español"),
         ("English ", "English", "Inglés"),

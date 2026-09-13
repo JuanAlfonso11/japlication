@@ -105,8 +105,15 @@ _TERM_TABLE: tuple[tuple[tuple[str, ...], str, str], ...] = (
     (("problem solving", "resolucion de problemas"), "Problem Solving", "Resolución de problemas"),
     (("time management", "gestion del tiempo"), "Time Management", "Gestión del tiempo"),
     (("adaptability", "adaptabilidad"), "Adaptability", "Adaptabilidad"),
-    # A technical skill written as ordinary words rather than a product name
+    # Technical skills written as ordinary words rather than product names.
+    # Without these the Spanish CV prints a half-translated skills line:
+    # "Liderazgo, Comunicación, Team coordination, Technical documentation".
     (("api integration", "integracion de apis", "integracion de api"), "API Integration", "Integración de APIs"),
+    (("team coordination", "coordinacion de equipos"), "Team Coordination", "Coordinación de equipos"),
+    (("technical documentation", "documentacion tecnica"), "Technical Documentation", "Documentación técnica"),
+    (("data pipelines", "pipelines de datos"), "Data Pipelines", "Pipelines de datos"),
+    # "Testing" deliberately stays out: it is the word an ATS filters on, and
+    # test_technical_skills_are_never_renamed pins it as a technical name.
     # A product name with the wrong spacing is still that product's name
     (("springboot", "spring boot"), "Spring Boot", "Spring Boot"),
     # Spoken languages

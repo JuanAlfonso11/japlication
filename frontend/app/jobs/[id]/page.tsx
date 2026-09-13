@@ -239,6 +239,9 @@ function JobDetailContent() {
         decision: "right",
         resume_version_id: activeResume.id,
         cover_letter_id: coverLetter?.id,
+        // This button already opened the employer's posting, so this is a
+        // real application — unlike a right swipe on Home, which only saves.
+        mark_applied: true,
       });
       setApplied(true);
     } catch (err) {

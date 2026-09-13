@@ -553,6 +553,10 @@ export interface DecisionPayload {
   // auto-generated (or reused) server-side either way.
   resume_version_id?: string;
   cover_letter_id?: string;
+  // A right swipe only saves. This is the detail page's "Aplicar" button
+  // saying the user is applying right now, which is what marks the
+  // application applied (and stamps applied_at) server-side.
+  mark_applied?: boolean;
 }
 
 export interface ApplicationUpdatePayload {
