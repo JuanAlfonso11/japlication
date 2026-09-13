@@ -83,7 +83,7 @@ const EMPTY_PROFILE: CareerProfile = {
   translations: {},
 };
 
-type ProfileTab = "cv" | "answers" | "insights";
+type ProfileTab = "cv" | "answers" | "insights" | "settings";
 
 const TAB_STORAGE_KEY = "jobflow_profile_tab";
 const CV_LANGUAGE_STORAGE_KEY = "jobflow_profile_cv_language";
@@ -101,7 +101,9 @@ function ProfileContent() {
   useEffect(() => {
     try {
       const stored = window.localStorage.getItem(TAB_STORAGE_KEY);
-      if (stored === "cv" || stored === "answers" || stored === "insights") setTab(stored);
+      if (stored === "cv" || stored === "answers" || stored === "insights" || stored === "settings") {
+        setTab(stored);
+      }
     } catch {
       // localStorage unavailable (private mode) — the default tab is fine.
     }
@@ -364,13 +366,9 @@ function ProfileContent() {
               ? `Guardado ${lastSavedAt.toLocaleTimeString()}`
               : "Al día"}
           </span>
-          <button
-            type="submit"
-            disabled={saving || !dirty}
-            className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {saving ? "Guardando…" : "Guardar perfil"}
-          </button>
+          {/* The second save button lived here: disabled most of the time,
+              at the top of a form whose own save button sits at the end of
+              it, where the thumb already is. The status text stays. */}
         </div>
       </div>
 
@@ -385,6 +383,10 @@ function ProfileContent() {
             badge: (profile.screening_answers ?? []).filter((a) => a.answer.trim()).length,
           },
           { id: "insights", label: "Análisis" },
+          // Ajustes was a floating gear that only appeared on Análisis, so
+          // the account, the theme and "Cerrar sesión" lived somewhere the
+          // user had no reason to look.
+          { id: "settings", label: "Ajustes" },
         ]}
         value={tab}
         onChange={setTab}
@@ -509,13 +511,22 @@ function ProfileContent() {
           <SkillGapsCard />
 
           <UsedResumesSection />
+        </>
+      )}
 
+      {/* Análisis is about the CV; these three are about the machine running
+          it. "Estado del sistema" talks about Task Scheduler and container
+          watchdogs, and "Errores recientes" prints stack traces — between a
+          CV health check and a list of skill gaps, they read as something
+          the user did wrong. */}
+      {tab === "settings" && (
+        <>
           <SettingsPanel />
 
           <SystemStatusPanel />
 
-          {/* Last in Analisis: it's the thing you go looking for only when
-              something already went wrong. */}
+          {/* Last: the thing you go looking for only when something already
+              went wrong. */}
           <ErrorLogPanel />
         </>
       )}
@@ -674,14 +685,17 @@ function ProfileContent() {
           mounted (and the form state with it), so edits made on another tab
           are never lost by switching. The header above still reports
           "Cambios sin guardar" from anywhere. */}
-      {tab !== "insights" && (
-        <div className="sticky bottom-16 flex justify-end md:bottom-0">
+      {/* Only when there is something to save. It used to render always, so
+          a pill reading "Guardado" floated over the last card's text and over
+          the X that deletes a question. */}
+      {tab !== "insights" && tab !== "settings" && (dirty || saving) && (
+        <div className="sticky bottom-16 flex justify-end pb-2 md:bottom-0">
           <button
             type="submit"
-            disabled={saving || !dirty}
+            disabled={saving}
             className="rounded-full bg-brand-600 px-5 py-3 text-sm font-semibold text-white shadow-lg hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {saving ? "Guardando…" : dirty ? "Guardar cambios" : "Guardado"}
+            {saving ? "Guardando…" : "Guardar cambios"}
           </button>
         </div>
       )}

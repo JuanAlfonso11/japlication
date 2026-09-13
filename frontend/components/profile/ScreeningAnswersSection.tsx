@@ -70,9 +70,28 @@ export default function ScreeningAnswersSection({
           <div className="space-y-3">
             {answers.map((entry, i) => (
               <EntryCard key={i} onRemove={() => remove(i)}>
-                <FormField label="Pregunta">
-                  <input
-                    className={inputClass}
+                <FormField
+                  label={
+                    entry.answer.trim().length > 0 ? (
+                      "Pregunta"
+                    ) : (
+                      <>
+                        Pregunta{" "}
+                        <span className="ml-1 rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+                          Pendiente
+                        </span>
+                      </>
+                    )
+                  }
+                >
+                  {/* Wraps instead of truncating: on a single line these read
+                      "¿Tienes autorización para trabaja…", and a question you
+                      cannot read is one you cannot answer. Marking the
+                      unanswered ones in place beats sorting them first — the
+                      save path addresses each row by its index. */}
+                  <textarea
+                    rows={2}
+                    className={`${inputClass} resize-y py-2 leading-snug`}
                     value={entry.question}
                     onChange={(e) => update(i, { question: e.target.value })}
                     placeholder="¿Cuál es tu expectativa salarial?"

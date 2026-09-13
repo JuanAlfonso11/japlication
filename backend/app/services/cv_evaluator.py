@@ -219,11 +219,15 @@ def _evaluate_skills(profile: Any) -> dict[str, Any]:
 
     missing_years = [s.get("name") for s in skills if isinstance(s, dict) and s.get("name") and not s.get("years_experience")]
     if missing_years:
+        # Written out rather than "habilidad(es)": this is read by one person
+        # about their own CV, and the count is known here.
+        count = len(missing_years)
+        subject = "1 habilidad no tiene" if count == 1 else f"{count} habilidades no tienen"
         issues.append(
             _issue(
                 "info",
                 "skills_breadth",
-                f"{len(missing_years)} habilidad(es) sin años de experiencia asignados — esto ayuda al "
+                f"{subject} años de experiencia asignados. Esto ayuda al "
                 "motor de match a comparar mejor contra lo que pide cada vacante.",
             )
         )
@@ -283,8 +287,8 @@ def _evaluate_ats_safety(profile: Any) -> dict[str, Any]:
             _issue(
                 "info",
                 "ats_safety",
-                f"{len(long_bullets)} logro(s) son muy largos (más de 220 caracteres); los reclutadores "
-                "escanean el CV en segundos, sé conciso.",
+                f"{'1 logro es muy largo' if len(long_bullets) == 1 else f'{len(long_bullets)} logros son muy largos'}"
+                " (más de 220 caracteres); los reclutadores escanean el CV en segundos, sé conciso.",
             )
         )
 

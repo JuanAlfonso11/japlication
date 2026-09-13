@@ -133,7 +133,10 @@ def test_ats_safety_flags_emoji_long_bullets_and_bad_dates():
     result = evaluate_cv(profile)
     messages = " ".join(i["message"] for i in result["categories"]["ats_safety"]["issues"])
     assert "emojis" in messages
-    assert "muy largos" in messages
+    # Substring, not the exact wording: the message agrees in number now
+    # ("1 logro es muy largo" / "3 logros son muy largos"), and this fixture
+    # has exactly one.
+    assert "muy largo" in messages
     assert "Acme Corp" in messages
     assert result["categories"]["ats_safety"]["score"] < 100
 

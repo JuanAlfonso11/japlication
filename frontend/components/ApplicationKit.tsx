@@ -73,11 +73,11 @@ function AnswerCard({ question, answer }: { question: string; answer: string }) 
 
   return (
     <div className="rounded-xl bg-gray-50 p-3 dark:bg-gray-800/60">
-      <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">{question}</p>
-      <div className="mt-1.5 flex items-start justify-between gap-3">
-        <p className="min-w-0 flex-1 whitespace-pre-line text-sm leading-relaxed text-gray-800 dark:text-gray-200">
-          {answer}
-        </p>
+      {/* The button rides with the question, not with the answer. Beside the
+          text it squeezed every answer to about 60% of the width, so each
+          one took half a screen to read. */}
+      <div className="flex items-start justify-between gap-3">
+        <p className="min-w-0 text-xs font-semibold text-gray-500 dark:text-gray-400">{question}</p>
         <button
           type="button"
           onClick={copy}
@@ -90,6 +90,9 @@ function AnswerCard({ question, answer }: { question: string; answer: string }) 
           {copied ? "✓" : "Copiar"}
         </button>
       </div>
+      <p className="mt-1.5 whitespace-pre-line text-sm leading-relaxed text-gray-800 dark:text-gray-200">
+        {answer}
+      </p>
     </div>
   );
 }

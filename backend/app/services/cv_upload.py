@@ -90,9 +90,11 @@ def _heuristic_parse(text: str) -> dict[str, Any]:
     skill_names = extract_skills_from_text(text)
     skills = [{"name": s, "category": None, "level": None, "years_experience": None} for s in skill_names]
 
+    # Names what the user can act on, not the env var they never set: the
+    # name of a backend setting tells them nothing about what to do next.
     warnings = [
-        "Sin ANTHROPIC_API_KEY configurada, solo pudimos extraer habilidades y datos de contacto "
-        "automáticamente. Agrega tu experiencia y educación a mano abajo — no inventamos esa parte "
+        "Sin IA disponible, solo pudimos extraer habilidades y datos de contacto "
+        "automáticamente. Agrega tu experiencia y educación a mano abajo: no inventamos esa parte "
         "para no arriesgar datos incorrectos."
     ]
     if not skills:

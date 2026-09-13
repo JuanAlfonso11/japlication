@@ -12,7 +12,9 @@ export function FormField({
   children,
   className = "",
 }: {
-  label: string;
+  /** Usually a string; ReactNode so a label can carry a small badge next to
+   * it (Respuestas marks the unanswered ones this way). */
+  label: ReactNode;
   children: ReactNode;
   className?: string;
 }) {
