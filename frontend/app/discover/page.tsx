@@ -101,9 +101,12 @@ function ExternalResultCard({
             </p>
           )}
         </div>
+        {/* Secondary, always: a results page is a list to read, and a column
+            of primary buttons down the side of it competes with every job
+            title for attention. */}
         <Button
           size="sm"
-          variant={imported ? "secondary" : "primary"}
+          variant="secondary"
           onClick={handleImport}
           disabled={imported}
           loading={loading}
@@ -312,6 +315,43 @@ function ExternalPlatformsSection() {
   );
 }
 
+const RESULTS_PAGE = 20;
+
+/** The results list, a page at a time.
+ *
+ * A search returned 741 cards and painted all of them at once: the 44 seconds
+ * measured from tapping "Buscar" to seeing results are mostly this, not the
+ * network — the client gives up on a request at 20s and never retried.
+ * The visible count lives in here so a new search remounts it (the parent
+ * keys it by the search) and the list starts from the top again. */
+function ResultsList({
+  results,
+  onImport,
+}: {
+  results: ExternalJobResult[];
+  onImport: (result: ExternalJobResult) => Promise<void>;
+}) {
+  const [visible, setVisible] = useState(RESULTS_PAGE);
+  const shown = results.slice(0, visible);
+
+  return (
+    <div className="space-y-3">
+      {shown.map((r) => (
+        <ExternalResultCard key={`${r.source}:${r.external_id}`} result={r} onImport={onImport} />
+      ))}
+      {visible < results.length && (
+        <button
+          type="button"
+          onClick={() => setVisible((v) => v + RESULTS_PAGE)}
+          className="w-full rounded-xl bg-white px-4 py-3 text-sm font-semibold text-gray-700 shadow-soft ring-1 ring-inset ring-gray-200 transition-colors hover:bg-gray-50 dark:bg-gray-900 dark:text-gray-200 dark:ring-gray-700 dark:hover:bg-gray-800"
+        >
+          Ver {Math.min(RESULTS_PAGE, results.length - visible)} más de {results.length}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function DiscoverContent() {
   const [q, setQ] = useState("");
   const [location, setLocation] = useState("");
@@ -456,11 +496,15 @@ function DiscoverContent() {
             </p>
           )}
 
-          <div className="space-y-3">
-            {filteredResults.map((r) => (
-              <ExternalResultCard key={`${r.source}:${r.external_id}`} result={r} onImport={handleImport} />
-            ))}
-          </div>
+          {/* Keyed by what came back, so a new search remounts the list and
+              it starts at the first page again. Repeating the exact same
+              search keeps your place, which is the behaviour you want when
+              you tapped Buscar twice. */}
+          <ResultsList
+            key={`${filteredResults.length}:${filteredResults[0]?.external_id ?? ""}`}
+            results={filteredResults}
+            onImport={handleImport}
+          />
 
           {!loading && searched && results.length > 0 && filteredResults.length === 0 && !error && (
             <p className="py-6 text-center text-sm text-gray-400 dark:text-gray-400">

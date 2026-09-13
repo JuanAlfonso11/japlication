@@ -31,6 +31,21 @@ function applyResolvedTheme(resolved: ResolvedTheme) {
   const root = document.documentElement;
   root.classList.toggle("dark", resolved === "dark");
   root.style.colorScheme = resolved;
+
+  // Android's status and navigation bars follow the OS theme, not the app's:
+  // choosing Claro inside JobPilot left the clock, battery and signal white
+  // on a white bar. SystemBarsStyle.Light means dark content on a light bar,
+  // which is the pairing that goes with the app's light theme.
+  // Imported lazily so the browser build never loads the native shim, and
+  // the whole thing stays best-effort: if it fails, the CSS theme above has
+  // already been applied and only the system bars keep their old contrast.
+  void import("@capacitor/core")
+    .then(({ SystemBars, SystemBarsStyle }) =>
+      SystemBars.setStyle({
+        style: resolved === "dark" ? SystemBarsStyle.Dark : SystemBarsStyle.Light,
+      })
+    )
+    .catch(() => {});
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
