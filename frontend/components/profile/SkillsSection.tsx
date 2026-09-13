@@ -45,21 +45,17 @@ export default function SkillsSection({
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {skills.map((skill, i) => (
           <EntryCard key={i} onRemove={() => remove(i)}>
+            {/* Two rows of two, not four stacked: with 37 skills, a card per
+                skill at four full-width fields made "Mi CV" a screen you
+                scroll past rather than read. Same four fields, half the
+                height. */}
             <div className="grid grid-cols-2 gap-2">
-              <FormField label="Nombre" className="col-span-2">
+              <FormField label="Nombre">
                 <input
                   className={inputClass}
                   value={skill.name}
                   onChange={(e) => update(i, { name: e.target.value })}
                   placeholder="ej. TypeScript"
-                />
-              </FormField>
-              <FormField label="Categoría">
-                <input
-                  className={inputClass}
-                  value={skill.category}
-                  onChange={(e) => update(i, { category: e.target.value })}
-                  placeholder="lenguaje, herramienta…"
                 />
               </FormField>
               <FormField label="Nivel">
@@ -74,7 +70,17 @@ export default function SkillsSection({
                   ))}
                 </Select>
               </FormField>
-              <FormField label="Años de experiencia" className="col-span-2">
+              <FormField label="Categoría">
+                <input
+                  className={inputClass}
+                  value={skill.category}
+                  onChange={(e) => update(i, { category: e.target.value })}
+                  placeholder="lenguaje, herramienta…"
+                />
+              </FormField>
+              {/* "Años", not "Años de experiencia": at half width that label
+                  wrapped to two lines and undid the height this saves. */}
+              <FormField label="Años">
                 <input
                   type="number"
                   min={0}
