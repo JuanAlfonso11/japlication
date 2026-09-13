@@ -74,32 +74,55 @@ function ScopePill({
       </button>
 
       {open && (
-        <div className="absolute left-0 top-9 z-20 w-64 animate-scale-in rounded-2xl bg-white p-3.5 shadow-lift ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-gray-800">
-          <input
-            type="range"
-            min={0}
-            max={SCOPE_LEVELS.length - 1}
-            step={1}
-            value={scopeIndex}
-            onChange={(e) => onChange(Number(e.target.value))}
-            className="w-full accent-brand-600"
+        <>
+          {/* A sheet, not a popover. Anchored under the pill it opened right
+              on top of the card's own title, and its five labels rode a
+              slider at 9px — the smallest text in the app, on the control
+              that decides which jobs you see at all. */}
+          <div
+            aria-hidden="true"
+            onClick={() => setOpen(false)}
+            className="fixed inset-0 z-40 bg-gray-900/30"
           />
-          <div className="mt-1 flex justify-between text-[9px] leading-tight text-gray-400 dark:text-gray-400">
-            {SCOPE_LEVELS.map((lvl) => (
-              <span key={lvl.scope} className="w-12 text-center first:text-left last:text-right">
-                {lvl.label}
-              </span>
-            ))}
-          </div>
-          {geoStatus === "denied" && geoError && (
-            <p className="mt-1.5 text-[11px] text-rose-500 dark:text-rose-400">
-              {geoError} Activa el permiso de ubicación en tu navegador o elige &quot;Cualquier lugar&quot;.
+          <div
+            role="dialog"
+            aria-label="Alcance de la búsqueda"
+            className="fixed inset-x-0 bottom-0 z-50 animate-slide-up rounded-t-3xl bg-white p-5 pb-8 shadow-lift dark:bg-gray-900"
+          >
+            <p className="font-display text-base font-extrabold tracking-display-tight text-gray-900 dark:text-gray-50">
+              ¿Qué tan lejos buscar?
             </p>
-          )}
-          {locationText && (
-            <p className="mt-1.5 text-[11px] text-gray-400 dark:text-gray-400">Tu ubicación: {locationText}</p>
-          )}
-        </div>
+            <div className="mt-3 space-y-1.5">
+              {SCOPE_LEVELS.map((lvl, index) => (
+                <button
+                  key={lvl.scope}
+                  type="button"
+                  onClick={() => {
+                    onChange(index);
+                    setOpen(false);
+                  }}
+                  aria-pressed={index === scopeIndex}
+                  className={`flex min-h-[44px] w-full items-center justify-between rounded-xl px-3.5 text-sm font-semibold transition-colors ${
+                    index === scopeIndex
+                      ? "bg-brand-600 text-white"
+                      : "bg-gray-50 text-gray-700 hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+                  }`}
+                >
+                  {lvl.label}
+                  {index === scopeIndex && <span aria-hidden="true">✓</span>}
+                </button>
+              ))}
+            </div>
+            {geoStatus === "denied" && geoError && (
+              <p className="mt-3 text-xs text-rose-500 dark:text-rose-400">
+                {geoError} Activa el permiso de ubicación en tu navegador o elige &quot;Cualquier lugar&quot;.
+              </p>
+            )}
+            {locationText && (
+              <p className="mt-3 text-xs text-gray-400 dark:text-gray-400">Tu ubicación: {locationText}</p>
+            )}
+          </div>
+        </>
       )}
     </div>
   );

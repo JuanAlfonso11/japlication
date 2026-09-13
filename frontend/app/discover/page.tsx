@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import RouteGuard from "@/components/RouteGuard";
 import ErrorNotice from "@/components/ErrorNotice";
 import ImportedJobCard from "@/components/ImportedJobCard";
@@ -352,6 +352,32 @@ function ResultsList({
   );
 }
 
+/** What you searched for last time, not what it found.
+ *
+ * This screen opened blank every time, so coming back meant setting the same
+ * four filters again. The results themselves deliberately aren't stored:
+ * hundreds of postings is a lot to keep around, and a job list goes stale
+ * while a set of filters doesn't. */
+const FILTERS_KEY = "jobpilot.discover.filters";
+
+type StoredFilters = {
+  q: string;
+  location: string;
+  remoteType: string;
+  level: string;
+  minSalary: string;
+};
+
+function readStoredFilters(): Partial<StoredFilters> {
+  try {
+    const raw = window.sessionStorage.getItem(FILTERS_KEY);
+    return raw ? (JSON.parse(raw) as Partial<StoredFilters>) : {};
+  } catch {
+    // Private mode, blocked storage, or something that isn't JSON any more.
+    return {};
+  }
+}
+
 function DiscoverContent() {
   const [q, setQ] = useState("");
   const [location, setLocation] = useState("");
@@ -365,11 +391,44 @@ function DiscoverContent() {
   const [lastAdded, setLastAdded] = useState<Job | null>(null);
   const [searched, setSearched] = useState(false);
 
+  // On mount, not while building the state: reading storage during the first
+  // render makes the server's HTML and the client's disagree, and React
+  // complains about exactly that.
+  useEffect(() => {
+    const stored = readStoredFilters();
+    if (stored.q) setQ(stored.q);
+    if (stored.location) setLocation(stored.location);
+    // The two typed ones are checked against their own lists, so a value
+    // left over from an older build can't strand a select on an option that
+    // no longer exists.
+    if (stored.remoteType && REMOTE_TYPES.includes(stored.remoteType as RemoteType)) {
+      setRemoteType(stored.remoteType as RemoteType);
+    }
+    if (stored.level && EXPERIENCE_LEVELS.includes(stored.level as ExperienceLevel)) {
+      setExperienceLevelFilter(stored.level as ExperienceLevel);
+    }
+    if (stored.minSalary) setMinSalary(stored.minSalary);
+  }, []);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError(null);
     setLastAdded(null);
+    try {
+      window.sessionStorage.setItem(
+        FILTERS_KEY,
+        JSON.stringify({
+          q,
+          location,
+          remoteType,
+          level: experienceLevelFilter,
+          minSalary,
+        } satisfies StoredFilters)
+      );
+    } catch {
+      // Not being able to remember the filters is not a reason to not search.
+    }
     try {
       const data = await jobsApi.searchAggregate({
         q: q || undefined,
