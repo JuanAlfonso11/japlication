@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "test": "vitest run",
+    "icons": "node scripts/generate-icons.mjs",
     "cap:sync": "cap sync android",
     "cap:open": "cap open android"
   },
