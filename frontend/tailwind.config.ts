@@ -3,14 +3,22 @@ import type { Config } from "tailwindcss";
 /* ---------------------------------------------------------------------------
  * JobPilot design tokens
  *
- * The palette is deliberately *not* another job-board blue (LinkedIn, Indeed,
- * Glassdoor and most of the category share one). `brand` is a deep green:
- * distinctive enough to be recognizable at a glance in a list of app icons,
- * still saturated/serious enough to read as professional rather than playful.
- * It was a violet-indigo until the hue swap — violet is the house colour of
- * every AI-assembled UI, which is what the app kept being mistaken for. Only
- * the hue moved: the ramp keeps the old lightness steps, so the contrast
- * pairs below still hold.
+ * `brand` is graphite and silver, taken from the owner's own portfolio
+ * (juanalvarado.vercel.app: --bg #060607, --surface #0e0e10, --silver
+ * #a9adb5). Two earlier hues were wrong for different reasons: violet is the
+ * house colour of every AI-assembled UI, which is what this app kept being
+ * mistaken for, and green is Glassdoor's and ZipRecruiter's. The category is
+ * saturated — LinkedIn and Indeed blue, Glassdoor green, Monster purple — so
+ * a near-black identity is the one nobody there is using.
+ *
+ * The portfolio's red (#e0283a) stays an accent rather than the brand: in
+ * this app red already means passed, rejected, error and delete across 121
+ * usages, and promoting it would mean repainting all of that onto amber,
+ * which already means "warning".
+ *
+ * A monochrome brand inverts in dark mode: on near-black, a graphite button
+ * disappears, so primary surfaces there use the light end of the ramp with
+ * dark text (see components/ui/Button.tsx).
  * `accent` (amber) is the warm counterweight — used sparingly for scores,
  * streaks and "look here" moments, never for whole surfaces.
  *
@@ -35,17 +43,17 @@ const config: Config = {
     extend: {
       colors: {
         brand: {
-          50: "#eef7f1",
-          100: "#d7ecdf",
-          200: "#b0dcc2",
-          300: "#7fc59e",
-          400: "#4aa87a",
-          500: "#1f8a5b",
-          600: "#0f7548",
-          700: "#0b5f3a",
-          800: "#0a4b2f",
-          900: "#093d28",
-          950: "#042115",
+          50: "#f5f6f7",
+          100: "#e6e8ec",
+          200: "#cdd0d6",
+          300: "#b8bbc2",
+          400: "#a9adb5",
+          500: "#80838b",
+          600: "#34343a",
+          700: "#1f1f23",
+          800: "#14141a",
+          900: "#0e0e10",
+          950: "#060607",
         },
         accent: {
           50: "#fff9ec",
@@ -92,8 +100,8 @@ const config: Config = {
         soft: "0 1px 2px 0 rgb(30 27 75 / 0.04), 0 1px 3px 0 rgb(30 27 75 / 0.06)",
         card: "0 1px 2px 0 rgb(30 27 75 / 0.04), 0 8px 24px -8px rgb(30 27 75 / 0.12)",
         lift: "0 2px 4px 0 rgb(30 27 75 / 0.05), 0 16px 40px -12px rgb(30 27 75 / 0.20)",
-        brand: "0 6px 20px -6px rgb(15 117 72 / 0.45)",
-        "brand-lg": "0 10px 34px -8px rgb(15 117 72 / 0.5)",
+        brand: "0 6px 20px -6px rgb(52 52 58 / 0.45)",
+        "brand-lg": "0 10px 34px -8px rgb(52 52 58 / 0.5)",
       },
       keyframes: {
         "fade-in": {

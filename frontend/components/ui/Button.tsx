@@ -12,7 +12,11 @@ type Size = "sm" | "md" | "lg";
 
 const VARIANTS: Record<Variant, string> = {
   primary:
-    "bg-brand-600 text-white shadow-brand hover:bg-brand-700 hover:shadow-brand-lg focus-visible:outline-brand-600 dark:bg-brand-500 dark:hover:bg-brand-400",
+    // Inverted in dark mode: with a graphite brand, `dark:bg-brand-500` put
+    // white text on mid-grey (about 3.4:1, under AA) and a brand-600 button
+    // would vanish into the near-black surface behind it. On black the
+    // primary is the light end of the ramp with dark text.
+    "bg-brand-600 text-white shadow-brand hover:bg-brand-700 hover:shadow-brand-lg focus-visible:outline-brand-600 dark:bg-brand-200 dark:text-gray-950 dark:hover:bg-brand-100",
   secondary:
     "bg-white text-gray-700 ring-1 ring-inset ring-gray-200 shadow-soft hover:bg-gray-50 hover:ring-gray-300 dark:bg-gray-900 dark:text-gray-200 dark:ring-gray-700 dark:hover:bg-gray-800",
   ghost:

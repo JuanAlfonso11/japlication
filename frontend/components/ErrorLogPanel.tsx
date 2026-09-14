@@ -148,7 +148,7 @@ export default function ErrorLogPanel() {
           <button
             type="button"
             onClick={() => setExpanded((v) => !v)}
-            className="inline-flex min-h-[34px] items-center rounded-lg bg-brand-600 px-3.5 text-xs font-bold text-white transition-colors hover:bg-brand-700 active:scale-95"
+            className="inline-flex min-h-[34px] items-center rounded-lg bg-brand-600 dark:bg-brand-200 dark:text-gray-950 px-3.5 text-xs font-bold text-white transition-colors hover:bg-brand-700 active:scale-95"
           >
             {expanded ? "Ocultar" : "Ver"}
           </button>

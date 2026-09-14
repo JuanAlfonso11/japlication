@@ -21,7 +21,7 @@
 export default function Logo({ className = "h-8 w-8" }: { className?: string }) {
   return (
     <svg viewBox="0 0 48 48" className={className} role="img" aria-label="JobPilot">
-      <rect width="48" height="48" rx="13" fill="#0f7548" />
+      <rect width="48" height="48" rx="13" fill="#34343a" />
       {/* r=16 puts the mark at ~67% of the square, the proportion a home
           screen's other icons sit at; at r=14 it read as noticeably
           smaller than its neighbours in the launcher grid. */}

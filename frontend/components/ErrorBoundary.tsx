@@ -56,7 +56,7 @@ export default class ErrorBoundary extends Component<
           <button
             type="button"
             onClick={() => this.setState({ error: null })}
-            className="inline-flex min-h-[40px] items-center rounded-xl bg-brand-600 px-4 text-sm font-bold text-white transition-colors hover:bg-brand-700 active:scale-[0.97]"
+            className="inline-flex min-h-[40px] items-center rounded-xl bg-brand-600 dark:bg-brand-200 dark:text-gray-950 px-4 text-sm font-bold text-white transition-colors hover:bg-brand-700 active:scale-[0.97]"
           >
             Reintentar
           </button>

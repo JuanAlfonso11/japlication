@@ -83,7 +83,7 @@ export default function MasterCvDownloads({
                 describeSave(await profileApi.downloadMasterPdf(language, `${baseName}.pdf`), "PDF")
               )
             }
-            className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-lg bg-brand-600 dark:bg-brand-200 dark:text-gray-950 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {busy === "pdf" ? "Generando…" : "PDF"}
           </button>

@@ -104,7 +104,7 @@ function ScopePill({
                   aria-pressed={index === scopeIndex}
                   className={`flex min-h-[44px] w-full items-center justify-between rounded-xl px-3.5 text-sm font-semibold transition-colors ${
                     index === scopeIndex
-                      ? "bg-brand-600 text-white"
+                      ? "bg-brand-600 dark:bg-brand-200 dark:text-gray-950 text-white"
                       : "bg-gray-50 text-gray-700 hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
                   }`}
                 >

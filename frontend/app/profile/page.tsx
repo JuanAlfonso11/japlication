@@ -415,7 +415,7 @@ function ProfileContent() {
               hasta que lo revises y le des a Guardar.
             </p>
           </div>
-          <label className="shrink-0 cursor-pointer rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 aria-disabled:cursor-not-allowed aria-disabled:opacity-60">
+          <label className="shrink-0 cursor-pointer rounded-lg bg-brand-600 dark:bg-brand-200 dark:text-gray-950 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 aria-disabled:cursor-not-allowed aria-disabled:opacity-60">
             {uploadingCv ? "Leyendo…" : "Subir PDF"}
             <input
               type="file"
@@ -464,7 +464,7 @@ function ProfileContent() {
             type="button"
             onClick={handleImproveProfile}
             disabled={improving}
-            className="shrink-0 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+            className="shrink-0 rounded-lg bg-brand-600 dark:bg-brand-200 dark:text-gray-950 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {improving ? "Mejorando…" : "Mejorar CV"}
           </button>
@@ -693,7 +693,7 @@ function ProfileContent() {
           <button
             type="submit"
             disabled={saving}
-            className="rounded-full bg-brand-600 px-5 py-3 text-sm font-semibold text-white shadow-lg hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-full bg-brand-600 dark:bg-brand-200 dark:text-gray-950 px-5 py-3 text-sm font-semibold text-white shadow-lg hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {saving ? "Guardando…" : "Guardar cambios"}
           </button>

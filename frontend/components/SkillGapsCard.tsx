@@ -73,7 +73,7 @@ export default function SkillGapsCard() {
             </div>
             <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800">
               <div
-                className="h-full rounded-full bg-brand-600 transition-[width] duration-500 ease-out"
+                className="h-full rounded-full bg-brand-600 transition-[width] duration-500 ease-out dark:bg-brand-200"
                 /* Scaled against the top gap, not against 100 — with a
                    worst gap of 40% every bar would otherwise be a stub and
                    the comparison, which is the whole point, disappears. */

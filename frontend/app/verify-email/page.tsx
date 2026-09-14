@@ -107,7 +107,7 @@ function VerifyEmailContent() {
             type="button"
             onClick={handleResend}
             disabled={resending}
-            className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
+            className="rounded-lg bg-brand-600 dark:bg-brand-200 dark:text-gray-950 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
           >
             {resending ? "Enviando…" : "Reenviar correo de verificación"}
           </button>
@@ -117,7 +117,7 @@ function VerifyEmailContent() {
 
       <Link
         href={token ? "/" : "/login"}
-        className="mt-1 w-full max-w-xs rounded-lg bg-brand-600 px-6 py-3 text-base font-semibold text-white hover:bg-brand-700"
+        className="mt-1 w-full max-w-xs rounded-lg bg-brand-600 dark:bg-brand-200 dark:text-gray-950 px-6 py-3 text-base font-semibold text-white hover:bg-brand-700"
       >
         {token ? "Ir a Home" : "Iniciar sesión"}
       </Link>

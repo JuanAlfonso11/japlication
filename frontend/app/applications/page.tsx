@@ -340,7 +340,7 @@ function ApplicationsContent() {
             aria-pressed={filter === f.value}
             className={`min-h-[34px] rounded-full px-3.5 text-[13px] font-semibold transition-all active:scale-95 ${
               filter === f.value
-                ? "bg-brand-600 text-white shadow-brand"
+                ? "bg-brand-600 dark:bg-brand-200 dark:text-gray-950 text-white shadow-brand"
                 : "bg-white text-gray-600 ring-1 ring-inset ring-gray-200 hover:bg-gray-50 hover:text-gray-900 dark:bg-gray-900 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-gray-800"
             }`}
           >

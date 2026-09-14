@@ -311,7 +311,7 @@ function JobDetailContent() {
           <div className="flex min-w-0 flex-1 items-start gap-3">
             <span
               aria-hidden="true"
-              className="mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-600 font-display text-lg font-extrabold text-white shadow-brand"
+              className="mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-600 dark:bg-brand-200 dark:text-gray-950 font-display text-lg font-extrabold text-white shadow-brand"
             >
               {job.company?.trim()?.[0]?.toUpperCase() ?? "?"}
             </span>
@@ -374,7 +374,7 @@ function JobDetailContent() {
             type="button"
             onClick={handleApply}
             disabled={applying || applied}
-            className="mt-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+            className="mt-2 rounded-lg bg-brand-600 dark:bg-brand-200 dark:text-gray-950 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {applied ? "Aplicado ✓" : applying ? "Preparando…" : job.source_url ? "Aplicar" : "Marcar como aplicado"}
           </button>
@@ -459,7 +459,7 @@ function JobDetailContent() {
               type="button"
               onClick={handleGenerateResume}
               disabled={resumeLoading}
-              className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-lg bg-brand-600 dark:bg-brand-200 dark:text-gray-950 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {resumeLoading ? "Generando…" : resume ? "Regenerar" : "Generar CV"}
             </button>
@@ -477,7 +477,7 @@ function JobDetailContent() {
             <button
               type="button"
               onClick={handleReuseResume}
-              className="shrink-0 self-start rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 sm:self-auto"
+              className="shrink-0 self-start rounded-lg bg-brand-600 dark:bg-brand-200 dark:text-gray-950 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 sm:self-auto"
             >
               Reutilizar
             </button>
@@ -518,7 +518,7 @@ function JobDetailContent() {
                     type="button"
                     onClick={handleDownloadPdf}
                     disabled={pdfDownloading}
-                    className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="rounded-lg bg-brand-600 dark:bg-brand-200 dark:text-gray-950 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {pdfDownloading ? "Generando…" : "Descargar PDF"}
                   </button>
@@ -621,7 +621,7 @@ function JobDetailContent() {
             type="button"
             onClick={handleGenerateCoverLetter}
             disabled={coverLoading}
-            className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-lg bg-brand-600 dark:bg-brand-200 dark:text-gray-950 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {coverLoading ? "Generando…" : coverLetter ? "Regenerar" : "Generar carta"}
           </button>
@@ -634,7 +634,7 @@ function JobDetailContent() {
                 type="button"
                 onClick={handleDownloadCoverLetterPdf}
                 disabled={coverPdfDownloading}
-                className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-lg bg-brand-600 dark:bg-brand-200 dark:text-gray-950 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {coverPdfDownloading ? "Generando…" : "Descargar PDF"}
               </button>

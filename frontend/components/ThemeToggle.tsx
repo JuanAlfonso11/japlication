@@ -55,7 +55,7 @@ export default function ThemeToggle({ compact = false }: { compact?: boolean }) 
             aria-label={opt.label}
             className={`flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
               active
-                ? "bg-brand-600 text-white"
+                ? "bg-brand-600 dark:bg-brand-200 dark:text-gray-950 text-white"
                 : "text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
             }`}
           >

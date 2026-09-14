@@ -185,7 +185,7 @@ export default function SwipeCard({
                   instead of ragged. */}
               <span
                 aria-hidden="true"
-                className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-600 font-display text-base font-extrabold text-white shadow-brand"
+                className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-600 dark:bg-brand-200 dark:text-gray-950 font-display text-base font-extrabold text-white shadow-brand"
               >
                 {job.company?.trim()?.[0]?.toUpperCase() ?? "?"}
               </span>

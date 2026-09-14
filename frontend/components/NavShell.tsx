@@ -122,7 +122,7 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
                 <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
                   {user.full_name.split(" ")[0]}
                 </span>
-                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-600 text-xs font-bold text-white shadow-brand">
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-600 dark:bg-brand-200 dark:text-gray-950 text-xs font-bold text-white shadow-brand">
                   {initialsOf(user.full_name)}
                 </span>
               </Link>
