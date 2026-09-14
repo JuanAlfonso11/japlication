@@ -7,7 +7,7 @@
   "display": "standalone",
   "orientation": "portrait-primary",
   "background_color": "#f6f7fb",
-  "theme_color": "#6d28f5",
+  "theme_color": "#0f7548",
   "share_target": {
     "action": "/jobs/import",
     "method": "GET",

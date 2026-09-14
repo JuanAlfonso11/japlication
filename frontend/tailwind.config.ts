@@ -4,9 +4,13 @@ import type { Config } from "tailwindcss";
  * JobPilot design tokens
  *
  * The palette is deliberately *not* another job-board blue (LinkedIn, Indeed,
- * Glassdoor and most of the category share one). `brand` is a violet-indigo:
+ * Glassdoor and most of the category share one). `brand` is a deep green:
  * distinctive enough to be recognizable at a glance in a list of app icons,
  * still saturated/serious enough to read as professional rather than playful.
+ * It was a violet-indigo until the hue swap — violet is the house colour of
+ * every AI-assembled UI, which is what the app kept being mistaken for. Only
+ * the hue moved: the ramp keeps the old lightness steps, so the contrast
+ * pairs below still hold.
  * `accent` (amber) is the warm counterweight — used sparingly for scores,
  * streaks and "look here" moments, never for whole surfaces.
  *
@@ -31,17 +35,17 @@ const config: Config = {
     extend: {
       colors: {
         brand: {
-          50: "#f4f2ff",
-          100: "#ebe7ff",
-          200: "#d9d1ff",
-          300: "#bdaaff",
-          400: "#9c79ff",
-          500: "#7f4dff",
-          600: "#6d28f5",
-          700: "#5b1fd6",
-          800: "#4a1cad",
-          900: "#3d1a8a",
-          950: "#250f57",
+          50: "#eef7f1",
+          100: "#d7ecdf",
+          200: "#b0dcc2",
+          300: "#7fc59e",
+          400: "#4aa87a",
+          500: "#1f8a5b",
+          600: "#0f7548",
+          700: "#0b5f3a",
+          800: "#0a4b2f",
+          900: "#093d28",
+          950: "#042115",
         },
         accent: {
           50: "#fff9ec",
@@ -88,8 +92,8 @@ const config: Config = {
         soft: "0 1px 2px 0 rgb(30 27 75 / 0.04), 0 1px 3px 0 rgb(30 27 75 / 0.06)",
         card: "0 1px 2px 0 rgb(30 27 75 / 0.04), 0 8px 24px -8px rgb(30 27 75 / 0.12)",
         lift: "0 2px 4px 0 rgb(30 27 75 / 0.05), 0 16px 40px -12px rgb(30 27 75 / 0.20)",
-        brand: "0 6px 20px -6px rgb(109 40 245 / 0.45)",
-        "brand-lg": "0 10px 34px -8px rgb(109 40 245 / 0.5)",
+        brand: "0 6px 20px -6px rgb(15 117 72 / 0.45)",
+        "brand-lg": "0 10px 34px -8px rgb(15 117 72 / 0.5)",
       },
       keyframes: {
         "fade-in": {

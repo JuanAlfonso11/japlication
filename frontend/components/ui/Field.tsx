@@ -32,7 +32,7 @@ export function FormField({
  * The focus ring is a shadow, not `ring-*`, so it composes with the
  * border-color change instead of fighting it for the same pixels. */
 export const inputClass =
-  "w-full min-h-[46px] rounded-xl border border-gray-200 bg-white px-3.5 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 hover:border-gray-300 focus:border-brand-500 focus:shadow-[0_0_0_3px_rgb(109_40_245_/_0.12)] dark:border-gray-700 dark:bg-gray-800/60 dark:text-gray-100 dark:placeholder:text-gray-500 dark:hover:border-gray-600 dark:focus:border-brand-400 dark:focus:shadow-[0_0_0_3px_rgb(156_121_255_/_0.18)]";
+  "w-full min-h-[46px] rounded-xl border border-gray-200 bg-white px-3.5 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 hover:border-gray-300 focus:border-brand-500 focus:shadow-[0_0_0_3px_rgb(15_117_72_/_0.12)] dark:border-gray-700 dark:bg-gray-800/60 dark:text-gray-100 dark:placeholder:text-gray-500 dark:hover:border-gray-600 dark:focus:border-brand-400 dark:focus:shadow-[0_0_0_3px_rgb(74_168_122_/_0.18)]";
 
 export const textareaClass = `${inputClass} min-h-[88px] resize-y py-2.5 leading-relaxed`;
 
