@@ -10,6 +10,10 @@ source was given.
 import pytest
 
 from app.api.v1.routers import jobs
+# Patched directly on the connector module: the router no longer imports any
+# of the 15 providers by name — it looks them up in
+# app.services.external_jobs.registry, whose adapter calls this function.
+from app.services import himalayas
 
 
 def _posting(job_id: str, title: str, location: str | None = None) -> dict:
@@ -41,7 +45,7 @@ async def test_postings_that_contradict_the_work_type_are_dropped(
         }
 
     monkeypatch.setattr(jobs, "_SEARCH_PROVIDERS", {"himalayas"})
-    monkeypatch.setattr(jobs.himalayas, "search_himalayas_jobs", fake_search)
+    monkeypatch.setattr(himalayas, "search_himalayas_jobs", fake_search)
 
     response = await async_client.get(
         "/jobs/search/aggregate",
@@ -64,7 +68,7 @@ async def test_a_posting_that_says_nothing_is_kept(async_client, user_and_header
         return {"results": [_posting("1", "Backend Engineer", "Worldwide")], "has_more": False}
 
     monkeypatch.setattr(jobs, "_SEARCH_PROVIDERS", {"himalayas"})
-    monkeypatch.setattr(jobs.himalayas, "search_himalayas_jobs", fake_search)
+    monkeypatch.setattr(himalayas, "search_himalayas_jobs", fake_search)
 
     response = await async_client.get(
         "/jobs/search/aggregate",

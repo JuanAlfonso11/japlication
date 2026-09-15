@@ -2,7 +2,7 @@
 job-search providers (Adzuna, SerpApi) — regression coverage for the
 "protect the monthly quota from an unattended background sweep" fix."""
 
-from datetime import date
+from datetime import datetime, timezone
 
 from sqlalchemy import select
 
@@ -12,11 +12,18 @@ from app.services import api_budget
 
 
 async def _current_count(provider: str) -> int:
+    # UTC, matching api_budget.try_consume_budget. `date.today()` is the
+    # machine's LOCAL date: this box runs at UTC-4, so between 20:00 and
+    # 23:59 local the UTC date has already rolled over and this helper read a
+    # different row than the code under test had just written — three tests
+    # failing for four hours a day with no bug behind it. That is exactly how
+    # a suite stops being run.
+    today = datetime.now(timezone.utc).date()
     async with AsyncSessionLocal() as db:
         row = (
             await db.execute(
                 select(ApiCallBudget).where(
-                    ApiCallBudget.provider == provider, ApiCallBudget.call_date == date.today()
+                    ApiCallBudget.provider == provider, ApiCallBudget.call_date == today
                 )
             )
         ).scalar_one_or_none()

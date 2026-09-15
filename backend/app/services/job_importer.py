@@ -11,7 +11,8 @@ Strategy (in order of preference):
    the built-in skills taxonomy.
 
 Network/parsing errors are always converted into a clean
-`HTTPException(422, ...)` rather than propagating raw exceptions.
+`JobImportError` rather than propagating raw exceptions; the router
+turns it into a 422.
 """
 
 from __future__ import annotations
@@ -24,12 +25,23 @@ from typing import Any, Optional
 
 import httpx
 from bs4 import BeautifulSoup
-from fastapi import HTTPException
 
 from app.services.skills_taxonomy import extract_skills_from_text
 from app.services.url_guard import UnsafeUrlError, validate_public_http_url
 
 logger = logging.getLogger(__name__)
+
+
+class JobImportError(RuntimeError):
+    """This URL could not be turned into a job posting.
+
+    A service raising HTTPException ties it to the transport: the every-2-hours
+    sweep and run_daily_sweep.py call this code with no request in flight, and
+    a FastAPI exception there is meaningless - every other one of the 15 job
+    services already raises its own error and lets the router translate it.
+    The message is written for the end user, because the router forwards it.
+    """
+
 
 USER_AGENT = (
     "Mozilla/5.0 (compatible; JobFlowAI/1.0; +https://jobflow.ai/bot) "
@@ -113,7 +125,7 @@ async def fetch_html(url: str) -> str:
     try:
         current = validate_public_http_url(url)
     except UnsafeUrlError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise JobImportError(str(exc)) from exc
 
     try:
         async with httpx.AsyncClient(
@@ -136,16 +148,14 @@ async def fetch_html(url: str) -> str:
                     if resp.is_redirect:
                         location = resp.headers.get("location")
                         if not location:
-                            raise HTTPException(
-                                status_code=422, detail="could not parse job posting"
-                            )
+                            raise JobImportError("could not parse job posting")
                         # Relative Locations are normal; resolve against the
                         # URL we actually fetched before re-validating.
                         next_url = str(resp.url.join(location))
                         try:
                             current = validate_public_http_url(next_url)
                         except UnsafeUrlError as exc:
-                            raise HTTPException(status_code=422, detail=str(exc)) from exc
+                            raise JobImportError(str(exc)) from exc
                         # Leaving the `async with` closes this response
                         # without reading its body — a redirect has nothing
                         # worth downloading.
@@ -158,10 +168,7 @@ async def fetch_html(url: str) -> str:
                     # enforces the cap, for servers that are not.
                     declared = resp.headers.get("content-length")
                     if declared and declared.isdigit() and int(declared) > MAX_DOWNLOAD_BYTES:
-                        raise HTTPException(
-                            status_code=422,
-                            detail="La página es demasiado grande para importarla.",
-                        )
+                        raise JobImportError("La página es demasiado grande para importarla.")
 
                     chunks: list[bytes] = []
                     total = 0
@@ -170,10 +177,7 @@ async def fetch_html(url: str) -> str:
                         if total > MAX_DOWNLOAD_BYTES:
                             # Abandon the connection right here; do not read
                             # the rest of whatever the server wants to send.
-                            raise HTTPException(
-                                status_code=422,
-                                detail="La página es demasiado grande para importarla.",
-                            )
+                            raise JobImportError("La página es demasiado grande para importarla.")
                         chunks.append(chunk)
 
                     body = b"".join(chunks)
@@ -184,11 +188,11 @@ async def fetch_html(url: str) -> str:
                         # Server declared a charset Python does not know.
                         return body.decode("utf-8", errors="replace")
 
-            raise HTTPException(status_code=422, detail="Demasiadas redirecciones.")
-    except HTTPException:
+            raise JobImportError("Demasiadas redirecciones.")
+    except JobImportError:
         raise
     except (httpx.HTTPError, httpx.InvalidURL) as exc:
-        raise HTTPException(status_code=422, detail="could not parse job posting") from exc
+        raise JobImportError("could not parse job posting") from exc
 
 
 def _find_jsonld_jobposting(soup: BeautifulSoup) -> Optional[dict[str, Any]]:
@@ -433,7 +437,7 @@ def parse_job_text_heuristic(text: str, title_hint: Optional[str] = None, compan
     with no JSON-LD available (or for manually pasted descriptions)."""
     text = text.strip()
     if not text:
-        raise HTTPException(status_code=422, detail="could not parse job posting")
+        raise JobImportError("could not parse job posting")
 
     lines = [l for l in text.split("\n") if l.strip()]
     title = title_hint or (lines[0].strip() if lines else "Untitled position")
@@ -464,7 +468,7 @@ def parse_job_text_heuristic(text: str, title_hint: Optional[str] = None, compan
     }
 
 
-def _unparseable(stage: str, exc: BaseException, url: Optional[str] = None) -> HTTPException:
+def _unparseable(stage: str, exc: BaseException, url: Optional[str] = None) -> JobImportError:
     """Turn an unexpected parser crash into the user-facing 422 — but leave a trace.
 
     Every one of these used to be a bare `except Exception` raising the same
@@ -485,7 +489,7 @@ def _unparseable(stage: str, exc: BaseException, url: Optional[str] = None) -> H
         exc,
         exc_info=exc,
     )
-    return HTTPException(status_code=422, detail="could not parse job posting")
+    return JobImportError("could not parse job posting")
 
 
 def parse_job_html(html: str, url: Optional[str] = None) -> dict[str, Any]:
@@ -513,10 +517,10 @@ def parse_job_html(html: str, url: Optional[str] = None) -> dict[str, Any]:
         page_text = soup.get_text(separator="\n", strip=True)
         if not page_text or len(page_text) < 20:
             # Not a bug — the page really has no readable text. No log.
-            raise HTTPException(status_code=422, detail="could not parse job posting")
+            raise JobImportError("could not parse job posting")
         try:
             parsed = parse_job_text_heuristic(page_text, title_hint=title_hint)
-        except HTTPException:
+        except JobImportError:
             raise
         except Exception as exc:
             raise _unparseable("heuristic", exc, url) from exc
@@ -530,7 +534,7 @@ async def import_job_from_url(url: str) -> dict[str, Any]:
     html = await fetch_html(url)
     try:
         return parse_job_html(html, url=url)
-    except HTTPException:
+    except JobImportError:
         raise
     except Exception as exc:
         raise _unparseable("import", exc, url) from exc

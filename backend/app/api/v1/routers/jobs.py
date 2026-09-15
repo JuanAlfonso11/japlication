@@ -5,7 +5,7 @@ from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import delete, func, or_, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -32,29 +32,24 @@ from app.schemas.job import (
     JobListResponse,
 )
 from app.schemas.job_match import MatchResult
-from app.services import (
-    adzuna,
-    api_budget,
-    arbeitnow,
-    experience_level,
-    getonbrd,
-    hackernews,
-    himalayas,
-    jobicy,
-    linkedin_jobs,
-    push_notifications,
-    remotejobs_org,
-    remotive,
-    serpapi_jobs,
-    themuse,
-    usajobs,
-    weworkremotely,
-    workingnomads,
-    remoteok,
-)
+# The 15 connector modules are no longer imported here: the router does not
+# name any provider any more, it looks them up in the registry.
+from app.services import api_budget, push_notifications
 from app.services.job_dedupe import dedupe_external_results
-from app.services.job_importer import _extract_remote_type, import_job_from_url
+from app.services.job_importer import (
+    JobImportError,
+    _extract_remote_type,
+    import_job_from_url,
+)
 from app.services.match_engine import compute_and_persist_match
+from app.services.external_jobs import (
+    PROVIDER_NAMES,
+    PROVIDER_NAMES_PATTERN,
+    SearchParams,
+    get_provider,
+)
+from app.services.external_jobs.registry import NO_AUTH_PROVIDERS, normalize_results
+from app.services.sweep_errors import SweepNotReady
 
 logger = logging.getLogger(__name__)
 
@@ -64,19 +59,16 @@ router = APIRouter(tags=["jobs"])
 # opposed to url_import/manual) — see docs/PUBLIC_APIS_RESEARCH.md for what
 # was investigated, why Google Jobs/Upwork/Indeed aren't part of this list,
 # and how LinkedIn got in through its public job pages.
-_NO_AUTH_PROVIDERS = {
-    "himalayas", "arbeitnow", "remotive", "jobicy", "remotejobs_org", "themuse",
-    "weworkremotely", "hackernews", "getonbrd", "workingnomads", "remoteok",
-    "linkedin",
-}
-
-# Registration-required providers. Each degrades gracefully when its keys
-# aren't set in .env: its search_*_jobs() raises a clear *Error, which the
-# single-provider endpoint turns into a 502 and the aggregate fan-out turns
-# into a per-source error message — never a hard failure for the others.
-_KEYED_PROVIDERS = {"adzuna", "usajobs", "serpapi"}
-
-_SEARCH_PROVIDERS = _NO_AUTH_PROVIDERS | _KEYED_PROVIDERS
+#
+# Derived from the provider registry rather than written out again, so these
+# lists cannot drift from the providers that actually exist. The keyed ones
+# (adzuna, usajobs, serpapi) degrade gracefully when their .env keys are
+# missing: their search raises a clear *Error, which the single-provider
+# endpoint turns into a 502 and the aggregate turns into a per-source error
+# message — never a hard failure for the others.
+_NO_AUTH_PROVIDERS = NO_AUTH_PROVIDERS
+_KEYED_PROVIDERS = frozenset(PROVIDER_NAMES) - NO_AUTH_PROVIDERS
+_SEARCH_PROVIDERS = frozenset(PROVIDER_NAMES)
 
 # Adzuna and SerpApi both have a monthly call quota (1,000/month and
 # 250/month respectively — docs/PUBLIC_APIS_RESEARCH.md #9 and #12); an
@@ -88,59 +80,6 @@ _SEARCH_PROVIDERS = _NO_AUTH_PROVIDERS | _KEYED_PROVIDERS
 # uniformly everywhere a provider gets called: the scheduled sweep, pull-
 # to-refresh, and Discover's explicit search all share the same daily
 # budget rather than each needing their own carve-out.
-
-# Best-effort mapping from the human-readable location names Discover's
-# dropdown sends to the geo slugs Himalayas' `country` and Jobicy's `geo`
-# params expect. Providers that don't recognize a slug just don't filter by
-# it rather than erroring, so an unmapped location still degrades gracefully
-# to the substring match the other four providers use.
-_LOCATION_SLUGS = {
-    "united states": "usa",
-    "canada": "canada",
-    "united kingdom": "uk",
-    "europe": "europe",
-    "latin america": "latin-america",
-    "mexico": "mexico",
-    "brazil": "brazil",
-    "argentina": "argentina",
-    "colombia": "colombia",
-    "chile": "chile",
-    "dominican republic": "dominican-republic",
-    "spain": "spain",
-    "germany": "germany",
-    "france": "france",
-    "india": "india",
-    "asia pacific": "apac",
-    "australia": "australia",
-}
-
-
-def _location_slug(location: Optional[str]) -> Optional[str]:
-    if not location:
-        return None
-    return _LOCATION_SLUGS.get(location.strip().lower(), location.strip().lower())
-
-
-def _himalayas_worldwide(location: Optional[str], remote_type_filter: Optional[str]) -> bool:
-    """Himalayas is a 100%-remote job board, so `worldwide` (roles open to
-    candidates anywhere) is what we want whenever the user isn't narrowing
-    to a specific country and isn't asking for onsite/hybrid (which
-    Himalayas simply doesn't have — see remote_type_filter's own
-    post-filter for how that case naturally yields zero results)."""
-    return not location and remote_type_filter in (None, "remote")
-
-
-def _themuse_location(location: Optional[str], remote_type_filter: Optional[str]) -> Optional[str]:
-    """The Muse has no separate remote/onsite field — "Remote" is itself a
-    location value there — so when the user wants remote work and hasn't
-    picked a specific place, ask The Muse for "Remote" directly instead of
-    leaving location unset (which would return everywhere, onsite included)."""
-    if location:
-        return location
-    if remote_type_filter in (None, "remote"):
-        return "Remote"
-    return None
-
 
 async def _ensure_match(job: Job, user_id: UUID, db: AsyncSession) -> None:
     """Computes and persists a JobMatch for a freshly-added job, if the
@@ -187,7 +126,12 @@ async def import_job(
         await _ensure_match(existing_job, current_user.id, db)
         return await _attach_match(existing_job, current_user.id, db)
 
-    parsed = await import_job_from_url(payload.url)
+    # The importer raises its own JobImportError now, like the other 15 job
+    # services; translating it to a status code is the router's job.
+    try:
+        parsed = await import_job_from_url(payload.url)
+    except JobImportError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     job = Job(
         imported_by=current_user.id,
@@ -292,11 +236,33 @@ async def list_jobs(
         ).where(JobMatch.overall_score >= min_score)
 
     if query:
+        # `jobs.search_vector` is a stored tsvector with a GIN index
+        # (idx_jobs_search) built over title + company + description. The old
+        # filter was three ILIKE '%…%' patterns, which no index can serve:
+        # every search was a sequential scan of the whole table, description
+        # column included, and the table grows ~20 rows every 2 hours.
+        #
+        # ILIKE stays as a fallback OR-ed in, because full-text search is not
+        # a superset of substring matching: it works on whole lemmas, so
+        # "Postgre" would no longer find "PostgreSQL" and a partial company
+        # name would stop matching. The indexed branch answers the common
+        # case cheaply; the scan only has to consider what it did not match.
         like = f"%{query}%"
-        base = base.where((Job.title.ilike(like)) | (Job.company.ilike(like)) | (Job.description.ilike(like)))
-        count_base = count_base.where(
-            (Job.title.ilike(like)) | (Job.company.ilike(like)) | (Job.description.ilike(like))
+        # Raw SQL for this one term: `search_vector` is a generated column
+        # that the ORM model deliberately does not map (nothing ever writes
+        # it), so there is no attribute to build the operator from. Bound
+        # parameter, never string interpolation.
+        text_match = text(
+            "jobs.search_vector @@ websearch_to_tsquery('spanish', :fts_query)"
+        ).bindparams(fts_query=query)
+        predicate = or_(
+            text_match,
+            Job.title.ilike(like),
+            Job.company.ilike(like),
+            Job.description.ilike(like),
         )
+        base = base.where(predicate)
+        count_base = count_base.where(predicate)
 
     total = (await db.execute(count_base)).scalar_one()
 
@@ -329,7 +295,9 @@ async def list_jobs(
 async def search_jobs(
     provider: str = Query(
         "himalayas",
-        pattern="^(himalayas|arbeitnow|remotive|jobicy|remotejobs_org|themuse|weworkremotely|hackernews|getonbrd|workingnomads|remoteok|adzuna|usajobs|serpapi|linkedin)$",
+        # Derived from the registry — a hand-typed regex here could accept a
+        # provider that does not exist, or reject one that does.
+        pattern=PROVIDER_NAMES_PATTERN,
     ),
     q: Optional[str] = Query(None),
     location: Optional[str] = Query(None),
@@ -354,258 +322,33 @@ async def search_jobs(
     require their own API keys (see .env) — calling them without keys
     configured returns a 502.
     """
-    if provider == "himalayas":
-        try:
-            data = await himalayas.search_himalayas_jobs(
-                q=q,
-                country=country or _location_slug(location),
-                worldwide=worldwide if worldwide is not None else _himalayas_worldwide(location, remote_type_filter),
-                seniority=seniority or (experience_level.to_himalayas(experience_level_filter) if experience_level_filter else None),
-                employment_type=employment_type,
-                sort=sort,
-                remote_type_filter=remote_type_filter,
-                page=page,
-            )
-        except himalayas.HimalayasError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
-        results = [
-            ExternalJobResult(external_id=r["himalayas_job_id"], **{k: v for k, v in r.items() if k != "himalayas_job_id"})
-            for r in data["results"]
-            if r.get("himalayas_job_id")
-        ]
-        return ExternalJobsSearchResponse(
-            provider="himalayas", results=results, page=page + 1 if data["has_more"] else None, has_more=data["has_more"]
-        )
-
-    if provider == "arbeitnow":
-        try:
-            data = await arbeitnow.search_arbeitnow_jobs(
-                q=q, location=location, experience_level_filter=experience_level_filter,
-                remote_type_filter=remote_type_filter, page=page,
-            )
-        except arbeitnow.ArbeitnowError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
-        results = [
-            ExternalJobResult(external_id=r["arbeitnow_job_id"], **{k: v for k, v in r.items() if k != "arbeitnow_job_id"})
-            for r in data["results"]
-            if r.get("arbeitnow_job_id")
-        ]
-        return ExternalJobsSearchResponse(
-            provider="arbeitnow", results=results, page=page + 1 if data["has_more"] else None, has_more=data["has_more"]
-        )
-
-    if provider == "remotive":
-        try:
-            data = await remotive.search_remotive_jobs(
-                q=q, location=location, experience_level_filter=experience_level_filter,
-                remote_type_filter=remote_type_filter, category=category,
-            )
-        except remotive.RemotiveError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
-        results = [
-            ExternalJobResult(external_id=r["remotive_job_id"], **{k: v for k, v in r.items() if k != "remotive_job_id"})
-            for r in data["results"]
-            if r.get("remotive_job_id")
-        ]
-        return ExternalJobsSearchResponse(provider="remotive", results=results, has_more=False)
-
-    if provider == "jobicy":
-        try:
-            data = await jobicy.search_jobicy_jobs(
-                q=q, location=_location_slug(location), experience_level_filter=experience_level_filter,
-                remote_type_filter=remote_type_filter, industry=category,
-            )
-        except jobicy.JobicyError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
-        results = [
-            ExternalJobResult(external_id=r["jobicy_job_id"], **{k: v for k, v in r.items() if k != "jobicy_job_id"})
-            for r in data["results"]
-            if r.get("jobicy_job_id")
-        ]
-        return ExternalJobsSearchResponse(provider="jobicy", results=results, has_more=False)
-
-    if provider == "remotejobs_org":
-        offset = (page - 1) * 50
-        try:
-            data = await remotejobs_org.search_remotejobs_org_jobs(
-                q=q, location=location, experience_level_filter=experience_level_filter,
-                remote_type_filter=remote_type_filter, category=category, offset=offset,
-            )
-        except remotejobs_org.RemoteJobsOrgError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
-        results = [
-            ExternalJobResult(
-                external_id=r["remotejobs_org_job_id"],
-                **{k: v for k, v in r.items() if k != "remotejobs_org_job_id"},
-            )
-            for r in data["results"]
-            if r.get("remotejobs_org_job_id")
-        ]
-        return ExternalJobsSearchResponse(
-            provider="remotejobs_org", results=results, page=page + 1 if data["has_more"] else None, has_more=data["has_more"]
-        )
-
-    if provider == "themuse":
-        try:
-            data = await themuse.search_themuse_jobs(
-                q=q,
-                location=_themuse_location(location, remote_type_filter),
-                experience_level_filter=experience_level_filter,
-                remote_type_filter=remote_type_filter,
-                category=category,
-                page=page - 1,
-            )
-        except themuse.TheMuseError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
-        results = [
-            ExternalJobResult(external_id=r["themuse_job_id"], **{k: v for k, v in r.items() if k != "themuse_job_id"})
-            for r in data["results"]
-            if r.get("themuse_job_id")
-        ]
-        return ExternalJobsSearchResponse(
-            provider="themuse", results=results, page=page + 1 if data["has_more"] else None, has_more=data["has_more"]
-        )
-
-    if provider == "weworkremotely":
-        try:
-            data = await weworkremotely.search_weworkremotely_jobs(
-                q=q, location=location, experience_level_filter=experience_level_filter,
-                remote_type_filter=remote_type_filter,
-            )
-        except weworkremotely.WeWorkRemotelyError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
-        results = [
-            ExternalJobResult(external_id=r["wwr_job_id"], **{k: v for k, v in r.items() if k != "wwr_job_id"})
-            for r in data["results"]
-            if r.get("wwr_job_id")
-        ]
-        return ExternalJobsSearchResponse(provider="weworkremotely", results=results, has_more=False)
-
-    if provider == "workingnomads":
-        try:
-            data = await workingnomads.search_workingnomads_jobs(
-                q=q, location=location, experience_level_filter=experience_level_filter,
-                remote_type_filter=remote_type_filter,
-            )
-        except workingnomads.WorkingNomadsError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
-        results = [
-            ExternalJobResult(external_id=r["workingnomads_job_id"], **{k: v for k, v in r.items() if k != "workingnomads_job_id"})
-            for r in data["results"]
-            if r.get("workingnomads_job_id")
-        ]
-        return ExternalJobsSearchResponse(provider="workingnomads", results=results, has_more=False)
-
-    if provider == "remoteok":
-        try:
-            data = await remoteok.search_remoteok_jobs(
-                q=q, location=location, experience_level_filter=experience_level_filter,
-                remote_type_filter=remote_type_filter,
-            )
-        except remoteok.RemoteOkError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
-        results = [
-            ExternalJobResult(external_id=r["remoteok_job_id"], **{k: v for k, v in r.items() if k != "remoteok_job_id"})
-            for r in data["results"]
-            if r.get("remoteok_job_id")
-        ]
-        return ExternalJobsSearchResponse(provider="remoteok", results=results, has_more=False)
-
-    if provider == "hackernews":
-        try:
-            data = await hackernews.search_hackernews_jobs(
-                q=q, location=location, experience_level_filter=experience_level_filter,
-                remote_type_filter=remote_type_filter,
-            )
-        except hackernews.HackerNewsError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
-        results = [
-            ExternalJobResult(external_id=r["hn_job_id"], **{k: v for k, v in r.items() if k != "hn_job_id"})
-            for r in data["results"]
-            if r.get("hn_job_id")
-        ]
-        return ExternalJobsSearchResponse(provider="hackernews", results=results, has_more=False)
-
-    if provider == "getonbrd":
-        try:
-            data = await getonbrd.search_getonbrd_jobs(
-                q=q, location=location, experience_level_filter=experience_level_filter,
-                remote_type_filter=remote_type_filter, page=page,
-            )
-        except getonbrd.GetOnBrdError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
-        results = [
-            ExternalJobResult(external_id=r["getonbrd_job_id"], **{k: v for k, v in r.items() if k != "getonbrd_job_id"})
-            for r in data["results"]
-            if r.get("getonbrd_job_id")
-        ]
-        return ExternalJobsSearchResponse(
-            provider="getonbrd", results=results, page=page + 1 if data["has_more"] else None, has_more=data["has_more"]
-        )
-
-    if provider == "adzuna":
-        try:
-            data = await adzuna.search_adzuna_jobs(
-                q=q, location=location, experience_level_filter=experience_level_filter,
-                remote_type_filter=remote_type_filter, page=page,
-            )
-        except adzuna.AdzunaError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
-        results = [
-            ExternalJobResult(external_id=r["adzuna_job_id"], **{k: v for k, v in r.items() if k != "adzuna_job_id"})
-            for r in data["results"]
-            if r.get("adzuna_job_id")
-        ]
-        return ExternalJobsSearchResponse(
-            provider="adzuna", results=results, page=page + 1 if data["has_more"] else None, has_more=data["has_more"]
-        )
-
-    if provider == "usajobs":
-        try:
-            data = await usajobs.search_usajobs_jobs(
-                q=q, location=location, experience_level_filter=experience_level_filter,
-                remote_type_filter=remote_type_filter, page=page,
-            )
-        except usajobs.USAJobsError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
-        results = [
-            ExternalJobResult(external_id=r["usajobs_job_id"], **{k: v for k, v in r.items() if k != "usajobs_job_id"})
-            for r in data["results"]
-            if r.get("usajobs_job_id")
-        ]
-        return ExternalJobsSearchResponse(
-            provider="usajobs", results=results, page=page + 1 if data["has_more"] else None, has_more=data["has_more"]
-        )
-
-    if provider == "linkedin":
-        try:
-            data = await linkedin_jobs.search_linkedin_jobs(
-                q=q, location=location, experience_level_filter=experience_level_filter,
-                remote_type_filter=remote_type_filter,
-            )
-        except linkedin_jobs.LinkedInError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
-        results = [
-            ExternalJobResult(external_id=r["linkedin_job_id"], **{k: v for k, v in r.items() if k != "linkedin_job_id"})
-            for r in data["results"]
-            if r.get("linkedin_job_id")
-        ]
-        return ExternalJobsSearchResponse(provider="linkedin", results=results, has_more=False)
-
-    # provider == "serpapi"
+    spec = get_provider(provider)
+    params = SearchParams(
+        q=q,
+        location=location,
+        experience_level_filter=experience_level_filter,
+        remote_type_filter=remote_type_filter,
+        category=category,
+        page=page,
+        country=country,
+        worldwide=worldwide,
+        seniority=seniority,
+        employment_type=employment_type,
+        sort=sort,
+    )
     try:
-        data = await serpapi_jobs.search_serpapi_jobs(
-            q=q, location=location, experience_level_filter=experience_level_filter,
-            remote_type_filter=remote_type_filter,
-        )
-    except serpapi_jobs.SerpApiError as exc:
+        data = await spec.search(params)
+    except spec.error_cls as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    results = [
-        ExternalJobResult(external_id=r["serpapi_job_id"], **{k: v for k, v in r.items() if k != "serpapi_job_id"})
-        for r in data["results"]
-        if r.get("serpapi_job_id")
-    ]
-    return ExternalJobsSearchResponse(provider="serpapi", results=results, has_more=False)
+
+    results = [ExternalJobResult(**r) for r in normalize_results(spec, data["results"])]
+    has_more = bool(data.get("has_more"))
+    return ExternalJobsSearchResponse(
+        provider=provider,
+        results=results,
+        page=page + 1 if has_more else None,
+        has_more=has_more,
+    )
 
 
 async def _run_search_provider(
@@ -628,110 +371,24 @@ async def _run_search_provider(
     if not await api_budget.try_consume_budget(provider):
         return provider, [], "Límite diario de llamadas alcanzado para proteger la cuota mensual — se reintenta mañana."
     try:
-        if provider == "himalayas":
-            data = await himalayas.search_himalayas_jobs(
+        spec = get_provider(provider)
+    except KeyError:
+        return provider, [], f"Unknown provider '{provider}'."
+
+    try:
+        data = await spec.search(
+            SearchParams(
                 q=q,
-                country=_location_slug(location),
-                worldwide=_himalayas_worldwide(location, remote_type_filter),
-                seniority=experience_level.to_himalayas(experience_level_filter) if experience_level_filter else None,
+                location=location,
+                experience_level_filter=experience_level_filter,
                 remote_type_filter=remote_type_filter,
-            )
-            id_key = "himalayas_job_id"
-        elif provider == "arbeitnow":
-            data = await arbeitnow.search_arbeitnow_jobs(
-                q=q, location=location, experience_level_filter=experience_level_filter,
-                remote_type_filter=remote_type_filter,
-            )
-            id_key = "arbeitnow_job_id"
-        elif provider == "remotive":
-            data = await remotive.search_remotive_jobs(
-                q=q, location=location, experience_level_filter=experience_level_filter,
-                remote_type_filter=remote_type_filter, category=category,
-            )
-            id_key = "remotive_job_id"
-        elif provider == "jobicy":
-            data = await jobicy.search_jobicy_jobs(
-                q=q, location=_location_slug(location), experience_level_filter=experience_level_filter,
-                remote_type_filter=remote_type_filter, industry=category,
-            )
-            id_key = "jobicy_job_id"
-        elif provider == "remotejobs_org":
-            data = await remotejobs_org.search_remotejobs_org_jobs(
-                q=q, location=location, experience_level_filter=experience_level_filter,
-                remote_type_filter=remote_type_filter, category=category,
-            )
-            id_key = "remotejobs_org_job_id"
-        elif provider == "themuse":
-            data = await themuse.search_themuse_jobs(
-                q=q, location=_themuse_location(location, remote_type_filter),
-                experience_level_filter=experience_level_filter, remote_type_filter=remote_type_filter,
                 category=category,
             )
-            id_key = "themuse_job_id"
-        elif provider == "weworkremotely":
-            data = await weworkremotely.search_weworkremotely_jobs(
-                q=q, location=location, experience_level_filter=experience_level_filter,
-                remote_type_filter=remote_type_filter,
-            )
-            id_key = "wwr_job_id"
-        elif provider == "workingnomads":
-            data = await workingnomads.search_workingnomads_jobs(
-                q=q, location=location, experience_level_filter=experience_level_filter,
-                remote_type_filter=remote_type_filter,
-            )
-            id_key = "workingnomads_job_id"
-        elif provider == "remoteok":
-            data = await remoteok.search_remoteok_jobs(
-                q=q, location=location, experience_level_filter=experience_level_filter,
-                remote_type_filter=remote_type_filter,
-            )
-            id_key = "remoteok_job_id"
-        elif provider == "hackernews":
-            data = await hackernews.search_hackernews_jobs(
-                q=q, location=location, experience_level_filter=experience_level_filter,
-                remote_type_filter=remote_type_filter,
-            )
-            id_key = "hn_job_id"
-        elif provider == "getonbrd":
-            data = await getonbrd.search_getonbrd_jobs(
-                q=q, location=location, experience_level_filter=experience_level_filter,
-                remote_type_filter=remote_type_filter,
-            )
-            id_key = "getonbrd_job_id"
-        elif provider == "adzuna":
-            data = await adzuna.search_adzuna_jobs(
-                q=q, location=location, experience_level_filter=experience_level_filter,
-                remote_type_filter=remote_type_filter,
-            )
-            id_key = "adzuna_job_id"
-        elif provider == "usajobs":
-            data = await usajobs.search_usajobs_jobs(
-                q=q, location=location, experience_level_filter=experience_level_filter,
-                remote_type_filter=remote_type_filter,
-            )
-            id_key = "usajobs_job_id"
-        elif provider == "serpapi":
-            data = await serpapi_jobs.search_serpapi_jobs(
-                q=q, location=location, experience_level_filter=experience_level_filter,
-                remote_type_filter=remote_type_filter,
-            )
-            id_key = "serpapi_job_id"
-        elif provider == "linkedin":
-            data = await linkedin_jobs.search_linkedin_jobs(
-                q=q, location=location, experience_level_filter=experience_level_filter,
-                remote_type_filter=remote_type_filter,
-            )
-            id_key = "linkedin_job_id"
-        else:
-            return provider, [], f"Unknown provider '{provider}'."
-    except Exception as exc:  # noqa: BLE001 — any provider failure is reported, never raised
+        )
+    except Exception as exc:  # noqa: BLE001 - any provider failure is reported, never raised
         return provider, [], str(exc)
 
-    results = [
-        ExternalJobResult(external_id=r[id_key], **{k: v for k, v in r.items() if k != id_key})
-        for r in data["results"]
-        if r.get(id_key)
-    ]
+    results = [ExternalJobResult(**r) for r in normalize_results(spec, data["results"])]
     # Every provider is asked for the work type, and several answer with
     # postings that contradict it: a remote search led with "Hybrid - San
     # Francisco, New York City, Austin", then a Berlin and a Köln role. The
@@ -897,24 +554,9 @@ async def import_external_job(
     if payload.source not in _SEARCH_PROVIDERS:
         raise HTTPException(status_code=422, detail=f"Unknown source '{payload.source}'.")
 
-    cache_lookup = {
-        "himalayas": himalayas.get_cached_result,
-        "arbeitnow": arbeitnow.get_cached_result,
-        "remotive": remotive.get_cached_result,
-        "jobicy": jobicy.get_cached_result,
-        "remotejobs_org": remotejobs_org.get_cached_result,
-        "themuse": themuse.get_cached_result,
-        "weworkremotely": weworkremotely.get_cached_result,
-        "hackernews": hackernews.get_cached_result,
-        "getonbrd": getonbrd.get_cached_result,
-        "workingnomads": workingnomads.get_cached_result,
-        "remoteok": remoteok.get_cached_result,
-        "adzuna": adzuna.get_cached_result,
-        "usajobs": usajobs.get_cached_result,
-        "serpapi": serpapi_jobs.get_cached_result,
-        "linkedin": linkedin_jobs.get_cached_result,
-    }[payload.source]
-    cached = cache_lookup(payload.external_id)
+    # Was a 15-entry dict repeated here. Forgetting to add a new provider to
+    # it left search working while "Add to queue" raised KeyError -> 500.
+    cached = get_provider(payload.source).get_cached(payload.external_id)
     if cached is None:
         raise HTTPException(
             status_code=404,
@@ -995,14 +637,17 @@ async def run_auto_import_for_user(user: User, db: AsyncSession) -> AutoImportRe
     profile = (
         await db.execute(select(CareerProfile).where(CareerProfile.user_id == user.id))
     ).scalar_one_or_none()
+    # SweepNotReady, not HTTPException: run_daily_sweep.py calls this on a
+    # schedule with no request in sight, and a user without a profile is a
+    # normal thing to skip there, not a 400 nobody is listening for.
     if profile is None:
-        raise HTTPException(status_code=400, detail="Save your career profile before auto-searching for matches.")
+        raise SweepNotReady("Save your career profile before auto-searching for matches.")
 
     q = _profile_search_query(profile)
     if not q:
-        raise HTTPException(
-            status_code=400,
-            detail="Add a headline, a recent role, or a few skills to your profile first so we know what to search for.",
+        raise SweepNotReady(
+            "Add a headline, a recent role, or a few skills to your profile first "
+            "so we know what to search for."
         )
 
     current_queue_size = await _undecided_queue_size(user.id, db)
@@ -1030,6 +675,7 @@ async def run_auto_import_for_user(user: User, db: AsyncSession) -> AutoImportRe
     all_results = dedupe_external_results(all_results)
 
     imported = 0
+    skipped = 0
     # Walk the FULL sorted list (not a pre-sliced all_results[:import_limit])
     # and stop once import_limit NEW jobs are actually in — slicing first
     # was the bug: across repeated 2-hour sweeps against the same
@@ -1044,7 +690,19 @@ async def run_auto_import_for_user(user: User, db: AsyncSession) -> AutoImportRe
             job, created = await _get_or_create_external_job(
                 result.model_dump(), result.source, user.id, db
             )
-        except Exception:
+        except Exception as exc:  # noqa: BLE001 — one bad posting must not end the sweep
+            # Used to be a bare `continue`: a posting that could not be stored
+            # vanished with no count and no log, so "the sweep found 30 and
+            # imported 4" had no explanation anywhere.
+            skipped += 1
+            logger.warning(
+                "sweep: se omitio %s/%s — %s: %s",
+                result.source,
+                result.external_id,
+                type(exc).__name__,
+                exc,
+            )
+            await db.rollback()
             continue
         if not created:
             continue
@@ -1080,6 +738,17 @@ async def run_auto_import_for_user(user: User, db: AsyncSession) -> AutoImportRe
             await db.execute(delete(DeviceToken).where(DeviceToken.token.in_(dead_tokens)))
             await db.commit()
 
+    if skipped:
+        # Surfaced in the same place the per-source errors are, so the count
+        # the user sees adds up instead of quietly not matching.
+        sources.append(
+            AggregateSourceStatus(
+                provider="import",
+                count=0,
+                error=f"{skipped} vacante(s) no se pudieron guardar — ver los logs del backend.",
+            )
+        )
+
     return AutoImportResponse(imported=imported, query=q, sources=sources)
 
 
@@ -1090,7 +759,13 @@ async def auto_import_matching_jobs(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> AutoImportResponse:
-    return await run_auto_import_for_user(current_user, db)
+    # The HTTP layer is where a domain error becomes a status code. The
+    # service itself stays usable from run_daily_sweep.py, which has no
+    # request to answer.
+    try:
+        return await run_auto_import_for_user(current_user, db)
+    except SweepNotReady as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("/jobs/{job_id}", response_model=JobSchema)

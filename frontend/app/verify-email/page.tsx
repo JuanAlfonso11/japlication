@@ -67,7 +67,7 @@ function VerifyEmailContent() {
           </p>
           {token && (
             <p className="text-xs text-gray-400 dark:text-gray-400">
-              Te llevamos a Home en {redirectIn}s…
+              Te llevamos a Inicio en {redirectIn}s…
             </p>
           )}
         </>
@@ -119,7 +119,7 @@ function VerifyEmailContent() {
         href={token ? "/" : "/login"}
         className="mt-1 w-full max-w-xs rounded-lg bg-brand-600 dark:bg-brand-200 dark:text-gray-950 px-6 py-3 text-base font-semibold text-white hover:bg-brand-700"
       >
-        {token ? "Ir a Home" : "Iniciar sesión"}
+        {token ? "Ir a Inicio" : "Iniciar sesión"}
       </Link>
     </div>
   );

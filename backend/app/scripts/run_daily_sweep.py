@@ -14,12 +14,12 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from fastapi import HTTPException
 from sqlalchemy import select
 
 from app.api.v1.routers.jobs import run_auto_import_for_user
 from app.db.session import AsyncSessionLocal, engine
 from app.models.user import User
+from app.services.sweep_errors import SweepNotReady
 
 logger = logging.getLogger("jobflow.sweep")
 
@@ -31,10 +31,12 @@ async def run() -> None:
         for user in users:
             try:
                 result = await run_auto_import_for_user(user, db)
-            except HTTPException as exc:
+            except SweepNotReady as exc:
                 # No career profile yet, or nothing in it to search on —
                 # normal for a brand-new account, not worth alarming about.
-                logger.info("Skipped %s: %s", user.email, exc.detail)
+                # Was `except HTTPException`, which only worked because the
+                # service reached into FastAPI from a context with no request.
+                logger.info("Skipped %s: %s", user.email, exc)
                 continue
             except Exception:
                 logger.exception("Sweep failed for %s", user.email)

@@ -89,6 +89,22 @@ def _send_verification_email(user: User) -> None:
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit("5/minute")
 async def register(request: Request, payload: UserRegister, db: AsyncSession = Depends(get_db)) -> TokenResponse:
+    # This 409 tells an anonymous caller whether an address has an account —
+    # user enumeration. Kept deliberately, as an accepted risk rather than an
+    # oversight:
+    #
+    #   * the alternative (always answer "check your email") is a genuinely
+    #     worse experience for a personal app: typing an address you already
+    #     registered would look like success and then silently never log you in;
+    #   * the endpoint is rate-limited to 5/minute, so enumerating any real
+    #     list of addresses is not practical here;
+    #   * the app is reachable only inside the owner's Tailscale network.
+    #
+    # If JobPilot is ever exposed publicly, this is the first thing to change:
+    # return 201 either way and send "someone tried to register with your
+    # address" to the existing account instead. The login path does NOT make
+    # the same trade — see the dummy hash there, which removes the timing
+    # oracle for an endpoint that is not rate-limited per address.
     existing = await db.execute(select(User).where(User.email == payload.email.lower()))
     if existing.scalar_one_or_none() is not None:
         raise HTTPException(status_code=409, detail="An account with this email already exists.")

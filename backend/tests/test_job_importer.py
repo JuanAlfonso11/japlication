@@ -1,7 +1,6 @@
 import pytest
-from fastapi import HTTPException
 
-from app.services.job_importer import parse_job_html
+from app.services.job_importer import JobImportError, parse_job_html
 
 JSONLD_JOB_HTML = """
 <!DOCTYPE html>
@@ -131,12 +130,38 @@ class TestHeuristicFallbackParsing:
         assert result["remote_type"] == "remote"
         assert result["employment_type"] == "full_time"
 
-    def test_empty_html_raises_422(self):
-        with pytest.raises(HTTPException) as exc_info:
+    # JobImportError, not HTTPException: the importer is a service and no
+    # longer reaches into FastAPI — the router translates this to a 422 (see
+    # test_unparseable_page_is_a_422 below, which checks that end of it).
+    def test_empty_html_raises_import_error(self):
+        with pytest.raises(JobImportError):
             parse_job_html("<html><body></body></html>")
-        assert exc_info.value.status_code == 422
 
-    def test_garbage_input_does_not_crash_raises_422(self):
-        with pytest.raises(HTTPException) as exc_info:
+    def test_garbage_input_does_not_crash_raises_import_error(self):
+        with pytest.raises(JobImportError):
             parse_job_html("")
-        assert exc_info.value.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_unparseable_page_is_a_422(async_client, user_and_headers, monkeypatch):
+    """The other half of the split: the service raises its own error, and the
+    ROUTER is what turns it into a status code. Without this, moving the
+    exception out of the service could silently start returning 500s and the
+    unit tests above would still pass."""
+    from app.api.v1.routers import jobs as jobs_router
+
+    _user, headers = user_and_headers
+
+    async def fake_import(_url):
+        raise JobImportError("could not parse job posting")
+
+    monkeypatch.setattr(jobs_router, "import_job_from_url", fake_import)
+
+    response = await async_client.post(
+        "/jobs/import",
+        json={"url": "https://example.com/careers/1"},
+        headers=headers,
+    )
+
+    assert response.status_code == 422, response.text
+    assert "parse" in response.json()["detail"].lower()
