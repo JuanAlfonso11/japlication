@@ -1,4 +1,5 @@
 import type {
+  AtsReport,
   ProfileLanguage,
   LanguageStatus,
   AggregateSearchResponse,
@@ -602,6 +603,9 @@ export const resumeApi = {
   update: (id: string, payload: ResumeVersionUpdatePayload) =>
     request<ResumeVersion>(`/resume-versions/${id}`, { method: "PATCH", body: payload }),
   downloadPdf: (id: string, filename: string) => downloadFile(`/resume-versions/${id}/export/pdf`, filename),
+  /** Lee de vuelta el PDF que produciría `downloadPdf` y comprueba que un
+   *  parser lo entiende. Ver backend/app/services/ats_check.py. */
+  atsCheck: (id: string) => request<AtsReport>(`/resumes/${id}/ats-check`),
   latexSource: (id: string) => fetchText(`/resume-versions/${id}/export/tex`),
   downloadTex: (id: string, filename: string) =>
     downloadFile(`/resume-versions/${id}/export/tex`, filename),

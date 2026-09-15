@@ -22,6 +22,7 @@ from app.models.enums import GenerationSource
 from app.models.job import Job
 from app.models.resume_version import ResumeVersion
 from app.models.user import User
+from app.schemas.resume_version import AtsReportSchema
 from app.schemas.resume_version import ReusableResumeSuggestion
 from app.schemas.resume_version import ResumeGenerateRequest
 from app.schemas.resume_version import ResumeVersion as ResumeVersionSchema
@@ -29,6 +30,7 @@ from app.schemas.resume_version import ResumeVersionUpdate
 from app.services.profile_i18n import detect_language, normalize_language
 from app.services.resume_adapter import adapt_resume
 from app.services.resume_latex import render_resume_latex
+from app.services import ats_check
 from app.services.resume_pdf import render_resume_pdf
 from app.services.resume_text import render_resume_text
 from app.services.skills_taxonomy import canonical_skill_set
@@ -393,3 +395,59 @@ async def export_resume_version_pdf(
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.get("/resumes/{resume_version_id}/ats-check", response_model=AtsReportSchema)
+async def check_resume_ats(
+    resume_version_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> AtsReportSchema:
+    """Renderiza el mismo PDF que devuelve el endpoint de arriba y lo lee de
+    vuelta con un parser, para comprobar sobre el texto extraido -- no sobre la
+    pagina -- que un ATS puede leerlo.
+
+    El endpoint de descarga promete "ATS-safe" y hasta ahora nadie lo
+    comprobaba: se renderizaba y no se volvia a abrir. Un PDF puede terminar
+    sin error y extraer las palabras pegadas, en otro orden, o vacio, y eso no
+    se ve abriendolo -- se ve al extraer el texto, que es justo lo que hace el
+    formulario al otro lado. Cuando falla, falla en silencio.
+
+    Se calcula al vuelo en vez de guardarse: el CV adaptado se puede regenerar,
+    y un veredicto guardado que describe un PDF anterior es peor que no
+    tenerlo."""
+    row = (
+        await db.execute(
+            select(ResumeVersion).where(
+                ResumeVersion.id == resume_version_id, ResumeVersion.user_id == current_user.id
+            )
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Resume version not found.")
+
+    profile = (
+        await db.execute(select(CareerProfile).where(CareerProfile.id == row.career_profile_id))
+    ).scalar_one_or_none()
+    contact_info = profile.contact_info if profile is not None else {}
+
+    def _render_and_check():
+        pdf_bytes = render_resume_pdf(
+            full_name=current_user.full_name,
+            contact_info=contact_info,
+            content=row.content,
+            language=row.language,
+            email=current_user.email,
+        )
+        return ats_check.check_resume_pdf(
+            pdf_bytes,
+            full_name=current_user.full_name,
+            email=current_user.email,
+            content=row.content,
+            language=row.language,
+        )
+
+    # En un hilo: renderizar y luego extraer el texto es todo trabajo sincrono
+    # de CPU, y este router ya mantiene esa regla en el resto de sus endpoints.
+    report = await asyncio.to_thread(_render_and_check)
+    return AtsReportSchema.model_validate(report, from_attributes=True)

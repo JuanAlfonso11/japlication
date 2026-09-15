@@ -158,6 +158,7 @@ async def import_job(
         salary_max=parsed.get("salary_max"),
         salary_currency=parsed.get("salary_currency"),
         posted_at=parsed.get("posted_at"),
+        deadline=parsed.get("deadline"),
         raw_html=parsed.get("raw_html"),
     )
     db.add(job)
@@ -206,6 +207,7 @@ async def create_job(
         salary_max=payload.salary_max,
         salary_currency=payload.salary_currency,
         posted_at=payload.posted_at,
+        deadline=payload.deadline,
         requires_cover_letter=payload.requires_cover_letter,
     )
     db.add(job)
@@ -548,6 +550,7 @@ async def _get_or_create_external_job(
         salary_max=cached.get("salary_max"),
         salary_currency=cached.get("salary_currency"),
         posted_at=cached.get("posted_at"),
+        deadline=cached.get("deadline"),
     )
     db.add(job)
     try:

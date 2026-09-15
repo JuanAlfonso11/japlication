@@ -1,5 +1,7 @@
 "use client";
 
+import AtsCheckPanel from "@/components/AtsCheckPanel";
+import DeadlineBadge from "@/components/DeadlineBadge";
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import RouteGuard from "@/components/RouteGuard";
@@ -322,6 +324,7 @@ function JobDetailContent() {
               <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
                 <span className="font-semibold text-gray-700 dark:text-gray-300">{job.company}</span>
                 {job.location ? ` · ${job.location}` : ""}
+                {job.deadline ? <DeadlineBadge deadline={job.deadline} className="ml-2 align-middle" /> : null}
               </p>
               {job.requires_cover_letter && (
                 <span className="mt-2 inline-block rounded-full bg-accent-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-accent-700 ring-1 ring-inset ring-accent-600/20 dark:bg-accent-500/10 dark:text-accent-300 dark:ring-accent-400/30">
@@ -549,6 +552,9 @@ function JobDetailContent() {
                   </span>
                 )}
                 {pdfError && <p className="text-xs text-rose-600 dark:text-rose-400">{pdfError}</p>}
+                {/* Antes de mandarlo, no despues: es el unico momento en que
+                    este dato cambia lo que haces. */}
+                <AtsCheckPanel resumeVersionId={resume.id} />
                 {saveNotice && (
                   <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">
                     {saveNotice}

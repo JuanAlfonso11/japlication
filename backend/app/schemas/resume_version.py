@@ -69,3 +69,23 @@ class ReusableResumeSuggestion(BaseModel):
     similarity: float = 0.0
     source_job_title: Optional[str] = None
     source_company: Optional[str] = None
+
+
+class AtsFindingSchema(BaseModel):
+    """Un problema concreto encontrado al leer de vuelta el PDF generado."""
+
+    level: str  # error | warning
+    code: str
+    message: str
+
+
+class AtsReportSchema(BaseModel):
+    """Lo que un ATS ve de verdad en el PDF, no lo que el generador dice que
+    puso. Ver app/services/ats_check.py."""
+
+    readable: bool
+    pages: int
+    extracted_chars: int
+    findings: list[AtsFindingSchema] = Field(default_factory=list)
+    keywords_found: list[str] = Field(default_factory=list)
+    keywords_missing: list[str] = Field(default_factory=list)

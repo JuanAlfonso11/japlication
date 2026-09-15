@@ -21,7 +21,7 @@ import asyncio
 import json
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any, Optional
 
 import httpx
@@ -380,6 +380,75 @@ def _extract_employment_type(text: str) -> Optional[str]:
     return None
 
 
+#: Como se escribe una fecha limite en una oferta, en los dos idiomas. Solo
+#: formas explicitas: "aplica pronto" o "plazas limitadas" no son una fecha, y
+#: adivinar una es peor que no tener ninguna -- un aviso de "te quedan 2 dias"
+#: basado en una suposicion hace que dejes de fiarte de todos los avisos.
+_DEADLINE_MARKERS = (
+    "fecha limite", "fecha límite", "plazo de inscripcion", "plazo de inscripción",
+    "postula antes del", "aplica antes del", "cierre de postulaciones",
+    "las candidaturas se cierran", "recepcion de candidaturas hasta",
+    "application deadline", "apply before", "applications close",
+    "closing date", "deadline for applications", "last day to apply",
+)
+
+_MONTHS = {
+    "enero": 1, "febrero": 2, "marzo": 3, "abril": 4, "mayo": 5, "junio": 6,
+    "julio": 7, "agosto": 8, "septiembre": 9, "setiembre": 9, "octubre": 10,
+    "noviembre": 11, "diciembre": 12,
+    "january": 1, "february": 2, "march": 3, "april": 4, "may": 5, "june": 6,
+    "july": 7, "august": 8, "september": 9, "october": 10, "november": 11,
+    "december": 12,
+}
+
+#: 2026-03-15 · 15/03/2026 · 15 de marzo de 2026 · March 15, 2026
+_DATE_PATTERNS = (
+    re.compile(r"(?P<y>20\d{2})-(?P<m>\d{1,2})-(?P<d>\d{1,2})"),
+    re.compile(r"(?P<d>\d{1,2})[/.-](?P<m>\d{1,2})[/.-](?P<y>20\d{2})"),
+    re.compile(r"(?P<d>\d{1,2})\s+de\s+(?P<mon>[a-zá-ú]+)\s+de\s+(?P<y>20\d{2})", re.IGNORECASE),
+    re.compile(r"(?P<mon>[a-z]+)\s+(?P<d>\d{1,2}),?\s+(?P<y>20\d{2})", re.IGNORECASE),
+)
+
+
+def _extract_deadline(text: str) -> Optional[date]:
+    """La fecha limite declarada en el texto, o None.
+
+    Solo mira los 120 caracteres que siguen a un marcador explicito: una
+    oferta esta llena de fechas (cuando se fundo la empresa, desde cuando
+    existe el equipo, la fecha de publicacion) y coger la primera que aparezca
+    daria un plazo inventado. Mejor ninguna fecha que una equivocada.
+    """
+    if not text:
+        return None
+    lowered = text.lower()
+    for marker in _DEADLINE_MARKERS:
+        idx = lowered.find(marker)
+        if idx == -1:
+            continue
+        window = text[idx : idx + 120]
+        for pattern in _DATE_PATTERNS:
+            match = pattern.search(window)
+            if not match:
+                continue
+            groups = match.groupdict()
+            month = (
+                _MONTHS.get((groups.get("mon") or "").lower())
+                if groups.get("mon")
+                else int(groups["m"])
+            )
+            if not month:
+                continue
+            try:
+                found = date(int(groups["y"]), month, int(groups["d"]))
+            except ValueError:
+                continue
+            # Una "fecha limite" en el pasado es casi siempre otra cosa mal
+            # leida, y avisar de un plazo vencido no ayuda a nadie.
+            if found >= date.today():
+                return found
+    return None
+
+
 def parse_jobposting_jsonld(item: dict[str, Any], fallback_text: str = "") -> dict[str, Any]:
     title = _text_or_none(item.get("title")) or "Untitled position"
 
@@ -441,6 +510,18 @@ def parse_jobposting_jsonld(item: dict[str, Any], fallback_text: str = "") -> di
         except ValueError:
             posted_at = None
 
+    # `validThrough` es el campo de schema.org para esto, asi que cuando la
+    # pagina lo trae no hay que adivinar nada. El texto solo se mira si falta.
+    deadline = None
+    valid_through = item.get("validThrough")
+    if valid_through:
+        try:
+            deadline = datetime.fromisoformat(str(valid_through).replace("Z", "+00:00")).date()
+        except ValueError:
+            deadline = None
+    if deadline is None:
+        deadline = _extract_deadline(description_text)
+
     full_text_for_scan = description_text
     requirements = _extract_section(description_text, SECTION_HEADERS["requirements"]) or []
     responsibilities = _extract_section(description_text, SECTION_HEADERS["responsibilities"]) or []
@@ -464,6 +545,7 @@ def parse_jobposting_jsonld(item: dict[str, Any], fallback_text: str = "") -> di
         "salary_max": salary_max,
         "salary_currency": salary_currency,
         "posted_at": posted_at,
+        "deadline": deadline,
     }
 
 
@@ -500,6 +582,7 @@ def parse_job_text_heuristic(text: str, title_hint: Optional[str] = None, compan
         "salary_max": None,
         "salary_currency": None,
         "posted_at": None,
+        "deadline": _extract_deadline(text),
     }
 
 

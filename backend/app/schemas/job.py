@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Optional
 from uuid import UUID
 
@@ -35,6 +35,7 @@ class JobCreate(BaseModel):
     salary_max: Optional[float] = None
     salary_currency: Optional[str] = None
     posted_at: Optional[datetime] = None
+    deadline: Optional[date] = None
     source_url: Optional[str] = None
     requires_cover_letter: bool = False
 
@@ -60,6 +61,7 @@ class Job(BaseModel):
     salary_max: Optional[float] = None
     salary_currency: Optional[str] = None
     posted_at: Optional[datetime] = None
+    deadline: Optional[date] = None
     requires_cover_letter: bool = False
     created_at: datetime
     updated_at: datetime
@@ -104,6 +106,7 @@ class ExternalJobResult(BaseModel):
     salary_max: Optional[float] = None
     salary_currency: Optional[str] = None
     posted_at: Optional[datetime] = None
+    deadline: Optional[date] = None
     posted_at_text: Optional[str] = None
     via: Optional[str] = None
     apply_options: list[ApplyOption] = Field(default_factory=list)

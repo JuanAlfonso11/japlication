@@ -122,6 +122,9 @@ CREATE TABLE jobs (
     salary_max        NUMERIC,
     salary_currency    TEXT,
     posted_at         TIMESTAMPTZ,
+    -- Fecha limite declarada por la oferta (NULL = no la dice, nunca "no hay").
+    -- DATE y no timestamp: la oferta dice un dia, no una hora.
+    deadline        DATE,
     raw_html          TEXT,
     requires_cover_letter BOOLEAN NOT NULL DEFAULT FALSE,
     embedding         VECTOR(1536),
@@ -140,6 +143,7 @@ CREATE INDEX idx_jobs_imported_by ON jobs (imported_by);
 -- migration 0009. Every /jobs listing ends in ORDER BY created_at DESC; the
 -- table grows ~20 rows every 2 hours from the sweep.
 CREATE INDEX idx_jobs_created_at ON jobs (created_at DESC);
+CREATE INDEX idx_jobs_deadline ON jobs (deadline) WHERE deadline IS NOT NULL;
 
 -- =========================================================
 -- job_matches (cached hybrid match-engine output per user/job pair)

@@ -218,6 +218,9 @@ export interface Job {
   source_url?: string | null;
   created_at?: string;
   requires_cover_letter?: boolean;
+  /** Fecha límite declarada por la oferta (YYYY-MM-DD). null = no la dice,
+   *  nunca "no hay plazo" — ver backend/app/models/job.py. */
+  deadline?: string | null;
   match?: MatchResult | null;
 }
 
@@ -407,6 +410,9 @@ export interface ExternalJobResult {
   salary_currency?: string | null;
   posted_at?: string | null;
   posted_at_text?: string | null;
+  /** Fecha límite declarada por la oferta (YYYY-MM-DD). null = no la dice,
+   *  nunca "no hay plazo" — ver backend/app/models/job.py. */
+  deadline?: string | null;
   via?: string | null;
   apply_options?: ApplyOption[];
   thumbnail?: string | null;
@@ -701,3 +707,20 @@ export interface ErrorLogEntry {
   url?: string | null;
   created_at: string;
 }
+
+/** Lo que un ATS ve de verdad en el PDF generado, no lo que el generador dice
+ *  que puso. Ver backend/app/services/ats_check.py. */
+export type AtsFinding = {
+  level: "error" | "warning";
+  code: string;
+  message: string;
+};
+
+export type AtsReport = {
+  readable: boolean;
+  pages: number;
+  extracted_chars: number;
+  findings: AtsFinding[];
+  keywords_found: string[];
+  keywords_missing: string[];
+};
