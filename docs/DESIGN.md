@@ -55,14 +55,26 @@ Detalle de empleo                    Discover   Agregar vacante  Perfil         
 
 ### 2.2 Discover — búsqueda en vivo
 Pantalla dedicada a buscar vacantes nuevas (a diferencia de Home, que solo recomienda lo ya cargado).
-Un único botón de búsqueda dispara `GET /jobs/search/aggregate` en paralelo contra las **6 APIs públicas
-sin ningún tipo de autenticación** (investigación completa en `docs/PUBLIC_APIS_RESEARCH.md`, incluyendo
-por qué Google Jobs y Upwork —ambas con credenciales— se quitaron deliberadamente, y por qué LinkedIn e
-Indeed ni siquiera son una opción real para un proyecto personal): **Himalayas, Arbeitnow, Remotive,
-Jobicy, RemoteJobs.org y The Muse**. Los resultados de todas se combinan en una sola lista (ordenada por
-fecha de publicación), cada tarjeta muestra de qué fuente vino, y si alguna API falla no tumba a las
-demás — se reporta aparte y el resto de resultados se sigue mostrando. El usuario elige cuáles agregar
-con un botón "Add to queue" por resultado; nada se persiste hasta que hace eso.
+Un único botón de búsqueda dispara `GET /jobs/search/aggregate` en paralelo contra **15 fuentes**
+(investigación completa en `docs/PUBLIC_APIS_RESEARCH.md`, incluyendo por qué Google Jobs y Upwork
+—ambas con credenciales— se quitaron deliberadamente):
+
+- **Sin credenciales (12)**: Himalayas, Arbeitnow, Remotive, Jobicy, RemoteJobs.org, The Muse,
+  WeWorkRemotely, Hacker News, GetOnBrd, WorkingNomads, RemoteOK y **LinkedIn** — esta última a
+  través de sus páginas públicas de empleo, no de una API con credenciales.
+- **Con clave propia en `.env` (3)**: Adzuna, USAJobs y SerpApi. Sin la clave se saltan y se
+  reportan en `sources`; nunca son un fallo duro.
+
+> La lista autoritativa vive en `backend/app/services/external_jobs/registry.py`, no aquí: los
+> valores aceptados, el conjunto sin autenticación y las cachés por proveedor se derivan de ese
+> registro. Agregar una fuente es una entrada ahí.
+
+Los resultados de todas se combinan en una sola lista (ordenada por fecha de publicación) y se
+deduplican, cada tarjeta muestra de qué fuente vino, y si alguna API falla no tumba a las demás — se
+reporta aparte y el resto se sigue mostrando. Hay un plazo global de 12 s: las fuentes lentas se
+marcan como pendientes en vez de retener la respuesta, y sus resultados quedan en caché para la
+siguiente búsqueda. El usuario elige cuáles agregar con un botón "Add to queue" por resultado; nada
+se persiste hasta que hace eso.
 
 **Filtros**: tres selectores independientes en vez de texto libre. **Puesto** es un dropdown agrupado por
 disciplina (ingeniería de software, infraestructura y datos, otras ingenierías, producto/diseño, otros
@@ -72,7 +84,7 @@ roles) en vez de una caja de texto. **Ubicación** es puramente geográfica (pa�
 antes "ubicación" y "remoto" estaban mezclados en un solo campo con un caso especial para
 `location=Remote`; ahora cada proveedor los trata como dos filtros ortogonales
 (`backend/app/api/v1/routers/jobs.py`). Un cuarto selector de **Nivel de experiencia** (Practicante,
-Junior, Nivel medio, Senior, Liderazgo) filtra las 6 fuentes sin login de forma uniforme — algunas lo
+Junior, Nivel medio, Senior, Liderazgo) filtra las fuentes sin login de forma uniforme — algunas lo
 exponen de forma nativa (Himalayas, The Muse mandan el filtro directo al proveedor; Jobicy lo trae en la
 respuesta), las que no lo hacen (Arbeitnow, Remotive, RemoteJobs.org) lo infieren por heurística de texto
 sobre título+descripción (`backend/app/services/experience_level.py`) — mismo criterio, aplicado parejo
@@ -163,15 +175,19 @@ La adaptación de CV y la cover letter **siempre parten del perfil maestro + los
 ## 5. Flujo de usuario end-to-end
 
 1. Usuario crea cuenta y completa su **CV Maestro** una sola vez.
-2. Busca directamente dentro de la app en **Discover** (las 6 fuentes sin login a la vez), o si ya encontró algo puntual en otro lado, pega la URL/texto en **Agregar vacante** — o sube su CV en PDF en **Perfil** para no partir de cero.
+2. Busca directamente dentro de la app en **Discover** (las 15 fuentes a la vez), o si ya encontró algo puntual en otro lado, pega la URL/texto en **Agregar vacante** — o sube su CV en PDF en **Perfil** para no partir de cero.
 3. El sistema normaliza la vacante y calcula el **match** contra su perfil automáticamente al guardarla.
 4. La vacante aparece en la cola de **Home**; el usuario decide en segundos (derecha/izquierda).
-5. Al aceptar (derecha), el sistema genera automáticamente un **CV adaptado** y una **cover letter** personalizada para esa vacante.
+5. Al aceptar (derecha), la vacante entra al pipeline en **Aplicaciones**. El **CV adaptado** y la
+   **cover letter** NO se generan solos: se piden desde el detalle de la vacante, con un botón por
+   cada uno. Fue una decisión deliberada — generarlos en cada swipe a la derecha dispara una llamada
+   de pago a Anthropic por vacante, incluida la mayoría a las que al final no se aplica.
 6. El usuario revisa/edita ambos documentos, los descarga/copia, y aplica en el sitio original.
 7. Actualiza el estado en **Aplicaciones** conforme avanza (entrevista, oferta, rechazo), manteniendo todo el historial centralizado.
 
 ## 6. Extensiones futuras (fuera del MVP)
-- LinkedIn e Indeed quedan fuera del alcance de este proyecto: ninguna de las dos tiene una API pública para *buscar* vacantes hoy — ambas cerraron esa puerta hace años y solo queda infraestructura para que un ATS *publique* empleos en nombre de un empleador ya cliente, detrás de programas de partners empresariales (ver investigación completa en `docs/PUBLIC_APIS_RESEARCH.md`).
+- **Indeed** queda fuera del alcance de este proyecto (LinkedIn sí entró después, vía sus páginas
+  públicas de empleo — ver 2.2): no tiene una API pública para *buscar* vacantes hoy — ambas cerraron esa puerta hace años y solo queda infraestructura para que un ATS *publique* empleos en nombre de un empleador ya cliente, detrás de programas de partners empresariales (ver investigación completa en `docs/PUBLIC_APIS_RESEARCH.md`).
 - Exportación directa a PDF con plantillas ATS adicionales.
 - Notificaciones/recordatorios de seguimiento de aplicaciones.
 - App nativa (React Native) si la PWA resulta insuficiente en el uso real.

@@ -125,24 +125,35 @@ sent — the backend logs the verification link instead, so local dev needs no m
 ## Live job search
 Search results are **not persisted** — pick one and call the import endpoint to add it to `jobs`.
 
-Six providers, all requiring **zero credentials** (no API key, no OAuth, no signup) — see
-`docs/PUBLIC_APIS_RESEARCH.md` for the full research behind each one, including why Google Jobs and Upwork
-(both credential-gated) were deliberately removed, and why LinkedIn/Indeed aren't — and likely can't be —
-options for a personal project at all: `himalayas`, `arbeitnow`, `remotive`, `jobicy`, `remotejobs_org`,
-`themuse`.
+**15 providers.** Twelve need **zero credentials** (no API key, no OAuth, no signup):
+`himalayas`, `arbeitnow`, `remotive`, `jobicy`, `remotejobs_org`, `themuse`, `weworkremotely`,
+`hackernews`, `getonbrd`, `workingnomads`, `remoteok`, `linkedin`.
+
+Three need their own key in `.env` and are skipped — reported in `sources`, never a hard failure —
+when it is missing: `adzuna`, `usajobs`, `serpapi`.
+
+LinkedIn is reached through its public job pages, not a credentialed API. See
+`docs/PUBLIC_APIS_RESEARCH.md` for the research behind every source, including why Google Jobs and
+Upwork (both credential-gated) were deliberately removed.
+
+> The authoritative list is **`backend/app/services/external_jobs/registry.py`**, not this document.
+> The accepted `provider` values, the no-auth set and the per-provider cache lookups are all derived
+> from that registry, so adding a source is one entry there. This section is prose *about* the
+> registry and can go stale; the registry cannot.
 
 - `GET /jobs/search/aggregate?q=&location=&remote_type=remote&experience_level=&category=`
   -> `{results: ExternalJobResult[], sources: [{provider, count, error?}]}`
-  — fans out to **all six providers in parallel** and merges the results, newest first. This is what
+  — fans out to **all 15 providers in parallel**, each with its own timeout and a 12s overall
+  deadline (slow sources are reported as pending in `sources` rather than holding up the response) and merges the results, newest first. This is what
   Discover's search calls. A provider that errors doesn't drop the others' results; its failure shows up in
   `sources` instead. `location` and `remote_type` are independent filters: `location` is purely geographic
   (e.g. `"Mexico"`, `"Europe"` — unset means any location) while `remote_type` is one of
   `remote|hybrid|onsite` and defaults to `remote` when omitted, preserving the historical default of
   showing remote-friendly postings first. `experience_level` is one of
   `internship|entry|mid|senior|lead` (see below).
-- `GET /jobs/search?provider=himalayas|arbeitnow|remotive|jobicy|remotejobs_org|themuse&q=&location=&experience_level=&remote_type=&category=&country=&worldwide=&seniority=&employment_type=&sort=&page=`
+- `GET /jobs/search?provider=<one of the 15 listed above>&q=&location=&experience_level=&remote_type=&category=&country=&worldwide=&seniority=&employment_type=&sort=&page=`
   -> `{provider, results: ExternalJobResult[], page?, has_more}` — single-provider search, for querying just
-  one source directly instead of all six.
+  one source directly instead of all 15.
   - `provider` defaults to `himalayas`. `remote_type` (`remote|hybrid|onsite`) is optional here — unset means
     no filtering by work mode.
   - `ExternalJobResult`: same shape as `Job` (minus id/timestamps) plus `external_id` and `source`.
@@ -162,13 +173,64 @@ options for a personal project at all: `himalayas`, `arbeitnow`, `remotive`, `jo
 - `POST /jobs/search/import` `{source, external_id}` -> `Job` (reads the normalized result from that
   provider's short-lived search cache — re-run the search if it expired, `404`)
 - `POST /jobs/search/auto-import` -> `{imported: int, query?: string, sources: [{provider, count, error?}]}`
-  — searches all six providers using the saved career profile (headline, most recent role, or top
+  — searches every provider using the saved career profile (headline, most recent role, or top
   skills, whichever is available first) and imports the newest matches into `jobs` with a computed
   match score in one call, so they show up in `GET /matches` immediately. This is what the frontend
   calls right after a CV-derived profile is saved (`POST /profile/import-cv` followed by
   `PUT /profile`), so Home's swipe queue has something to show without a manual Discover search.
   Only genuinely new postings (by `source_url`) are imported/counted. `400` if no career profile
   exists yet, or if it has no headline, experience, or skills to search by.
+
+## Operations
+
+Seven endpoints the app itself depends on, none of which were documented here — the frontend, the
+Android shell and the scheduled PowerShell scripts all call them.
+
+### System (`/system`)
+- `POST /system/heartbeat` -> `204` — the scheduled scripts (`scripts/*.ps1`) report that they ran.
+  Authenticated with the `X-Heartbeat-Secret` header, **not** a user token: these callers have no
+  session. The secret is `SYSTEM_HEARTBEAT_SECRET`, auto-generated into `backend/runtime/` on first
+  boot so the endpoint is never left open by default.
+- `GET /system/status` -> `HeartbeatInfo[]` — when each scheduled job last reported, for the
+  "Estado del sistema" panel in Perfil. Requires a user token.
+- `POST /system/client-errors` -> `204` — the frontend and the Android WebView post their own
+  uncaught errors here so a crash on the phone leaves a trace on the server. See
+  `frontend/lib/errorReporting.ts`.
+- `GET /system/errors` -> `ErrorLogEntry[]` — the recorded errors, for the panel in Perfil.
+
+### Push notifications (`/notifications`)
+- `POST /notifications/register-device` `{token}` -> `204` — register this device's FCM token.
+  Dead tokens are cleaned up automatically when a send fails with `UnregisteredError`.
+- `DELETE /notifications/register-device` `{token}` -> `204` — unregister it.
+
+Without `FIREBASE_CREDENTIALS_PATH` set, the backend accepts registrations and simply never sends —
+the same graceful-degradation pattern as SMTP and Anthropic.
+
+### Android updates (`/app`)
+- `GET /app/android-update` -> `AndroidUpdateInfo` — lets the installed APK notice a newer build
+  without a cable. Driven by the `ANDROID_LATEST_VERSION_*` variables in `.env`; unset means no
+  update is tracked and the banner never shows. See `docs/ANDROID_APP.md`.
+
+## Pagination
+
+Not uniform, and worth knowing before adding a client:
+
+| Endpoint | Scheme |
+|---|---|
+| `GET /jobs`, `GET /applications`, `GET /matches` | `limit` + `offset` |
+| `GET /jobs/search` | `page` (1-based); the response echoes the next `page` and `has_more` |
+| `GET /jobs/search/aggregate` | none — one fan-out returns one merged, deduplicated list |
+
+Everything else returns a complete list.
+
+## Idempotency
+
+- `POST /jobs/import` and `POST /jobs/search/import` key on `source_url`: importing the same posting
+  twice returns the existing row rather than creating a second one (`409` only on a real uniqueness
+  conflict).
+- `POST /notifications/register-device` is safe to repeat with the same token.
+- `POST /system/heartbeat` is an append: each call records one more run.
+- Everything else is a normal create.
 
 ## Match Engine
 - `GET /jobs/{id}/match` -> computes (or returns fresh cached) `MatchResult`, recompute with `?refresh=true`
