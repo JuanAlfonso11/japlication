@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useReducer, useState } from "react";
 import RouteGuard from "@/components/RouteGuard";
 import { ListSkeleton } from "@/components/ui/Skeleton";
 import ErrorNotice from "@/components/ErrorNotice";
@@ -10,6 +10,8 @@ import SegmentedTabs from "@/components/ui/SegmentedTabs";
 import ErrorLogPanel from "@/components/ErrorLogPanel";
 import { useAnnounce } from "@/components/LiveRegion";
 import useUnsavedGuard from "@/components/useUnsavedGuard";
+import useAsyncTask from "@/components/useAsyncTask";
+import useLocalStorageState from "@/components/useLocalStorageState";
 import SettingsPanel from "@/components/profile/SettingsPanel";
 import UsedResumesSection from "@/components/profile/UsedResumesSection";
 import SystemStatusPanel from "@/components/profile/SystemStatusPanel";
@@ -40,6 +42,7 @@ import type {
   LanguageStatus,
   ProfileLanguage,
 } from "@/lib/types";
+import { improveReducer, initialImproveState } from "./improveState";
 
 /** Normalizes a value for comparison: case, accents and punctuation removed,
  * whitespace collapsed. "Ingeniería de Software" and "ingenieria de software"
@@ -128,6 +131,18 @@ const EMPTY_PROFILE: CareerProfile = {
 
 type ProfileTab = "cv" | "answers" | "insights" | "settings";
 
+function isProfileTab(value: string): value is ProfileTab {
+  return value === "cv" || value === "answers" || value === "insights" || value === "settings";
+}
+
+function isProfileLanguage(value: string): value is ProfileLanguage {
+  return value === "en" || value === "es";
+}
+
+/** What the PDF import has to say once it is done: how the file was read, and
+ *  anything the parser was unsure about. */
+type CvImportNotice = { warnings: string[]; generatedBy: string };
+
 const TAB_STORAGE_KEY = "jobflow_profile_tab";
 const CV_LANGUAGE_STORAGE_KEY = "jobflow_profile_cv_language";
 
@@ -139,26 +154,8 @@ function ProfileContent() {
 
   // Remembered across visits: coming back to Perfil to keep filling in the
   // answer bank and landing on the CV form every time is a small, repeated
-  // annoyance. Read in an effect rather than in the initial state so the
-  // server-rendered markup and the first client render agree.
-  const [tab, setTab] = useState<ProfileTab>("cv");
-  useEffect(() => {
-    try {
-      const stored = window.localStorage.getItem(TAB_STORAGE_KEY);
-      if (stored === "cv" || stored === "answers" || stored === "insights" || stored === "settings") {
-        setTab(stored);
-      }
-    } catch {
-      // localStorage unavailable (private mode) — the default tab is fine.
-    }
-  }, []);
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(TAB_STORAGE_KEY, tab);
-    } catch {
-      // Non-fatal: the choice just won't persist.
-    }
-  }, [tab]);
+  // annoyance.
+  const [tab, setTab] = useLocalStorageState<ProfileTab>(TAB_STORAGE_KEY, "cv", isProfileTab);
 
   const [profile, setProfile] = useState<CareerProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -173,63 +170,43 @@ function ProfileContent() {
   // Which language the CV form is editing. Remembered for the same reason
   // the tab is: someone filling in the Spanish version does it over several
   // visits, and landing back on English every time is a papercut.
-  const [cvLanguage, setCvLanguage] = useState<ProfileLanguage>("es");
-  useEffect(() => {
-    try {
-      const stored = window.localStorage.getItem(CV_LANGUAGE_STORAGE_KEY);
-      if (stored === "en" || stored === "es") setCvLanguage(stored);
-    } catch {
-      // localStorage unavailable (private mode) — the default is fine.
-    }
-  }, []);
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(CV_LANGUAGE_STORAGE_KEY, cvLanguage);
-    } catch {
-      // Non-fatal: the choice just won't persist.
-    }
-  }, [cvLanguage]);
+  const [cvLanguage, setCvLanguage] = useLocalStorageState<ProfileLanguage>(
+    CV_LANGUAGE_STORAGE_KEY,
+    "es",
+    isProfileLanguage
+  );
 
-  const [evaluation, setEvaluation] = useState<CVEvaluation | null>(null);
-  const [evalLoading, setEvalLoading] = useState(false);
-  const [evalError, setEvalError] = useState<string | null>(null);
+  // Four requests, one shape each: running / error / result. See
+  // components/useAsyncTask.ts for why they are no longer written out by hand.
+  const [evalState, evalTask] = useAsyncTask<CVEvaluation>();
+  const [uploadState, uploadTask] = useAsyncTask<CvImportNotice>();
+  const [autoSearchState, autoSearchTask] = useAsyncTask<string>();
 
-  const [uploadingCv, setUploadingCv] = useState(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-  const [uploadNotice, setUploadNotice] = useState<{ warnings: string[]; generatedBy: string } | null>(null);
+  // Not part of the import request itself — it outlives it, until the save
+  // that turns the imported draft into a reason to go looking for matches.
   const [cvImportedPendingSave, setCvImportedPendingSave] = useState(false);
-  const [autoSearching, setAutoSearching] = useState(false);
-  const [autoSearchNotice, setAutoSearchNotice] = useState<string | null>(null);
 
-  const [improving, setImproving] = useState(false);
-  const [improveError, setImproveError] = useState<string | null>(null);
-  const [improveNotice, setImproveNotice] = useState<{
-    changeLog: string[];
-    generatedBy: string;
-    scoreBefore: number | null;
-    scoreAfter: number | null;
-  } | null>(null);
-  const [improvePendingSave, setImprovePendingSave] = useState(false);
-  const [preImproveScore, setPreImproveScore] = useState<number | null>(null);
+  // The CV rewrite moves six things that have to stay consistent with each
+  // other; improveState.ts holds the transitions and the reasons.
+  const [improve, dispatchImprove] = useReducer(improveReducer, initialImproveState);
 
   const loadEvaluation = useCallback(async () => {
-    setEvalLoading(true);
-    setEvalError(null);
+    // Keeps the previous score on screen while the new one loads: this runs
+    // after every save, and blanking a card the user is looking at reads as
+    // "it broke" rather than "it is refreshing".
+    evalTask.start({ keepData: true });
     try {
-      const data = await profileApi.evaluation();
-      setEvaluation(data);
+      evalTask.succeed(await profileApi.evaluation());
     } catch (err) {
       // A profile that doesn't exist yet (404) just has nothing to evaluate —
       // not an error worth surfacing before the user has saved anything.
       if (err instanceof ApiError && err.status === 404) {
-        setEvaluation(null);
+        evalTask.succeed(null);
       } else {
-        setEvalError(err instanceof ApiError ? err.message : "No se pudo evaluar tu CV.");
+        evalTask.fail(err instanceof ApiError ? err.message : "No se pudo evaluar tu CV.");
       }
-    } finally {
-      setEvalLoading(false);
     }
-  }, []);
+  }, [evalTask]);
 
   const loadLanguages = useCallback(async () => {
     try {
@@ -297,16 +274,15 @@ function ProfileContent() {
       // becomes true again after the save it is describing.
       loadLanguages();
 
-      if (improvePendingSave) {
-        setImprovePendingSave(false);
+      if (improve.pendingSave) {
         try {
           const newEvaluation = await profileApi.evaluation();
-          setEvaluation(newEvaluation);
-          setImproveNotice((prev) =>
-            prev ? { ...prev, scoreBefore: preImproveScore, scoreAfter: newEvaluation.overall_score } : prev
-          );
+          evalTask.succeed(newEvaluation);
+          dispatchImprove({ type: "scored", scoreAfter: newEvaluation.overall_score });
         } catch {
-          // Non-fatal — the improved profile still saved fine.
+          // Non-fatal — the improved profile still saved fine; the card just
+          // shows its change log without a before/after.
+          dispatchImprove({ type: "scored", scoreAfter: null });
         }
       } else {
         loadEvaluation();
@@ -314,11 +290,10 @@ function ProfileContent() {
 
       if (cvImportedPendingSave) {
         setCvImportedPendingSave(false);
-        setAutoSearching(true);
-        setAutoSearchNotice(null);
+        autoSearchTask.start();
         try {
           const result = await jobsApi.autoImport();
-          setAutoSearchNotice(
+          autoSearchTask.succeed(
             result.imported > 0
               ? `Encontramos ${result.imported} vacante${result.imported === 1 ? "" : "s"} nueva${
                   result.imported === 1 ? "" : "s"
@@ -328,9 +303,7 @@ function ProfileContent() {
         } catch {
           // Non-fatal — the profile itself saved fine; the user can still
           // find jobs manually via Discover.
-          setAutoSearchNotice(null);
-        } finally {
-          setAutoSearching(false);
+          autoSearchTask.succeed(null);
         }
       }
     } catch (err) {
@@ -344,73 +317,56 @@ function ProfileContent() {
     const file = e.target.files?.[0];
     e.target.value = ""; // allow re-uploading the same file again later
     if (!file) return;
-    setUploadingCv(true);
-    setUploadError(null);
-    setUploadNotice(null);
+    uploadTask.start();
     try {
       const result = await profileApi.importCv(file);
       setProfile((prev) => (prev ? mergeCvDraft(prev, result.profile) : prev));
       setDirty(true);
       setCvImportedPendingSave(true);
-      setUploadNotice({ warnings: result.warnings, generatedBy: result.generated_by });
+      uploadTask.succeed({ warnings: result.warnings, generatedBy: result.generated_by });
     } catch (err) {
-      setUploadError(err instanceof ApiError ? err.message : "No se pudo leer ese PDF.");
-    } finally {
-      setUploadingCv(false);
+      uploadTask.fail(err instanceof ApiError ? err.message : "No se pudo leer ese PDF.");
     }
   }
 
-  /** Snapshot of the user's own wording, taken right before "Mejorar CV"
-   * overwrites it. The profile is described in the design as "the single
-   * source of factual truth", and this button rewrites the headline, the
-   * summary AND every achievement bullet in one shot. There was a text
-   * change-log but no before/after and no way back: the only escape was to
-   * leave without saving, which also threw away anything else edited in the
-   * same session. A tool that scary is a tool you stop using. */
-  const [preImproveProfile, setPreImproveProfile] = useState<Pick<
-    CareerProfile,
-    "headline" | "summary" | "experience"
-  > | null>(null);
-
   function handleRevertImprove() {
-    if (!preImproveProfile) return;
-    patch(preImproveProfile);
-    setPreImproveProfile(null);
-    setImproveNotice(null);
-    setImprovePendingSave(false);
+    if (!improve.original) return;
+    patch(improve.original);
+    dispatchImprove({ type: "reverted" });
     announce("Se restauró tu versión del CV.");
   }
 
   async function handleImproveProfile() {
-    setImproving(true);
-    setImproveError(null);
-    setImproveNotice(null);
-    setPreImproveScore(evaluation?.overall_score ?? null);
+    // The snapshot is taken here rather than after the call comes back: it is
+    // the same text either way (nothing else writes to the profile while the
+    // request is in flight), and taking it up front is what lets the reducer
+    // decide whether it should replace the one already held. See
+    // improveState.ts — pressing this twice used to overwrite the user's own
+    // wording with the first rewrite.
+    dispatchImprove({
+      type: "start",
+      snapshot: profile
+        ? { headline: profile.headline, summary: profile.summary, experience: profile.experience }
+        : null,
+      currentScore: evalState.data?.overall_score ?? null,
+    });
     try {
       const result = await profileApi.improve();
-      if (profile) {
-        setPreImproveProfile({
-          headline: profile.headline,
-          summary: profile.summary,
-          experience: profile.experience,
-        });
-      }
       patch({
         headline: result.profile.headline,
         summary: result.profile.summary,
         experience: result.profile.experience,
       });
-      setImprovePendingSave(true);
-      setImproveNotice({
+      dispatchImprove({
+        type: "succeeded",
         changeLog: result.change_log,
         generatedBy: result.generated_by,
-        scoreBefore: null,
-        scoreAfter: null,
       });
     } catch (err) {
-      setImproveError(err instanceof ApiError ? err.message : "No se pudo mejorar el CV.");
-    } finally {
-      setImproving(false);
+      dispatchImprove({
+        type: "failed",
+        message: err instanceof ApiError ? err.message : "No se pudo mejorar el CV.",
+      });
     }
   }
 
@@ -419,6 +375,11 @@ function ProfileContent() {
   if (loading) return <ListSkeleton rows={5} />;
   if (loadError) return <ErrorNotice message={loadError} onRetry={load} />;
   if (!profile) return null;
+
+  // Narrowed once, so the two cards below can read the fields without
+  // repeating a null check on every line.
+  const uploadNotice = uploadState.data;
+  const improveNotice = improve.notice;
 
   return (
     <form onSubmit={handleSave} className="space-y-6 pb-4 animate-fade-in">
@@ -474,14 +435,14 @@ function ProfileContent() {
 
       {saveError && <ErrorNotice message={saveError} />}
 
-      {autoSearching && (
+      {autoSearchState.running && (
         <div className="rounded-lg bg-brand-50 p-3 text-xs font-medium text-brand-700 ring-1 ring-inset ring-brand-600/20 dark:bg-brand-900/20 dark:text-brand-300 dark:ring-brand-400/30">
           Buscando vacantes que hagan match con tu nuevo perfil…
         </div>
       )}
-      {!autoSearching && autoSearchNotice && (
+      {!autoSearchState.running && autoSearchState.data && (
         <div className="rounded-lg bg-emerald-50 p-3 text-xs font-medium text-emerald-800 ring-1 ring-inset ring-emerald-600/20 dark:bg-emerald-900/20 dark:text-emerald-300 dark:ring-emerald-400/30">
-          {autoSearchNotice}
+          {autoSearchState.data}
         </div>
       )}
 
@@ -496,19 +457,19 @@ function ProfileContent() {
             </p>
           </div>
           <label className="shrink-0 cursor-pointer rounded-lg bg-brand-600 dark:bg-brand-200 dark:text-gray-950 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 aria-disabled:cursor-not-allowed aria-disabled:opacity-60">
-            {uploadingCv ? "Leyendo…" : "Subir PDF"}
+            {uploadState.running ? "Leyendo…" : "Subir PDF"}
             <input
               type="file"
               accept="application/pdf"
               className="hidden"
-              disabled={uploadingCv}
+              disabled={uploadState.running}
               onChange={handleCvFileChange}
             />
           </label>
         </div>
-        {uploadError && (
+        {uploadState.error && (
           <div className="mt-2">
-            <ErrorNotice message={uploadError} />
+            <ErrorNotice message={uploadState.error} />
           </div>
         )}
         {uploadNotice && (
@@ -543,15 +504,15 @@ function ProfileContent() {
           <button
             type="button"
             onClick={handleImproveProfile}
-            disabled={improving}
+            disabled={improve.running}
             className="shrink-0 rounded-lg bg-brand-600 dark:bg-brand-200 dark:text-gray-950 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {improving ? "Mejorando…" : "Mejorar CV"}
+            {improve.running ? "Mejorando…" : "Mejorar CV"}
           </button>
         </div>
-        {improveError && (
+        {improve.error && (
           <div className="mt-2">
-            <ErrorNotice message={improveError} />
+            <ErrorNotice message={improve.error} />
           </div>
         )}
         {improveNotice && (
@@ -576,7 +537,7 @@ function ProfileContent() {
                   ` (+${Math.round(improveNotice.scoreAfter - improveNotice.scoreBefore)})`}
               </p>
             )}
-            {preImproveProfile && (
+            {improve.original && (
               <div className="mt-3 border-t border-amber-600/20 pt-2.5 dark:border-amber-400/20">
                 <p className="mb-2">
                   Tu versión anterior sigue guardada aquí hasta que salgas de esta pantalla.
@@ -597,7 +558,11 @@ function ProfileContent() {
 
       {tab === "insights" && (
         <>
-          <CVEvaluationCard evaluation={evaluation} loading={evalLoading} error={evalError} />
+          <CVEvaluationCard
+            evaluation={evalState.data}
+            loading={evalState.running}
+            error={evalState.error}
+          />
 
           {/* Right after the CV evaluation, which grades the profile in the
               abstract — this is the same question answered against the jobs
