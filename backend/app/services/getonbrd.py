@@ -21,6 +21,8 @@ from typing import Any, Optional
 
 import httpx
 
+from app.services.external_jobs import http as external_http
+
 from app.services import experience_level
 from app.services.job_importer import html_to_text, parse_job_text_heuristic
 
@@ -123,8 +125,7 @@ async def search_getonbrd_jobs(
     }
 
     try:
-        async with httpx.AsyncClient(timeout=20.0) as client:
-            resp = await client.get(f"{BASE_URL}/search/jobs", params=params)
+        resp = await external_http.get("getonbrd", f"{BASE_URL}/search/jobs", params=params)
     except httpx.HTTPError as exc:
         raise GetOnBrdError("Could not reach Get on Board (network error).") from exc
 

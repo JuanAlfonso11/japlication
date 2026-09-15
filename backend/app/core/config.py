@@ -89,6 +89,14 @@ class Settings(BaseSettings):
     # CV upload (PDF -> CareerProfile draft)
     MAX_CV_UPLOAD_MB: int = 8
 
+    #: Per-request timeout for the 15 external job providers. Was a literal
+    #: `timeout=20.0` repeated in every connector — which also meant each one
+    #: could hold a connection 8 seconds past the aggregate's own 12s deadline,
+    #: long after nobody was waiting for it. Kept just under that deadline so a
+    #: straggler is abandoned rather than orphaned. See
+    #: services/external_jobs/http.py.
+    EXTERNAL_JOBS_TIMEOUT_SECONDS: float = 11.0
+
     # CORS. FRONTEND_ORIGIN is also used to build the email-verification link,
     # so it stays the single "canonical" origin. CORS_EXTRA_ORIGINS is a
     # comma-separated list of additional origins allowed to call the API —

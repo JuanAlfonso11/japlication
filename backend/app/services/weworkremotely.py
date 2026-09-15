@@ -19,6 +19,8 @@ from xml.etree import ElementTree
 
 import httpx
 
+from app.services.external_jobs import http as external_http
+
 from app.services import experience_level
 from app.services.job_importer import html_to_text, parse_job_text_heuristic
 
@@ -105,8 +107,7 @@ async def _all_jobs() -> list[dict[str, Any]]:
         return cached_jobs
 
     try:
-        async with httpx.AsyncClient(timeout=20.0) as client:
-            resp = await client.get(RSS_URL)
+        resp = await external_http.get("weworkremotely", RSS_URL)
     except httpx.HTTPError as exc:
         raise WeWorkRemotelyError("Could not reach We Work Remotely (network error).") from exc
     if resp.status_code != 200:

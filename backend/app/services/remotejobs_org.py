@@ -13,6 +13,8 @@ from typing import Any, Optional
 
 import httpx
 
+from app.services.external_jobs import http as external_http
+
 from app.services import experience_level
 from app.services.job_importer import html_to_text, parse_job_text_heuristic
 
@@ -103,8 +105,7 @@ async def search_remotejobs_org_jobs(
         params["type"] = job_type
 
     try:
-        async with httpx.AsyncClient(timeout=20.0) as client:
-            resp = await client.get(ENDPOINT, params=params)
+        resp = await external_http.get("remotejobs_org", ENDPOINT, params=params)
     except httpx.HTTPError as exc:
         raise RemoteJobsOrgError("Could not reach RemoteJobs.org (network error).") from exc
 

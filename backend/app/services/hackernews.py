@@ -22,6 +22,8 @@ from typing import Any, Optional
 
 import httpx
 
+from app.services.external_jobs import http as external_http
+
 from app.services import experience_level
 from app.services.job_importer import html_to_text, parse_job_text_heuristic
 
@@ -94,10 +96,11 @@ async def _current_thread_jobs() -> list[dict[str, Any]]:
         return cached_jobs
 
     try:
-        async with httpx.AsyncClient(timeout=20.0) as client:
-            resp = await client.get(
-                SEARCH_URL, params={"tags": "story,author_whoishiring", "hitsPerPage": 5}
-            )
+        resp = await external_http.get(
+            "hackernews",
+            SEARCH_URL,
+            params={"tags": "story,author_whoishiring", "hitsPerPage": 5},
+        )
     except httpx.HTTPError as exc:
         raise HackerNewsError("Could not reach Hacker News / Algolia (network error).") from exc
     if resp.status_code != 200:
@@ -112,8 +115,14 @@ async def _current_thread_jobs() -> list[dict[str, Any]]:
         raise HackerNewsError("Could not find this month's 'Who is hiring?' thread.")
 
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.get(ITEM_URL.format(item_id=thread_id))
+        # The whole "Who is hiring?" thread is a big document — this one call
+        # keeps a longer timeout than the shared default, explicitly, instead
+        # of the old hardcoded 30.0.
+        resp = await external_http.get(
+            "hackernews",
+            ITEM_URL.format(item_id=thread_id),
+            timeout=external_http.timeout_seconds() * 2,
+        )
     except httpx.HTTPError as exc:
         raise HackerNewsError("Could not reach Hacker News / Algolia (network error).") from exc
     if resp.status_code != 200:

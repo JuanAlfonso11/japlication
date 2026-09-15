@@ -16,6 +16,8 @@ from typing import Any, Optional
 
 import httpx
 
+from app.services.external_jobs import http as external_http
+
 from app.services.job_importer import html_to_text, parse_job_text_heuristic
 
 HIMALAYAS_SEARCH_ENDPOINT = "https://himalayas.app/jobs/api/search"
@@ -155,8 +157,7 @@ async def search_himalayas_jobs(
         params["sort"] = sort
 
     try:
-        async with httpx.AsyncClient(timeout=20.0) as client:
-            resp = await client.get(HIMALAYAS_SEARCH_ENDPOINT, params=params)
+        resp = await external_http.get("himalayas", HIMALAYAS_SEARCH_ENDPOINT, params=params)
     except httpx.HTTPError as exc:
         raise HimalayasError("Could not reach Himalayas (network error).") from exc
 

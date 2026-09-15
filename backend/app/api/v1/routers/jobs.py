@@ -48,6 +48,7 @@ from app.services.external_jobs import (
     SearchParams,
     get_provider,
 )
+from app.services.external_jobs.http import ProviderUnavailable
 from app.services.external_jobs.registry import NO_AUTH_PROVIDERS, normalize_results
 from app.services.sweep_errors import SweepNotReady
 
@@ -338,6 +339,16 @@ async def search_jobs(
     )
     try:
         data = await spec.search(params)
+    except ProviderUnavailable as exc:
+        # The circuit breaker is open: this source has failed repeatedly and is
+        # being skipped on purpose. 503 + Retry-After, not 502 — the request was
+        # fine, the upstream is resting, and saying so lets a client back off
+        # instead of hammering.
+        raise HTTPException(
+            status_code=503,
+            detail=str(exc),
+            headers={"Retry-After": "120"},
+        ) from exc
     except spec.error_cls as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 

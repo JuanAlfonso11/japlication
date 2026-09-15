@@ -19,6 +19,8 @@ from typing import Any, Optional
 
 import httpx
 
+from app.services.external_jobs import http as external_http
+
 from app.services import experience_level
 from app.services.job_importer import html_to_text, parse_job_text_heuristic
 
@@ -113,18 +115,21 @@ async def search_jobicy_jobs(
         params["geo"] = geo
 
     try:
-        async with httpx.AsyncClient(timeout=20.0) as client:
-            resp = await client.get(ENDPOINT, params=params)
-            if resp.status_code == 400 and "geo" in params:
-                # Jobicy only recognizes a fixed, curated list of geoSlugs
-                # (~55 of them — no Dominican Republic, among others) and
-                # hard-400s on anything outside it, unlike every other
-                # provider here, which just ignores a location it doesn't
-                # understand. Retry once without `geo` rather than
-                # surfacing that as an error — same graceful "unfiltered
-                # results" degradation the other providers already give.
-                params = {k: v for k, v in params.items() if k != "geo"}
-                resp = await client.get(ENDPOINT, params=params)
+        resp = await external_http.get("jobicy", ENDPOINT, params=params)
+        if resp.status_code == 400 and "geo" in params:
+            # Jobicy only recognizes a fixed, curated list of geoSlugs
+            # (~55 of them — no Dominican Republic, among others) and
+            # hard-400s on anything outside it, unlike every other
+            # provider here, which just ignores a location it doesn't
+            # understand. Retry once without `geo` rather than
+            # surfacing that as an error — same graceful "unfiltered
+            # results" degradation the other providers already give.
+            #
+            # `retries=0`: this is a deliberate second call with different
+            # parameters, not a retry of a flaky one — the shared client's
+            # own retry would only repeat the same rejected request.
+            params = {k: v for k, v in params.items() if k != "geo"}
+            resp = await external_http.get("jobicy", ENDPOINT, params=params, retries=0)
     except httpx.HTTPError as exc:
         raise JobicyError("Could not reach Jobicy (network error).") from exc
 

@@ -20,6 +20,8 @@ from typing import Any, Optional
 
 import httpx
 
+from app.services.external_jobs import http as external_http
+
 from app.services import experience_level
 from app.services.job_importer import html_to_text, parse_job_text_heuristic
 
@@ -104,8 +106,7 @@ async def _all_jobs() -> list[dict[str, Any]]:
         return cached_jobs
 
     try:
-        async with httpx.AsyncClient(timeout=20.0) as client:
-            resp = await client.get(ENDPOINT, headers={"Accept": "application/json"})
+        resp = await external_http.get("workingnomads", ENDPOINT, headers={"Accept": "application/json"})
     except httpx.HTTPError as exc:
         raise WorkingNomadsError("Could not reach Working Nomads (network error).") from exc
 

@@ -38,6 +38,8 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 import httpx
+
+from app.services.external_jobs import http as external_http
 from bs4 import BeautifulSoup
 
 from app.core.config import settings
@@ -186,7 +188,21 @@ async def _search(key: Key) -> list[dict[str, Any]]:
         params["f_WT"] = _WORK_TYPES[work_type]
     slots = asyncio.Semaphore(_POSTINGS_AT_ONCE)
 
-    async with httpx.AsyncClient(headers=_HEADERS, timeout=15.0, follow_redirects=True) as client:
+    # Keeps its own client on purpose, unlike the other 14 connectors: this
+    # one issues many concurrent posting fetches behind a semaphore and reuses
+    # a single connection pool for them. Per-request clients (what
+    # external_http.get does) would be a regression here. What it does take
+    # from the shared module is the configurable timeout — the 15.0 literal
+    # that used to be here is exactly the kind of value the review flagged as
+    # needing 15 edits to change.
+    if external_http.is_circuit_open("linkedin"):
+        raise LinkedInError("LinkedIn no responde desde hace rato; se omite temporalmente.")
+
+    async with httpx.AsyncClient(
+        headers=_HEADERS,
+        timeout=external_http.timeout_seconds(),
+        follow_redirects=True,
+    ) as client:
 
         async def posting(job_id: str) -> dict[str, Optional[str]]:
             async with slots:

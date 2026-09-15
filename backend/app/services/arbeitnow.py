@@ -13,6 +13,8 @@ from typing import Any, Optional
 
 import httpx
 
+from app.services.external_jobs import http as external_http
+
 from app.services import experience_level
 from app.services.job_importer import html_to_text, parse_job_text_heuristic
 
@@ -90,8 +92,7 @@ async def search_arbeitnow_jobs(
     page: int = 1,
 ) -> dict[str, Any]:
     try:
-        async with httpx.AsyncClient(timeout=20.0) as client:
-            resp = await client.get(ENDPOINT, params={"page": page})
+        resp = await external_http.get("arbeitnow", ENDPOINT, params={"page": page})
     except httpx.HTTPError as exc:
         raise ArbeitnowError("Could not reach Arbeitnow (network error).") from exc
 

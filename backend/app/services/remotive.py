@@ -17,6 +17,8 @@ from typing import Any, Optional
 
 import httpx
 
+from app.services.external_jobs import http as external_http
+
 from app.services import experience_level
 from app.services.job_importer import html_to_text, parse_job_text_heuristic
 
@@ -110,8 +112,7 @@ async def search_remotive_jobs(
         params["category"] = category
 
     try:
-        async with httpx.AsyncClient(timeout=20.0) as client:
-            resp = await client.get(ENDPOINT, params=params)
+        resp = await external_http.get("remotive", ENDPOINT, params=params)
     except httpx.HTTPError as exc:
         raise RemotiveError("Could not reach Remotive (network error).") from exc
 

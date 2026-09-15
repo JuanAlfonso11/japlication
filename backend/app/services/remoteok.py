@@ -33,6 +33,8 @@ from typing import Any, Optional
 
 import httpx
 
+from app.services.external_jobs import http as external_http
+
 from app.services import experience_level
 from app.services.job_importer import USER_AGENT, html_to_text, parse_job_text_heuristic
 
@@ -122,14 +124,17 @@ async def _all_jobs() -> list[dict[str, Any]]:
         return cached_jobs
 
     try:
-        async with httpx.AsyncClient(timeout=20.0) as client:
-            # The browser User-Agent is load-bearing here, not cosmetic:
-            # Cloudflare returns a challenge page to anything that looks
-            # like a script, which is why this source was passed over the
-            # first time round.
-            resp = await client.get(
-                ENDPOINT, headers={"User-Agent": USER_AGENT, "Accept": "application/json"}
-            )
+        # The browser User-Agent is load-bearing here, not cosmetic:
+        # Cloudflare returns a challenge page to anything that looks
+        # like a script, which is why this source was passed over the
+        # first time round. The shared client sends a browser UA by default;
+        # this one is passed explicitly anyway so the requirement stays
+        # visible at the call site rather than depending on a default.
+        resp = await external_http.get(
+            "remoteok",
+            ENDPOINT,
+            headers={"User-Agent": USER_AGENT, "Accept": "application/json"},
+        )
     except httpx.HTTPError as exc:
         raise RemoteOkError("Could not reach Remote OK (network error).") from exc
 

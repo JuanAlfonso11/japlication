@@ -20,6 +20,8 @@ from typing import Any, Optional
 
 import httpx
 
+from app.services.external_jobs import http as external_http
+
 from app.core.config import settings
 from app.services import experience_level
 from app.services.job_importer import html_to_text, parse_job_text_heuristic
@@ -132,8 +134,7 @@ async def search_usajobs_jobs(
     }
 
     try:
-        async with httpx.AsyncClient(timeout=20.0) as client:
-            resp = await client.get(ENDPOINT, params=params, headers=headers)
+        resp = await external_http.get("usajobs", ENDPOINT, params=params, headers=headers)
     except httpx.HTTPError as exc:
         raise USAJobsError("Could not reach USAJobs (network error).") from exc
 
