@@ -25,9 +25,25 @@ trouble getting router access for WireGuard.
   ```
   tailscale serve --bg --https=443  http://localhost:3000   # frontend
   tailscale serve --bg --https=8443 http://localhost:8000   # backend
+  tailscale serve --bg --https=8444 http://localhost:8446   # APK update server
   ```
   This config lives in `tailscaled` itself (`--bg` = persists across reboots), not in this repo —
-  if it's ever lost, re-run the two commands above (check current state with `tailscale serve status`).
+  if it's ever lost, re-run the three commands above (check current state with `tailscale serve status`).
+
+  The third route is the one that's easy to forget, because nothing in `docker compose` creates it:
+  it's set up by `scripts\install-apk-server-autostart.ps1` (which also reserves the URL ACL for
+  `http://+:8446/`) and served by `scripts\apk-server\serve-apk.ps1`, a small `HttpListener` that
+  hands out `scripts\apk-server\jobpilot.apk` — the file `ship-android-update.ps1` writes and
+  `UpdateChecker.tsx` downloads for the in-app update banner. Two things worth knowing about it:
+
+  - **It has no authentication.** Any device on your tailnet can `GET` the APK. That's acceptable
+    because the tailnet is only your own devices and the APK contains no secrets (the app is a
+    WebView shell; every credential lives behind the backend's login). It would *not* be acceptable
+    to expose that port with `tailscale funnel`, which puts it on the public internet — don't.
+  - **It runs outside Docker**, as a login-time scheduled task. If the update banner ever says a
+    new version exists but the download fails, check that process first (`Get-Process powershell`,
+    or just re-run `install-apk-server-autostart.ps1`); the containers being healthy says nothing
+    about it.
 - `.env` at the repo root: `FRONTEND_ORIGIN=https://jobpilot.tailb3d4c1.ts.net`,
   `BACKEND_PUBLIC_URL` and `NEXT_PUBLIC_API_URL` both
   `https://jobpilot.tailb3d4c1.ts.net:8443/api/v1`.
