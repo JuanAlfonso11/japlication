@@ -546,6 +546,11 @@ export interface Application {
   job_id: string;
   user_id?: string;
   status: ApplicationStatus;
+  /** El match EN EL MOMENTO EN QUE DECIDISTE, congelado. No es lo mismo que
+   *  `job.match.overall_score`, que es el de ahora: el perfil cambia, el motor
+   *  de match cambia, y la pregunta "¿por qué la pasé?" solo la contesta el
+   *  número que tenías delante ese día. */
+  match_score?: number | null;
   notes?: string | null;
   applied_at?: string | null;
   created_at?: string;

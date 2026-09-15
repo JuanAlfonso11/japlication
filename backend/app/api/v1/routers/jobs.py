@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import re
 from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
@@ -626,21 +627,77 @@ async def import_external_job(
     return await _attach_match(job, current_user.id, db)
 
 
-def _profile_search_query(profile: CareerProfile) -> Optional[str]:
-    """Best-effort search term derived from a saved career profile: the
-    headline (usually a target job title) first, then the most recent
-    listed role, then a handful of top skills — whichever is available
-    first, since the free-text `q` providers accept is a single string."""
-    if profile.headline and profile.headline.strip():
-        return profile.headline.strip()
+#: Un titular de perfil es un cartel, no un termino de busqueda. Se parte por
+#: estos separadores para sacar los puestos que contiene.
+_HEADLINE_SPLIT = re.compile(r"\s*[|/·•;]\s*|\s+[-–—]\s+|\s*,\s*|\s+&\s+|\s+\+\s+")
+
+#: Palabras que adornan un titular y estrechan la busqueda sin aportar nada:
+#: ninguna oferta se titula "Senior Aspiring Backend Engineer".
+_HEADLINE_NOISE = {
+    "senior", "junior", "lead", "principal", "staff", "aspiring", "experienced",
+    "passionate", "results-driven", "freelance", "consultant", "especialista",
+    "profesional", "apasionado", "con", "en", "de", "y", "and", "applied",
+}
+
+#: Cuatro palabras es lo mas largo que la mayoria de los portales trata como
+#: una consulta y no como una frase literal que no encuentra nada.
+_MAX_TERM_WORDS = 4
+
+
+def _clean_search_term(raw: str) -> Optional[str]:
+    """Convierte un trozo de titular en algo que un portal sepa buscar."""
+    words = [w for w in re.split(r"\s+", (raw or "").strip()) if w]
+    words = [w.strip("().,:;\"'") for w in words]
+    words = [w for w in words if w and w.lower() not in _HEADLINE_NOISE]
+    if not words:
+        return None
+    term = " ".join(words[:_MAX_TERM_WORDS])
+    return term if len(term) >= 3 else None
+
+
+def _profile_search_terms(profile: CareerProfile) -> list[str]:
+    """Terminos de busqueda cortos sacados del perfil, de mas a menos preciso.
+
+    Antes esto devolvia UN termino y era el titular entero, tal cual. Medido
+    contra las 12 fuentes gratuitas en el mismo instante, con el mismo codigo:
+
+        "Computer Science Engineer | Software Engineer | Backend, Full-Stack
+         & Applied AI"  ->  25 resultados, 2 fuentes
+        "Software Engineer"                              -> 276 resultados, 12 fuentes
+        "backend"                                        -> 287 resultados, 12 fuentes
+
+    Diez de las doce devolvian CERO y reportaban OK, porque la mayoria trata
+    `q` como una frase: un titular de 79 caracteres con barras y ampersands no
+    coincide con ninguna oferta. Jobicy directamente contestaba 400. No era un
+    problema de las APIs ni de sus cuotas -- era la consulta.
+
+    Se devuelve una lista y no un solo termino porque el titular suele nombrar
+    varios puestos que la persona aceptaria, y quedarse con el primero tira los
+    demas. El barrido usa el siguiente solo si el anterior no lleno la cola,
+    asi que no cuesta llamadas de mas cuando el primero basta.
+    """
+    terms: list[str] = []
+
+    def add(candidate: Optional[str]) -> None:
+        cleaned = _clean_search_term(candidate or "")
+        if cleaned and cleaned.lower() not in {t.lower() for t in terms}:
+            terms.append(cleaned)
+
+    for segment in _HEADLINE_SPLIT.split(profile.headline or ""):
+        add(segment)
     for entry in profile.experience or []:
-        title = (entry or {}).get("title")
-        if title and str(title).strip():
-            return str(title).strip()
-    skill_names = [s.get("name") for s in (profile.skills or []) if isinstance(s, dict) and s.get("name")]
-    if skill_names:
-        return ", ".join(skill_names[:3])
-    return None
+        add((entry or {}).get("title"))
+    for skill in (profile.skills or [])[:3]:
+        if isinstance(skill, dict):
+            add(skill.get("name"))
+
+    return terms[:4]
+
+
+def _profile_search_query(profile: CareerProfile) -> Optional[str]:
+    """El mejor termino unico. Se conserva para quien solo necesita uno."""
+    terms = _profile_search_terms(profile)
+    return terms[0] if terms else None
 
 
 _HOME_QUEUE_TARGET = 30  # Home's swipe queue is topped up to this many undecided matches, never left to grow past it.
@@ -690,7 +747,8 @@ async def run_auto_import_for_user(user: User, db: AsyncSession) -> AutoImportRe
     if profile is None:
         raise SweepNotReady("Save your career profile before auto-searching for matches.")
 
-    q = _profile_search_query(profile)
+    terms = _profile_search_terms(profile)
+    q = terms[0] if terms else None
     if not q:
         raise SweepNotReady(
             "Add a headline, a recent role, or a few skills to your profile first "
@@ -704,15 +762,52 @@ async def run_auto_import_for_user(user: User, db: AsyncSession) -> AutoImportRe
     if import_limit == 0:
         return AutoImportResponse(imported=0, query=q, sources=[])
 
-    outcomes = await asyncio.gather(
-        *[_run_search_provider(p, q, None, None, None, None) for p in _SEARCH_PROVIDERS]
-    )
-
+    # Varios terminos, pero solo los que hagan falta. El primero se lanza a
+    # todas las fuentes; los siguientes solo a las gratuitas, y solo si el
+    # anterior no lleno la cola -- asi explorar mas no gasta cuota de adzuna
+    # ni de serpapi, que es justo lo que hay que proteger.
+    #
+    # Esto es tambien la respuesta a "recargo y no trae nada nuevo": antes
+    # siempre se preguntaba lo mismo, asi que una vez importada esa primera
+    # pagina no habia mas que traer hasta que los portales publicaran algo.
     all_results: list[ExternalJobResult] = []
     sources: list[AggregateSourceStatus] = []
-    for provider, results, error in outcomes:
-        all_results.extend(results)
-        sources.append(AggregateSourceStatus(provider=provider, count=len(results), error=error))
+    seen_external: set[tuple[str, str]] = set()
+    used_terms: list[str] = []
+
+    for index, term in enumerate(terms):
+        providers = _SEARCH_PROVIDERS if index == 0 else [
+            p for p in _SEARCH_PROVIDERS if p in _NO_AUTH_PROVIDERS
+        ]
+        outcomes = await asyncio.gather(
+            *[_run_search_provider(p, term, None, None, None, None) for p in providers]
+        )
+        used_terms.append(term)
+        nuevos = 0
+        for provider, results, error in outcomes:
+            for result in results:
+                key = (result.source, result.external_id)
+                if key in seen_external:
+                    continue
+                seen_external.add(key)
+                all_results.append(result)
+                nuevos += 1
+            sources.append(
+                AggregateSourceStatus(
+                    provider=provider if index == 0 else f"{provider} ({term})",
+                    count=len(results),
+                    error=error,
+                )
+            )
+        # Con holgura de sobra sobre lo que caben, no hace falta seguir
+        # preguntando: el resto se descartaria igual por el tope de la cola.
+        if len(all_results) >= import_limit * 3:
+            break
+        if nuevos == 0 and index > 0:
+            # Un termino que no aporta nada nuevo tampoco lo hara el siguiente
+            # si el perfil es estrecho; se para en vez de recorrerlos todos.
+            break
+
     all_results.sort(key=_aggregate_sort_key, reverse=True)
     # Matters even more here than in the search endpoint: without it the
     # sweep imports each board's copy of one vacancy as its own `jobs` row,
@@ -796,7 +891,7 @@ async def run_auto_import_for_user(user: User, db: AsyncSession) -> AutoImportRe
             )
         )
 
-    return AutoImportResponse(imported=imported, query=q, sources=sources)
+    return AutoImportResponse(imported=imported, query=" · ".join(used_terms), sources=sources)
 
 
 @router.post("/jobs/search/auto-import", response_model=AutoImportResponse)

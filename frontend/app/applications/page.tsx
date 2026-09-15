@@ -108,6 +108,12 @@ function ApplicationRow({
 
   const job = application.job;
 
+  // El número congelado en el momento de la decisión. `job.match` es el de
+  // ahora y sirve para otra pregunta ("¿sigue encajando?"), no para esta.
+  const frozenScore =
+    typeof application.match_score === "number" ? application.match_score : null;
+  const decisionScore = frozenScore ?? job?.match?.overall_score ?? null;
+
   return (
     <div
       className={`rounded-2xl bg-white p-3.5 ring-1 transition-shadow dark:bg-gray-900 ${
@@ -159,8 +165,29 @@ function ApplicationRow({
           </svg>
         </button>
         <div className="flex shrink-0 flex-col items-end gap-1.5">
-          {job?.match && <ScoreBadge score={job.match.overall_score} size="sm" />}
           <StatusBadge status={application.status} />
+          {/* Debajo del estado, no encima: leyendo la fila, primero está qué
+              hiciste con la vacante y después por qué. Y es el score que
+              tenías delante al decidir (application.match_score, congelado),
+              no el de ahora — el perfil cambia y el motor de match también,
+              así que el número de hoy no explica una decisión de hace un mes.
+              Solo se cae al score actual cuando la fila no guardó el suyo
+              (las tres más antiguas). */}
+          {decisionScore !== null && (
+            <div className="flex items-center gap-1">
+              <ScoreBadge score={decisionScore} size="sm" />
+              <span
+                className="text-[10px] font-medium text-gray-400 dark:text-gray-500"
+                title={
+                  frozenScore !== null
+                    ? "El match que tenías delante cuando tomaste esta decisión"
+                    : "Match calculado ahora: esta fila es anterior a que se guardara el del momento"
+                }
+              >
+                {frozenScore !== null ? "al decidir" : "ahora"}
+              </span>
+            </div>
+          )}
           {application.status === "passed" && (
             <button
               type="button"
