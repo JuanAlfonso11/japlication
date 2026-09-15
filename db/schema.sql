@@ -317,6 +317,26 @@ CREATE TABLE api_call_budgets (
     PRIMARY KEY (provider, call_date)
 );
 
+-- =========================================================
+-- external_job_cache — normalized search results from the 15 external
+-- providers, kept just long enough that "Agregar a la cola" can rebuild a
+-- posting without a second request to its source. Each connector also keeps
+-- an in-memory copy (the fast path); this table is what survives a restart,
+-- which the dicts do not — see app/services/external_jobs/result_cache.py.
+-- Not user data: nothing here is in anyone's queue, and the whole table can
+-- be dropped at any moment at the cost of one repeated search.
+-- =========================================================
+CREATE TABLE external_job_cache (
+    source          TEXT NOT NULL,
+    external_id     TEXT NOT NULL,
+    payload         JSONB NOT NULL,
+    cached_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (source, external_id)
+);
+
+-- The sweep deletes by age across every provider; lookups go through the PK.
+CREATE INDEX idx_external_job_cache_cached_at ON external_job_cache (cached_at);
+
 -- Back-fill FKs on applications now that the referenced tables exist
 ALTER TABLE applications
     ADD CONSTRAINT fk_applications_resume_version

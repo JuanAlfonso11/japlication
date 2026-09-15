@@ -170,8 +170,11 @@ Upwork (both credential-gated) were deliberately removed.
       "salary_min": 90000, "salary_max": 120000, "salary_currency": "USD", "posted_at": "2023-11-14T22:13:20Z"
     }
     ```
-- `POST /jobs/search/import` `{source, external_id}` -> `Job` (reads the normalized result from that
-  provider's short-lived search cache — re-run the search if it expired, `404`)
+- `POST /jobs/search/import` `{source, external_id}` -> `Job` (rebuilds the posting from the
+  normalized result the search already returned, instead of querying the provider a second time).
+  Two layers: the connector's own in-memory copy (15 min, emptied by any restart) and, behind it,
+  the `external_job_cache` table (`EXTERNAL_JOBS_CACHE_TTL_HOURS`, 48 by default), which survives
+  one. `404` only once both are past their TTL — re-run the search.
 - `POST /jobs/search/auto-import` -> `{imported: int, query?: string, sources: [{provider, count, error?}]}`
   — searches every provider using the saved career profile (headline, most recent role, or top
   skills, whichever is available first) and imports the newest matches into `jobs` with a computed

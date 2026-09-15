@@ -5,6 +5,7 @@ from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from pydantic import ValidationError
 from sqlalchemy import delete, func, or_, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -48,6 +49,7 @@ from app.services.external_jobs import (
     SearchParams,
     get_provider,
 )
+from app.services.external_jobs import result_cache
 from app.services.external_jobs.http import ProviderUnavailable
 from app.services.external_jobs.registry import NO_AUTH_PROVIDERS, normalize_results
 from app.services.sweep_errors import SweepNotReady
@@ -353,6 +355,11 @@ async def search_jobs(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     results = [ExternalJobResult(**r) for r in normalize_results(spec, data["results"])]
+    # Written here, where the normalized results are already in hand, so
+    # "Agregar a la cola" still works after a restart empties the connector's
+    # own in-memory copy. Dumped in JSON mode: the column is JSONB, and
+    # `posted_at` is a datetime until it is told otherwise.
+    await result_cache.remember(provider, [r.model_dump(mode="json") for r in results])
     has_more = bool(data.get("has_more"))
     return ExternalJobsSearchResponse(
         provider=provider,
@@ -413,6 +420,10 @@ async def _run_search_provider(
             if (_extract_remote_type(f"{r.title} {r.location or ''}") or remote_type_filter)
             == remote_type_filter
         ]
+    # After the filter, not before: a result the user never sees is a result
+    # they cannot import. Also covers the stragglers — a slow provider whose
+    # task outlives its own request still leaves its results importable.
+    await result_cache.remember(provider, [r.model_dump(mode="json") for r in results])
     return provider, results, None
 
 
@@ -560,14 +571,32 @@ async def import_external_job(
     db: AsyncSession = Depends(get_db),
 ) -> JobSchema:
     """Persist an external search result (found via GET /jobs/search) as a
-    `jobs` row. Reads the normalized result from that provider's short-lived
-    search cache rather than re-querying it."""
+    `jobs` row. Rebuilds it from the normalized result the search already
+    returned rather than querying the provider a second time — first from
+    that connector's in-memory copy, then from external_job_cache, which is
+    the one that survives a restart."""
     if payload.source not in _SEARCH_PROVIDERS:
         raise HTTPException(status_code=422, detail=f"Unknown source '{payload.source}'.")
 
     # Was a 15-entry dict repeated here. Forgetting to add a new provider to
     # it left search working while "Add to queue" raised KeyError -> 500.
     cached = get_provider(payload.source).get_cached(payload.external_id)
+    if cached is None:
+        # The connector's dict is emptied by every restart and by its own
+        # 15-minute TTL, which is how a result still on screen could answer
+        # "expired". The table outlives the process — see
+        # app.services.external_jobs.result_cache.
+        stored = await result_cache.get(payload.source, payload.external_id)
+        if stored is not None:
+            # Back through the schema: it restores the real types the JSONB
+            # copy flattened (`posted_at` above all, which goes into a
+            # timestamptz column), and rejects a payload written by an older
+            # build whose shape no longer fits.
+            try:
+                cached = ExternalJobResult(**stored).model_dump()
+            except ValidationError:
+                logger.info("stale cached payload for %s/%s", payload.source, payload.external_id)
+                cached = None
     if cached is None:
         raise HTTPException(
             status_code=404,

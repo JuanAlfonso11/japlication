@@ -10,6 +10,7 @@ from app.models.cover_letter import CoverLetter
 from app.models.system_heartbeat import SystemHeartbeat
 from app.models.api_call_budget import ApiCallBudget
 from app.models.error_log import ErrorLog
+from app.models.external_job_cache import ExternalJobCache
 
 __all__ = [
     "User",
@@ -24,4 +25,5 @@ __all__ = [
     "SystemHeartbeat",
     "ApiCallBudget",
     "ErrorLog",
+    "ExternalJobCache",
 ]

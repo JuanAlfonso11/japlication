@@ -60,6 +60,7 @@ _TABLES_TO_CLEAN = [
     "system_heartbeats",
     "api_call_budgets",
     "error_logs",
+    "external_job_cache",
     "jobs",
     "career_profiles",
     "users",

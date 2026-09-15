@@ -97,6 +97,14 @@ class Settings(BaseSettings):
     #: services/external_jobs/http.py.
     EXTERNAL_JOBS_TIMEOUT_SECONDS: float = 11.0
 
+    #: How long a normalized search result stays importable without a new
+    #: search. Hours, not days, on purpose: this covers the gap between
+    #: seeing a result and pressing "Agregar a la cola" — across a restart, a
+    #: lunch break, overnight — not a private index of the job market. A
+    #: week-old posting is likely filled, and importing it would put a dead
+    #: listing in the swipe queue, which is worse than asking for a new search.
+    EXTERNAL_JOBS_CACHE_TTL_HOURS: int = 48
+
     # CORS. FRONTEND_ORIGIN is also used to build the email-verification link,
     # so it stays the single "canonical" origin. CORS_EXTRA_ORIGINS is a
     # comma-separated list of additional origins allowed to call the API —
