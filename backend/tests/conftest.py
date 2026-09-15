@@ -10,7 +10,11 @@ import os
 # router/integration test talks to the isolated test database, never the
 # real jobflow one. See backend/README.md for the one-time `CREATE DATABASE
 # jobflow_test` + schema-load setup this depends on.
-os.environ["DATABASE_URL"] = "postgresql+asyncpg://jobflow:jobflow@db:5432/jobflow_test"
+# La contrasena sale del entorno, no escrita aqui: estaba fijada a "jobflow",
+# que era el valor por defecto de docker-compose, asi que en cuanto la base de
+# datos tuvo una contrasena de verdad la suite entera dejaba de conectar.
+_PG_PASSWORD = os.environ.get("POSTGRES_PASSWORD", "jobflow")
+os.environ["DATABASE_URL"] = f"postgresql+asyncpg://jobflow:{_PG_PASSWORD}@db:5432/jobflow_test"
 
 # Same reasoning as DATABASE_URL above, for the same @lru_cache'd settings
 # object: cleared here, before anything imports app.core.config, so no test

@@ -118,7 +118,11 @@ async def _attach_match(job: Job, user_id: UUID, db: AsyncSession) -> JobSchema:
 
 
 @router.post("/jobs/import", response_model=JobSchema, status_code=status.HTTP_201_CREATED)
+# Sin limite, este endpoint era el unico del router que no lo tenia, y es el
+# mas caro de todos: ver el to_thread de abajo.
+@limiter.limit("10/minute")
 async def import_job(
+    request: Request,
     payload: JobImportRequest,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),

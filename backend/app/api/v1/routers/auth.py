@@ -11,7 +11,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import RedirectResponse
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
@@ -105,6 +105,22 @@ async def register(request: Request, payload: UserRegister, db: AsyncSession = D
     # address" to the existing account instead. The login path does NOT make
     # the same trade — see the dummy hash there, which removes the timing
     # oracle for an endpoint that is not rate-limited per address.
+    # JobPilot es de un solo operador, pero el backend no lo sabia: quien
+    # alcanzara el puerto 8000 se creaba una cuenta y con ella gastaba el
+    # presupuesto de Anthropic (que se paga) y las cuotas de Adzuna y SerpApi,
+    # ademas de leer GET /system/errors, que a proposito no filtra por usuario
+    # porque asume que solo hay uno. Ese supuesto ahora se cumple de verdad.
+    #
+    # ALLOW_EXTRA_REGISTRATIONS=1 en .env vuelve a abrirlo, para cuando haga
+    # falta dar de alta a alguien mas o recrear la cuenta desde cero.
+    if not settings.ALLOW_EXTRA_REGISTRATIONS:
+        already = await db.execute(select(func.count()).select_from(User))
+        if (already.scalar_one() or 0) > 0:
+            raise HTTPException(
+                status_code=403,
+                detail="El registro esta cerrado en esta instalacion.",
+            )
+
     existing = await db.execute(select(User).where(User.email == payload.email.lower()))
     if existing.scalar_one_or_none() is not None:
         raise HTTPException(status_code=409, detail="An account with this email already exists.")

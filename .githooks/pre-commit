@@ -7,6 +7,62 @@
 # Installed via: git config core.hooksPath .githooks
 # Bypass once with: git commit --no-verify
 
+# --- Secretos: nada de esto sale del disco --------------------------------
+# Este repo nunca ha tenido un secreto real en su historial -- se auditaron los
+# 1570 blobs de los 138 commits, uno por uno, contra cada valor del .env real.
+# Esta comprobacion existe para que siga siendo verdad sin depender de que
+# alguien se acuerde. Reescribir el historial despues es caro, destructivo, y
+# no des-filtra nada que ya se haya subido.
+#
+# Dos capas. La primera, los nombres: ningun archivo que sea un .env de verdad,
+# una credencial, un keystore o un backup entra al commit.
+BLOCKED=$(git diff --cached --name-only --diff-filter=ACM | grep -iE '(^|/)\.env($|\.[^e]|\.e[^x])|(^|/)backend/secrets/|(^|/)backups/|\.(jks|keystore|p12|pfx|pem)$|(^|/)backend/runtime/|keystore\.properties$|google-services\.json$|\.apk$' || true)
+if [ -n "$BLOCKED" ]; then
+    echo "[pre-commit] BLOQUEADO: estos archivos no se suben nunca:"
+    echo "$BLOCKED" | sed 's/^/    /'
+    echo "[pre-commit] Si de verdad hace falta, revisa .gitignore primero."
+    exit 1
+fi
+
+# La segunda, el contenido: el valor del secreto pegado dentro de cualquier
+# archivo -- un docker-compose, un script, un README, un test. Es la forma en
+# que estas cosas se filtran de verdad, no subiendo el .env entero.
+LEAK=$(git diff --cached -U0 --diff-filter=ACM \
+    | grep -E '^\+' \
+    | grep -ivE '(example|placeholder|your-key|tu-clave|pon-aqui|change-me|fake|dummy|xxx)' \
+    | grep -oE 'sk-ant-[A-Za-z0-9_-]{16,}|AIza[0-9A-Za-z_-]{30,}|ghp_[A-Za-z0-9]{30,}|AKIA[0-9A-Z]{16}|xox[baprs]-[A-Za-z0-9-]{10,}|-----BEGIN [A-Z ]*PRIVATE KEY-----' \
+    || true)
+if [ -n "$LEAK" ]; then
+    echo "[pre-commit] BLOQUEADO: esto parece una credencial de verdad dentro de un archivo:"
+    echo "$LEAK" | sed 's/^\(.\{12\}\).*/    \1.../'
+    echo "[pre-commit] Sacala a .env (que esta gitignoreado) y deja un placeholder."
+    exit 1
+fi
+
+# Y el .env real de esta maquina, valor por valor: es la unica comprobacion que
+# detecta una clave con un formato que ningun patron generico reconoce -- una
+# contrasena de aplicacion de Gmail, por ejemplo, son 16 letras sueltas.
+if [ -f .env ]; then
+    STAGED=$(git diff --cached -U0 --diff-filter=ACM | grep -E '^\+' || true)
+    if [ -n "$STAGED" ]; then
+        while IFS= read -r line; do
+            case "$line" in \#*|"") continue;; esac
+            key="${line%%=*}"; val="${line#*=}"
+            val="${val%\"}"; val="${val#\"}"
+            # Solo valores que de verdad parecen secretos: largos y sin
+            # aspecto de URL o de nombre de host, para no bloquear un commit
+            # por mencionar el hostname de la tailnet, que esta documentado a
+            # proposito en docs/ANDROID_APP.md.
+            [ ${#val} -lt 16 ] && continue
+            case "$val" in http*|*.ts.net*|*localhost*|*@*.*) continue;; esac
+            if printf '%s' "$STAGED" | grep -qF -- "$val"; then
+                echo "[pre-commit] BLOQUEADO: el valor de $key (de tu .env) aparece en lo que vas a commitear."
+                exit 1
+            fi
+        done < .env
+    fi
+fi
+
 if docker compose ps --status running --services 2>/dev/null | grep -q "^backend$"; then
     echo "[pre-commit] Running backend tests..."
     if ! docker compose exec -T backend python -m pytest -q; then

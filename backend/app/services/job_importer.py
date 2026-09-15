@@ -17,6 +17,7 @@ turns it into a 422.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
@@ -55,7 +56,23 @@ SECTION_HEADERS = {
     ],
     "nice_to_have": [
         "nice to have", "preferred qualifications", "bonus points", "deseable",
-        "plus", "preferred skills",
+        # "plus" a secas estuvo aqui y reclasificaba TODO lo obligatorio como
+        # deseable. En espanol "plus" es casi siempre una prestacion -- "plus
+        # de transporte", "plus de nocturnidad" -- y en ingles aparece dentro
+        # de palabras como "surplus". Medido: una oferta con "Plus de
+        # transporte incluido" antes de los requisitos dejaba las cinco
+        # habilidades obligatorias marcadas como deseables, el match subia de
+        # 37,5 a 50,0 y "lo que te falta" salia vacio.
+        #
+        # Solo formas que encabezan una seccion. El corte parte el texto EN el
+        # marcador y trata como deseable lo que viene DESPUES, asi que una
+        # frase suelta tipo "Kubernetes is a plus" -- donde la habilidad va
+        # antes -- nunca se pudo clasificar por esta via, ni con el marcador
+        # anterior. Anadirla solo meteria un punto de corte en el lado
+        # equivocado. En esa forma la habilidad se queda como obligatoria, que
+        # es el error conservador: aparece en "lo que te falta" en vez de
+        # desaparecer del calculo.
+        "preferred skills", "nice-to-have", "deseables", "se valora", "valorable",
     ],
     "responsibilities": [
         "responsibilities", "responsabilidades", "what you'll do", "what you will do",
@@ -261,11 +278,17 @@ def _build_skills_required(text: str) -> list[dict[str, str]]:
     lowered = text.lower()
 
     # Find the char offset where a "nice to have" section starts, if any.
+    #
+    # Como palabra completa, no como subcadena: `find` hacia que "surplus"
+    # contara como la cabecera "plus" y partiera la lista en el sitio
+    # equivocado. Todo lo que quedaba despues pasaba de obligatorio a
+    # deseable, que es el peor resultado posible -- silenciosamente
+    # incorrecto en el numero que da sentido a la app.
     nice_to_have_start = None
     for marker in nice_to_have_markers:
-        idx = lowered.find(marker)
-        if idx != -1 and (nice_to_have_start is None or idx < nice_to_have_start):
-            nice_to_have_start = idx
+        match = re.search(r"(?<![a-z0-9])" + re.escape(marker) + r"(?![a-z0-9])", lowered)
+        if match and (nice_to_have_start is None or match.start() < nice_to_have_start):
+            nice_to_have_start = match.start()
 
     if nice_to_have_start is not None:
         required_text = text[:nice_to_have_start]
@@ -298,15 +321,27 @@ def _extract_section(text: str, header_keys: list[str]) -> list[str]:
         return []
 
     collected: list[str] = []
+    blank_run = 0
     for line in lines[start_idx:]:
         stripped = line.strip()
         low = stripped.lower().strip(" :#-")
         if not stripped:
+            # Las dos ramas de este if hacian `continue`, asi que la seccion
+            # no terminaba nunca: el comentario describia un corte que el
+            # codigo no hacia. Medido sobre una oferta real, "Requisitos" se
+            # tragaba 40 lineas de "Sobre nosotros", proceso de seleccion,
+            # politica de privacidad y el correo de RRHH -- y todo eso entraba
+            # en el score y en el prompt que adapta el CV.
+            #
+            # Una linea en blanco suelta se tolera (las listas las llevan);
+            # dos seguidas son un cambio de seccion. Antes de recoger nada
+            # no cuentan: el hueco entre la cabecera y su primer elemento.
             if collected:
-                # allow one blank line inside a list, but stop on a second
-                continue
-            else:
-                continue
+                blank_run += 1
+                if blank_run >= 2:
+                    break
+            continue
+        blank_run = 0
         if any(low == h or low.startswith(h) for h in all_headers) and len(low) < 60:
             break
         cleaned = stripped.lstrip("-•*• \t")
@@ -533,7 +568,14 @@ def parse_job_html(html: str, url: Optional[str] = None) -> dict[str, Any]:
 async def import_job_from_url(url: str) -> dict[str, Any]:
     html = await fetch_html(url)
     try:
-        return parse_job_html(html, url=url)
+        # En un hilo, no en el event loop. parse_job_html es BeautifulSoup +
+        # lxml + los extractores heuristicos, todo sincrono, y escala con el
+        # tamano de la pagina: medido, 13,2 s con los 5 MiB que MAX_DOWNLOAD_
+        # BYTES deja pasar. Durante esos 13 s uvicorn no atendia NADA -- ni
+        # login, ni swipes, ni los heartbeats de las tareas programadas; un
+        # latido de 100 ms dio cero pulsos en todo el bloqueo. Con to_thread,
+        # el mismo trabajo deja el hueco maximo en 0,2 s.
+        return await asyncio.to_thread(parse_job_html, html, url)
     except JobImportError:
         raise
     except Exception as exc:

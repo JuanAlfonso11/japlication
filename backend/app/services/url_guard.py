@@ -64,14 +64,17 @@ def _is_public_address(raw: str) -> bool:
     if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped is not None:
         address = address.ipv4_mapped
 
-    return not (
-        address.is_private
-        or address.is_loopback
-        or address.is_link_local
-        or address.is_multicast
-        or address.is_reserved
-        or address.is_unspecified
-    )
+    # `is_global` en vez de la lista de negaciones que habia aqui. La lista
+    # parecia equivalente y no lo era: 100.64.0.0/10 -- el rango CGNAT, que es
+    # justo el que usa Tailscale -- no es private, ni loopback, ni link-local,
+    # ni reserved, asi que pasaba entero. Comprobado: 100.64.1.1 daba
+    # _is_public=True con la version anterior. Por ahi se alcanzaba cualquier
+    # nodo de la tailnet y el servidor de APK del propio equipo en :8446, que
+    # es precisamente lo que este modulo dice en su cabecera que bloquea.
+    #
+    # CPython excluye ese rango solo dentro de `is_global`, nunca lo mete en
+    # `_private_networks`, asi que no era cuestion de version de Python.
+    return address.is_global
 
 
 def _resolve(host: str) -> list[str]:

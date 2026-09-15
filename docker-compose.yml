@@ -4,7 +4,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: jobflow
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-jobflow}
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?falta POSTGRES_PASSWORD en .env - generala con python -c 'import secrets; print(secrets.token_urlsafe(32))'}"
       POSTGRES_DB: jobflow
     # No `ports:` on purpose. Postgres is only ever reached from the backend
     # container, over the compose network — publishing 5432 on the host put
@@ -28,13 +28,17 @@ services:
       db:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql+asyncpg://jobflow:${POSTGRES_PASSWORD:-jobflow}@db:5432/jobflow
+      DATABASE_URL: postgresql+asyncpg://jobflow:${POSTGRES_PASSWORD}@db:5432/jobflow
+      # Tambien suelta, solo para la suite de tests: conftest.py construye con
+      # ella la URL de jobflow_test, y la tenia escrita a mano como "jobflow".
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       # `:?` (not `:-`) on purpose: compose refuses to start at all if
       # JWT_SECRET is missing, instead of quietly substituting a value that
       # is published in this file. The backend enforces strength separately
       # in app/core/config.py — this just stops the container from ever
       # booting without one.
       JWT_SECRET: "${JWT_SECRET:?falta JWT_SECRET en .env - generalo con python -c 'import secrets; print(secrets.token_urlsafe(48))'}"
+      ALLOW_EXTRA_REGISTRATIONS: ${ALLOW_EXTRA_REGISTRATIONS:-0}
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
       REFRESH_TOKEN_EXPIRE_DAYS: ${REFRESH_TOKEN_EXPIRE_DAYS:-90}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
@@ -70,7 +74,16 @@ services:
       # ever worked, and the from-scratch path silently never did.
       - ./db:/db:ro
     ports:
-      - "8000:8000"
+      # 127.0.0.1, no 0.0.0.0. Sin el prefijo, Docker publicaba el backend en
+      # TODAS las interfaces del host: cualquier equipo de la misma WiFi (casa,
+      # hotel, cafe) llegaba a la API sin TLS y sin pasar por Tailscale. El
+      # razonamiento ya estaba escrito aqui arriba para Postgres; simplemente
+      # no se habia aplicado a los dos servicios que si se publican.
+      #
+      # No rompe el acceso desde el movil: `tailscale serve` corre en el host y
+      # proxea a http://localhost:3000 y :8000 (verificado con `serve status`),
+      # asi que sigue alcanzando ambos.
+      - "127.0.0.1:8000:8000"
 
   frontend:
     build:
@@ -81,7 +94,7 @@ services:
     depends_on:
       - backend
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
 
 volumes:
   jobflow_db_data:

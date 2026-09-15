@@ -173,7 +173,15 @@ def normalize_skill(raw: str) -> str:
 #: "react" and "swift" stay matchable: unlike these, that is how postings
 #: normally write the technology, and losing them costs more than the
 #: occasional "react to feedback".
-NEVER_MATCH_BARE: frozenset[str] = frozenset({"go", "rest", "spring", "c", "r"})
+#: Las siglas de dos letras se anadieron despues, por el mismo motivo y con
+#: el mismo criterio: "Trabajamos con ML y DL" es tecnico, pero "el equipo de
+#: TS revisa los tickets" y "reunion el proximo dl" no lo son, y el CV subido
+#: pasa por este mismo escaner, asi que inventaba habilidades en el borrador
+#: del perfil. Las formas largas siguen detectandose ("machine learning",
+#: "deep learning", "typescript"), que es como las escriben las ofertas.
+NEVER_MATCH_BARE: frozenset[str] = frozenset(
+    {"go", "rest", "spring", "c", "r", "ml", "dl", "ts"}
+)
 
 
 def extract_skills_from_text(text: str) -> list[str]:

@@ -38,18 +38,36 @@ Note the two "start" paths overlap on purpose: **autostart** brings the app up s
 
 `backups/` is gitignored — it holds real user data (career profile, applications) and is never committed.
 
-To restore a backup: `Get-Content backups\jobflow_<timestamp>.sql | docker compose exec -T db psql -U jobflow -d jobflow`
+To restore a backup:
+```powershell
+docker compose cp backups\jobflow_<timestamp>.sql db:/tmp/restore.sql
+docker compose exec -T db psql -U jobflow -d jobflow -v ON_ERROR_STOP=1 -f /tmp/restore.sql
+```
 (stop the backend first so it isn't writing mid-restore).
 
-**Drill-tested (2026-09-03)**: took a real `pg_dump`, restored it into a throwaway
+This used to read `Get-Content backups\... | psql`, and that pipe was hiding a
+real problem. `backup-db.ps1` wrote the dump with `>`, which in Windows
+PowerShell 5.1 — what the scheduled task runs — is `Out-File`, and `Out-File`
+writes **UTF-16LE**. Every backup on disk was UTF-16: `ff fe` BOM, twice the
+size (4,517,336 bytes for a 2,420,790-character dump). `Get-Content` detects
+the BOM and decodes it, so the restore drill below passed and nothing ever
+looked wrong — while `psql -f`, another machine, or any other tool would have
+failed on a file that is the only copy of the data. The script now has pg_dump
+write inside the container and copies the file out as bytes, and it refuses to
+report success if the result starts with a BOM or a null byte.
+
+**Drill-tested (2026-09-15)**: restored a real backup into a throwaway
 `jobflow_restore_test` database on the same running container (never touched the live `jobflow`
-database), and confirmed every table's row count matched exactly with no errors, before dropping
-the scratch database. To repeat that drill instead of restoring straight into the live database:
+database) — 1 user, 209 jobs, 209 applications, exit 0 — before dropping the scratch database.
+Done deliberately with `psql -f` and **not** through `Get-Content`, because the earlier drill
+(2026-09-03) passed only thanks to that pipe: see the UTF-16 note above. A drill that exercises
+the one code path that papers over the defect proves nothing. To repeat it:
 ```powershell
-docker compose exec -T db psql -U jobflow -d jobflow -c "CREATE DATABASE jobflow_restore_test;"
-Get-Content backups\jobflow_<timestamp>.sql | docker compose exec -T db psql -U jobflow -d jobflow_restore_test
+docker compose exec -T db psql -U jobflow -d postgres -c "CREATE DATABASE jobflow_restore_test;"
+docker compose cp backups\jobflow_<timestamp>.sql db:/tmp/restore.sql
+docker compose exec -T db psql -U jobflow -d jobflow_restore_test -v ON_ERROR_STOP=1 -f /tmp/restore.sql
 docker compose exec -T db psql -U jobflow -d jobflow_restore_test -c "SELECT count(*) FROM users;"  # spot-check
-docker compose exec -T db psql -U jobflow -d jobflow -c "DROP DATABASE jobflow_restore_test;"
+docker compose exec -T db psql -U jobflow -d postgres -c "DROP DATABASE jobflow_restore_test;"
 ```
 
 ## Pre-commit hook

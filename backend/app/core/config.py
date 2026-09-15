@@ -105,6 +105,13 @@ class Settings(BaseSettings):
     #: listing in the swipe queue, which is worse than asking for a new search.
     EXTERNAL_JOBS_CACHE_TTL_HOURS: int = 48
 
+    #: Deja registrar cuentas aunque ya exista una. Por defecto NO: JobPilot
+    #: es de un solo operador, y con el registro abierto cualquiera que
+    #: alcanzara el backend se creaba una cuenta y gastaba el presupuesto de
+    #: Anthropic y las cuotas de las APIs de empleo. Ponlo a 1 en .env solo
+    #: mientras des de alta a alguien mas, y quitalo despues.
+    ALLOW_EXTRA_REGISTRATIONS: bool = False
+
     # CORS. FRONTEND_ORIGIN is also used to build the email-verification link,
     # so it stays the single "canonical" origin. CORS_EXTRA_ORIGINS is a
     # comma-separated list of additional origins allowed to call the API —

@@ -20,12 +20,42 @@ $backupFile = Join-Path $backupDir "jobflow_$timestamp.sql"
 Set-Location $repoDir
 
 Write-Host "[JobPilot backup] Dumping database..."
-docker compose exec -T db pg_dump -U jobflow -d jobflow --no-owner --no-privileges > $backupFile
+
+# pg_dump escribe DENTRO del contenedor y luego se copia el archivo tal cual.
+#
+# Antes esto era `docker compose exec ... > $backupFile`. En Windows
+# PowerShell 5.1 -- que es con lo que corre la tarea programada -- el operador
+# `>` es Out-File, y Out-File escribe en UTF-16LE. Los backups llevaban meses
+# guardandose en UTF-16: BOM ff fe al principio y el doble de tamano (4.517.336
+# bytes en disco para un dump de 2.420.790 caracteres). Restauraban solo si se
+# pasaba por `Get-Content`, que detecta el BOM y decodifica -- que es justo lo
+# que hace el simulacro documentado en scripts/README.md, por eso paso sin que
+# nadie viera nada. Cualquier otra via (psql -f, otra maquina, otra
+# herramienta) fallaba, y no se habria sabido hasta el dia de necesitarlo.
+#
+# `docker compose cp` copia bytes, sin capa de texto que pueda recodificar.
+$innerFile = "/tmp/jobflow_$timestamp.sql"
+docker compose exec -T db pg_dump -U jobflow -d jobflow --no-owner --no-privileges -f $innerFile
+if ($LASTEXITCODE -eq 0) {
+    docker compose cp "db:$innerFile" $backupFile
+    docker compose exec -T db rm -f $innerFile | Out-Null
+}
 
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path $backupFile) -or (Get-Item $backupFile).Length -eq 0) {
     Send-Heartbeat -JobName "backup" -Status "error" -Detail "pg_dump failed or produced an empty file"
     Write-Error "[JobPilot backup] pg_dump failed or produced an empty file."
     if (Test-Path $backupFile) { Remove-Item $backupFile -Force }
+    exit 1
+}
+
+# El fallo que hubo aqui era invisible: el archivo existia, no estaba vacio, y
+# el chequeo de arriba pasaba. Esto mira los dos primeros bytes, que es donde
+# se veia. Un dump de Postgres empieza siempre en ASCII ("--" de un comentario
+# o "SET"), nunca con un BOM.
+$firstBytes = [System.IO.File]::ReadAllBytes($backupFile)[0..1]
+if ($firstBytes[0] -eq 0xFF -or $firstBytes[0] -eq 0xFE -or $firstBytes[1] -eq 0x00) {
+    Send-Heartbeat -JobName "backup" -Status "error" -Detail "El backup salio con BOM o en UTF-16 - no restaurara"
+    Write-Error "[JobPilot backup] El archivo empieza con un BOM o con un byte nulo: no es UTF-8."
     exit 1
 }
 
