@@ -5,9 +5,11 @@ import RouteGuard from "@/components/RouteGuard";
 import ErrorNotice from "@/components/ErrorNotice";
 import ImportedJobCard from "@/components/ImportedJobCard";
 import SkillTag from "@/components/SkillTag";
-import { Select } from "@/components/ui/Field";
+import { inputClass, Select } from "@/components/ui/Field";
 import Button from "@/components/ui/Button";
 import PageHeader from "@/components/ui/PageHeader";
+import { ListSkeleton } from "@/components/ui/Skeleton";
+import { useAnnounce } from "@/components/LiveRegion";
 import { ApiError, jobsApi } from "@/lib/api";
 import { EXTERNAL_PLATFORM_GROUPS } from "@/lib/externalPlatforms";
 import { importAndMatch } from "@/lib/jobActions";
@@ -27,6 +29,9 @@ import {
 
 const EXPERIENCE_LEVELS: ExperienceLevel[] = ["internship", "entry", "mid", "senior", "lead"];
 const REMOTE_TYPES: RemoteType[] = ["remote", "hybrid", "onsite"];
+// Sentinel for the "type your own title" option. A value no real job title
+// can collide with, so it is never mistaken for a search term.
+const CUSTOM_TITLE_VALUE = "__custom__";
 
 function SourceBadge({ source }: { source: ExternalProvider }) {
   return (
@@ -204,12 +209,18 @@ function SourcesSummary({
             {failed.length} sin responder
           </span>
         )}
+        {/* "buscando…" was a promise the app never kept: these providers
+            missed the 12s deadline, their results land in the server-side
+            cache, and nothing here ever picks them up — you had to press
+            Buscar again. Saying so is the honest version, and it tells the
+            user the one action that actually works. */}
         {pending.length > 0 && (
           <span
             className="rounded-full bg-gray-100 px-2.5 py-1 font-semibold text-gray-600 dark:bg-gray-800 dark:text-gray-300"
             title={pending[0].error ?? undefined}
           >
-            {pending.map((s) => PROVIDER_LABELS[s.provider] ?? s.provider).join(", ")} buscando…
+            {pending.map((s) => PROVIDER_LABELS[s.provider] ?? s.provider).join(", ")} tardaron —
+            busca otra vez en un momento para incluirlas
           </span>
         )}
         <button
@@ -379,7 +390,11 @@ function readStoredFilters(): Partial<StoredFilters> {
 }
 
 function DiscoverContent() {
+  const announce = useAnnounce();
   const [q, setQ] = useState("");
+  // True when the user chose "Otro…" and is typing a title the list does not
+  // have. Restored below if a remembered filter is not one of the presets.
+  const [customTitle, setCustomTitle] = useState(false);
   const [location, setLocation] = useState("");
   const [remoteType, setRemoteType] = useState<RemoteType | "">("remote");
   const [experienceLevelFilter, setExperienceLevelFilter] = useState<ExperienceLevel | "">("");
@@ -396,7 +411,13 @@ function DiscoverContent() {
   // complains about exactly that.
   useEffect(() => {
     const stored = readStoredFilters();
-    if (stored.q) setQ(stored.q);
+    if (stored.q) {
+      setQ(stored.q);
+      // A remembered title that is not one of the presets was typed by hand,
+      // so restore the text field rather than a select that cannot show it.
+      const isPreset = JOB_TITLE_GROUPS.some((g) => g.options.includes(stored.q as string));
+      if (!isPreset) setCustomTitle(true);
+    }
     if (stored.location) setLocation(stored.location);
     // The two typed ones are checked against their own lists, so a value
     // left over from an older build can't strand a select on an option that
@@ -415,6 +436,15 @@ function DiscoverContent() {
     setLoading(true);
     setError(null);
     setLastAdded(null);
+    // Clear the previous run's results and source chips. Leaving them on
+    // screen while the next search ran meant the page looked identical for
+    // the ~40 seconds a 15-source fan-out takes (measured: 44s tap to
+    // results, against a client that gives up at 20s) — the only thing that
+    // changed was the button label, so it read as "the button did nothing"
+    // and invited a second tap or a reload.
+    setResults([]);
+    setSources([]);
+    announce("Buscando en 15 fuentes. Esto puede tardar hasta un minuto.");
     try {
       window.sessionStorage.setItem(
         FILTERS_KEY,
@@ -439,8 +469,16 @@ function DiscoverContent() {
       setResults(data.results);
       setSources(data.sources);
       setSearched(true);
+      const answered = data.sources.filter((s) => !s.error).length;
+      announce(
+        data.results.length === 0
+          ? "La búsqueda terminó sin resultados."
+          : `${data.results.length} vacantes encontradas en ${answered} de ${data.sources.length} fuentes.`
+      );
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Falló la búsqueda.");
+      const message = err instanceof ApiError ? err.message : "Falló la búsqueda.";
+      setError(message);
+      announce(message, "assertive");
     } finally {
       setLoading(false);
     }
@@ -471,22 +509,61 @@ function DiscoverContent() {
         <div className="space-y-4">
           <form onSubmit={handleSubmit} className="space-y-2">
             <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
-              <Select
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                className="col-span-2 sm:min-w-[180px] sm:flex-1"
-              >
-                <option value="">Puesto</option>
-                {JOB_TITLE_GROUPS.map((group) => (
-                  <optgroup key={group.label} label={group.label}>
-                    {group.options.map((title) => (
-                      <option key={title} value={title}>
-                        {title}
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
-              </Select>
+              {/* The dropdown is the fast path — it keeps the common titles
+                  one tap away and avoids the useless free-text searches it
+                  was designed to prevent. But being closed meant a title that
+                  is not on the list ("Site Reliability Engineer", "Analista
+                  de datos junior") simply could not be searched at all, which
+                  turns the search box into a catalogue. "Otro…" opens a text
+                  field; everything else is unchanged. */}
+              {customTitle ? (
+                <div className="col-span-2 flex gap-2 sm:min-w-[180px] sm:flex-1">
+                  <input
+                    type="text"
+                    autoFocus
+                    value={q}
+                    onChange={(e) => setQ(e.target.value)}
+                    placeholder="Escribe el puesto"
+                    aria-label="Puesto"
+                    className={inputClass}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCustomTitle(false);
+                      setQ("");
+                    }}
+                    className="shrink-0 rounded-lg px-2 text-xs font-semibold text-gray-500 underline decoration-dotted underline-offset-2 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                  >
+                    Lista
+                  </button>
+                </div>
+              ) : (
+                <Select
+                  value={q}
+                  onChange={(e) => {
+                    if (e.target.value === CUSTOM_TITLE_VALUE) {
+                      setCustomTitle(true);
+                      setQ("");
+                      return;
+                    }
+                    setQ(e.target.value);
+                  }}
+                  className="col-span-2 sm:min-w-[180px] sm:flex-1"
+                >
+                  <option value="">Puesto</option>
+                  {JOB_TITLE_GROUPS.map((group) => (
+                    <optgroup key={group.label} label={group.label}>
+                      {group.options.map((title) => (
+                        <option key={title} value={title}>
+                          {title}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                  <option value={CUSTOM_TITLE_VALUE}>Otro… (escribir)</option>
+                </Select>
+              )}
               <Select
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
@@ -545,6 +622,20 @@ function DiscoverContent() {
           </form>
 
           {error && <ErrorNotice message={error} />}
+
+          {/* Something has to move while 15 providers are queried. A skeleton
+              (not a spinner) because globals.css already argues the case: a
+              spinner reads as "stuck", a skeleton reads as "your results are
+              being laid out". The note underneath sets the expectation for a
+              wait this long instead of leaving the user guessing. */}
+          {loading && (
+            <div className="space-y-3">
+              <p className="text-center text-xs text-gray-400 dark:text-gray-500">
+                Preguntando a 15 fuentes a la vez. Las lentas pueden tardar hasta un minuto.
+              </p>
+              <ListSkeleton rows={3} />
+            </div>
+          )}
 
           {sources.length > 0 && <SourcesSummary sources={sources} shownCount={results.length} />}
 

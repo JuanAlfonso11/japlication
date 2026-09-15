@@ -29,18 +29,17 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "career_profiles",
-        sa.Column(
-            "translations",
-            postgresql.JSONB(astext_type=sa.Text()),
-            nullable=False,
-            server_default=sa.text("'{}'::jsonb"),
-        ),
+    # IF NOT EXISTS — see 0002. Both columns are now also declared in
+    # db/schema.sql (they were missing from it for weeks, which meant any
+    # database created from that file was stamped as up to date without them
+    # and could never be repaired).
+    op.execute(
+        "ALTER TABLE career_profiles "
+        "ADD COLUMN IF NOT EXISTS translations JSONB NOT NULL DEFAULT '{}'::jsonb"
     )
-    op.add_column(
-        "resume_versions",
-        sa.Column("language", sa.Text(), nullable=False, server_default=sa.text("'en'")),
+    op.execute(
+        "ALTER TABLE resume_versions "
+        "ADD COLUMN IF NOT EXISTS language TEXT NOT NULL DEFAULT 'en'"
     )
 
 

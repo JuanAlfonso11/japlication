@@ -72,6 +72,12 @@ CREATE TABLE career_profiles (
     -- a copy button, so the repetitive part of applying stops being retyped.
     -- [{question, answer}]
     screening_answers JSONB NOT NULL DEFAULT '[]'::jsonb,
+    -- migration 0006. Translations live BESIDE the base columns, never
+    -- replacing them: the match engine compares words, so mixing languages
+    -- in the text it reads is what dropped the semantic score to ~1/100 when
+    -- a Spanish profile met an English posting. Surfaced only when a CV is
+    -- rendered.  {"<lang>": {headline, summary, experience: [...]}}
+    translations    JSONB NOT NULL DEFAULT '{}'::jsonb,
     embedding       VECTOR(1536),                          -- optional semantic embedding of the full profile
     search_vector   TSVECTOR GENERATED ALWAYS AS (
                         to_tsvector('spanish', coalesce(headline,'') || ' ' || coalesce(summary,''))
@@ -93,7 +99,8 @@ CREATE INDEX idx_career_profiles_search ON career_profiles USING gin (search_vec
 CREATE TYPE job_source AS ENUM (
     'url_import', 'himalayas', 'arbeitnow', 'remotive', 'jobicy', 'remotejobs_org', 'themuse',
     'weworkremotely', 'hackernews', 'adzuna', 'usajobs', 'getonbrd', 'serpapi',
-    'workingnomads', 'remoteok', 'manual'
+    'workingnomads', 'remoteok', 'manual',
+    'linkedin'   -- migration 0007
 );
 
 CREATE TABLE jobs (
@@ -130,6 +137,9 @@ CREATE INDEX idx_jobs_search ON jobs USING gin (search_vector);
 CREATE INDEX idx_jobs_skills_gin ON jobs USING gin (skills_required jsonb_path_ops);
 CREATE INDEX idx_jobs_company_trgm ON jobs USING gin (company gin_trgm_ops);
 CREATE INDEX idx_jobs_imported_by ON jobs (imported_by);
+-- migration 0009. Every /jobs listing ends in ORDER BY created_at DESC; the
+-- table grows ~20 rows every 2 hours from the sweep.
+CREATE INDEX idx_jobs_created_at ON jobs (created_at DESC);
 
 -- =========================================================
 -- job_matches (cached hybrid match-engine output per user/job pair)
@@ -154,6 +164,9 @@ CREATE TABLE job_matches (
 );
 
 CREATE INDEX idx_job_matches_user_score ON job_matches (user_id, overall_score DESC);
+-- migration 0009. The composite above leads with user_id, so it cannot serve
+-- a lookup by job_id (_attach_match) or the FK check on DELETE FROM jobs.
+CREATE INDEX idx_job_matches_job ON job_matches (job_id);
 
 -- =========================================================
 -- applications (swipe decisions + application lifecycle)
@@ -181,6 +194,9 @@ CREATE TABLE applications (
 );
 
 CREATE INDEX idx_applications_user_status ON applications (user_id, status);
+-- migration 0009. Unindexed FK: joined from the job side, and scanned on
+-- every DELETE FROM jobs.
+CREATE INDEX idx_applications_job ON applications (job_id);
 
 -- =========================================================
 -- resume_versions (ATS-safe, job-tailored resume snapshots)
@@ -203,6 +219,10 @@ CREATE TABLE resume_versions (
     -- _find_reusable_resume). Their edits therefore carry forward instead of
     -- being re-made every time.
     edited_at           TIMESTAMPTZ,
+    -- migration 0006. Which language this CV was written in, so the list of
+    -- generated CVs can show it and a reused version is never handed to a
+    -- posting in the other language by accident.
+    language            TEXT NOT NULL DEFAULT 'en',
     created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

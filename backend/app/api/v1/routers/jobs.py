@@ -1,10 +1,12 @@
 import asyncio
+import logging
 from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
@@ -53,6 +55,8 @@ from app.services import (
 from app.services.job_dedupe import dedupe_external_results
 from app.services.job_importer import _extract_remote_type, import_job_from_url
 from app.services.match_engine import compute_and_persist_match
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["jobs"])
 
@@ -865,7 +869,11 @@ async def _get_or_create_external_job(
     db.add(job)
     try:
         await db.commit()
-    except Exception:
+    except IntegrityError:
+        # Lost the race: another request inserted this source_url between our
+        # SELECT above and this INSERT. Narrowed from `except Exception` so a
+        # connection drop or a bad value is no longer silently reinterpreted
+        # as "someone else already imported it".
         await db.rollback()
         if cached.get("source_url"):
             existing = await db.execute(select(Job).where(Job.source_url == cached["source_url"]))
@@ -915,8 +923,16 @@ async def import_external_job(
 
     try:
         job, _created = await _get_or_create_external_job(cached, payload.source, current_user.id, db)
-    except Exception:
-        raise HTTPException(status_code=409, detail="This job was already imported.")
+    except IntegrityError as exc:
+        # Only a real uniqueness conflict means "already imported". This used
+        # to be a bare `except Exception`, so a dropped database connection, a
+        # value too long for its column or an invalid enum all reported
+        # "This job was already imported." — sending you to look for a row
+        # that was never written. Everything else now surfaces as a 500 and
+        # gets recorded by error_middleware, which is where it can be found.
+        await db.rollback()
+        logger.info("import conflict for %s/%s: %s", payload.source, payload.external_id, exc.orig)
+        raise HTTPException(status_code=409, detail="This job was already imported.") from exc
     await _ensure_match(job, current_user.id, db)
     return await _attach_match(job, current_user.id, db)
 
@@ -1096,9 +1112,23 @@ async def delete_job(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> None:
-    result = await db.execute(select(Job).where(Job.id == job_id))
+    # `jobs` is a shared table on purpose — two users importing the same
+    # source_url get the same row, which is what makes dedupe work. But that
+    # made DELETE the one global write with no owner: any authenticated user
+    # could remove a row out from under everyone else. Deleting is now
+    # restricted to rows this user imported; rows with no importer (older
+    # data, before imported_by was populated) stay deletable so existing
+    # queues don't become impossible to clean up.
+    result = await db.execute(
+        select(Job).where(
+            Job.id == job_id,
+            or_(Job.imported_by == current_user.id, Job.imported_by.is_(None)),
+        )
+    )
     job = result.scalar_one_or_none()
     if job is None:
+        # Deliberately the same 404 whether the row is missing or belongs to
+        # someone else — a distinct 403 would confirm the id exists.
         raise HTTPException(status_code=404, detail="Job not found.")
     await db.delete(job)
     await db.commit()

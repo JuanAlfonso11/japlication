@@ -1,3 +1,10 @@
+# NOTE: the AI / PDF / SMTP helpers below are synchronous by design, but
+# uvicorn runs one event loop: calling one directly from an `async def`
+# handler freezes EVERY other request for its whole duration (5-15s for a
+# Claude call, up to the SMTP timeout for a slow mail server). They are
+# dispatched with asyncio.to_thread so only the calling request waits -
+# the same pattern services/match_engine.py already documents.
+import asyncio
 from typing import Optional
 from uuid import UUID
 
@@ -209,7 +216,8 @@ async def get_interview_prep(
     if match_row is None:
         match_row = await compute_and_persist_match(profile, job, current_user.id, db)
 
-    prep = build_interview_prep(
+    prep = await asyncio.to_thread(
+        build_interview_prep,
         profile,
         job,
         list(match_row.matched_skills or []),

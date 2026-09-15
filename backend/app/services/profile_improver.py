@@ -19,9 +19,9 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from app.services.anthropic_client import get_anthropic_client
+from app.services.anthropic_client import get_anthropic_client, log_ai_failure
+from app.core.config import settings
 
-ANTHROPIC_MODEL = "claude-sonnet-5"
 
 SYSTEM_PROMPT = """You are a CV/resume writing coach for JobPilot.
 
@@ -135,7 +135,7 @@ def _try_anthropic_improve(profile: Any) -> dict[str, Any] | None:
 
     try:
         response = client.messages.create(
-            model=ANTHROPIC_MODEL,
+            model=settings.ANTHROPIC_MODEL,
             max_tokens=2000,
             system=SYSTEM_PROMPT,
             messages=[
@@ -178,8 +178,9 @@ def _try_anthropic_improve(profile: Any) -> dict[str, Any] | None:
                 "experience bullets — same facts, clearer writing."
             ],
         }
-    except Exception:
+    except Exception as exc:
         # Any AI failure (network, parsing, quota) falls back to the deterministic improver.
+        log_ai_failure("profile_improver", exc)
         return None
 
 

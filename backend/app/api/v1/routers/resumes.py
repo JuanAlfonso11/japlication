@@ -1,3 +1,10 @@
+# NOTE: the AI / PDF / SMTP helpers below are synchronous by design, but
+# uvicorn runs one event loop: calling one directly from an `async def`
+# handler freezes EVERY other request for its whole duration (5-15s for a
+# Claude call, up to the SMTP timeout for a slow mail server). They are
+# dispatched with asyncio.to_thread so only the calling request waits -
+# the same pattern services/match_engine.py already documents.
+import asyncio
 from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
@@ -144,7 +151,7 @@ async def generate_resume(
     # the default a person would pick, and the one that keeps the CV
     # readable by whoever posted the job.
     language = (payload.language if payload else None) or detect_language(job.description)
-    adapted = adapt_resume(profile, job, language)
+    adapted = await asyncio.to_thread(adapt_resume, profile, job, language)
 
     resume_version = ResumeVersion(
         user_id=current_user.id,
@@ -372,7 +379,8 @@ async def export_resume_version_pdf(
     ).scalar_one_or_none()
     contact_info = profile.contact_info if profile is not None else {}
 
-    pdf_bytes = render_resume_pdf(
+    pdf_bytes = await asyncio.to_thread(
+        render_resume_pdf,
         full_name=current_user.full_name,
         contact_info=contact_info,
         content=row.content,

@@ -1,3 +1,10 @@
+# NOTE: the AI / PDF / SMTP helpers below are synchronous by design, but
+# uvicorn runs one event loop: calling one directly from an `async def`
+# handler freezes EVERY other request for its whole duration (5-15s for a
+# Claude call, up to the SMTP timeout for a slow mail server). They are
+# dispatched with asyncio.to_thread so only the calling request waits -
+# the same pattern services/match_engine.py already documents.
+import asyncio
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -66,7 +73,8 @@ async def generate_cover_letter_endpoint(
     matched_skills = list(match_row.matched_skills) if match_row else []
 
     tone = payload.tone or "professional"
-    generated = generate_cover_letter(
+    generated = await asyncio.to_thread(
+        generate_cover_letter,
         profile=profile,
         job=job,
         candidate_name=current_user.full_name,
@@ -143,7 +151,8 @@ async def export_cover_letter_pdf(
     ).scalar_one_or_none()
     contact_info = profile.contact_info if profile is not None else {}
 
-    pdf_bytes = render_cover_letter_pdf(
+    pdf_bytes = await asyncio.to_thread(
+        render_cover_letter_pdf,
         full_name=current_user.full_name,
         contact_info=contact_info,
         content=row.content,

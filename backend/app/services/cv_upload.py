@@ -27,10 +27,10 @@ from fastapi import HTTPException
 from pypdf import PdfReader
 from pypdf.errors import PdfReadError
 
-from app.services.anthropic_client import get_anthropic_client
+from app.services.anthropic_client import get_anthropic_client, log_ai_failure
 from app.services.skills_taxonomy import extract_skills_from_text
+from app.core.config import settings
 
-ANTHROPIC_MODEL = "claude-sonnet-5"
 
 _EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
 _PHONE_RE = re.compile(r"(\+?\d[\d .()-]{7,}\d)")
@@ -154,7 +154,7 @@ def _try_ai_parse(text: str) -> Optional[dict[str, Any]]:
 
     try:
         response = client.messages.create(
-            model=ANTHROPIC_MODEL,
+            model=settings.ANTHROPIC_MODEL,
             max_tokens=4000,
             system=SYSTEM_PROMPT,
             messages=[{"role": "user", "content": f"RESUME TEXT:\n{text[:20000]}"}],
@@ -165,7 +165,8 @@ def _try_ai_parse(text: str) -> Optional[dict[str, Any]]:
             if raw.startswith("json"):
                 raw = raw[4:]
         profile = json.loads(raw)
-    except Exception:
+    except Exception as exc:
+        log_ai_failure("cv_upload", exc)
         return None
 
     # Fill in any keys the model omitted so the response always matches CareerProfileUpsert's shape.

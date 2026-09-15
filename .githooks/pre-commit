@@ -19,6 +19,26 @@ else
     echo "[pre-commit] Backend container isn't running — skipping backend tests."
 fi
 
+# Schema drift: db/schema.sql must produce the same database as running the
+# migrations from scratch. app/scripts/migrate.py stamps a database that has
+# tables but no Alembic history as "already up to date", so when the two
+# disagree a freshly-created database is permanently missing whatever only
+# lived in a migration — silently, and unfixable by any later migration.
+# Migrations 0006 and 0007 lived outside schema.sql for weeks exactly this way.
+# Only runs when the schema actually changed, because it costs ~20s.
+if git diff --cached --name-only | grep -qE '^(db/schema\.sql|backend/alembic/versions/)'; then
+    if docker compose ps --status running --services 2>/dev/null | grep -q "^db$"; then
+        echo "[pre-commit] Checking schema drift..."
+        if ! powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-schema-drift.ps1; then
+            echo "[pre-commit] Schema drift detected — commit blocked."
+            echo "[pre-commit] Put the change in BOTH db/schema.sql and a migration."
+            exit 1
+        fi
+    else
+        echo "[pre-commit] db container isn't running — skipping schema drift check."
+    fi
+fi
+
 if git diff --cached --name-only | grep -q '^frontend/'; then
     # Docker first, not local npm: this machine has node installed but not
     # on the PATH a fresh shell inherits, so the local branch silently never

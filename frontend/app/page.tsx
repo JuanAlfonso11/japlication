@@ -1,16 +1,18 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import RouteGuard from "@/components/RouteGuard";
 import ErrorNotice from "@/components/ErrorNotice";
 import PullToRefresh from "@/components/PullToRefresh";
 import { STATUS_LABELS } from "@/components/StatusBadge";
 import SwipeCard from "@/components/SwipeCard";
+import { useAnnounce } from "@/components/LiveRegion";
 import Button, { buttonClass } from "@/components/ui/Button";
 import { Skeleton, SwipeCardSkeleton } from "@/components/ui/Skeleton";
 import { useAuth } from "@/context/AuthContext";
-import { applicationsApi, ApiError, jobsApi } from "@/lib/api";
+import { applicationsApi, ApiError, jobsApi, profileApi } from "@/lib/api";
 import {
   detectUserLocation,
   jobMatchesScope,
@@ -166,6 +168,8 @@ function StatsRow({ applications, queueCount }: { applications: Application[]; q
 
 function HomeContent() {
   const { user } = useAuth();
+  const router = useRouter();
+  const announce = useAnnounce();
   const [queue, setQueue] = useState<Job[] | null>(null);
   const [applications, setApplications] = useState<Application[] | null>(null);
   const [loading, setLoading] = useState(true);
@@ -208,6 +212,12 @@ function HomeContent() {
     [userLocation, geoStatus]
   );
 
+  // Whether the user has a career profile at all. Until they do, the match
+  // engine has nothing to score against, so the queue is empty for a reason
+  // that has nothing to do with having reviewed everything — see the empty
+  // state below.
+  const [hasProfile, setHasProfile] = useState<boolean | null>(null);
+
   const load = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
@@ -226,6 +236,25 @@ function HomeContent() {
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  // Deliberately separate from load(): a missing profile is a normal state
+  // for a new account, not a failure, so it must never turn the whole page
+  // into an error. 404 simply means "no profile yet".
+  useEffect(() => {
+    let cancelled = false;
+    profileApi
+      .get()
+      .then(() => {
+        if (!cancelled) setHasProfile(true);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setHasProfile(err instanceof ApiError && err.status === 404 ? false : true);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -264,6 +293,9 @@ function HomeContent() {
   );
   const current = filteredQueue && filteredQueue.length > 0 ? filteredQueue[0] : null;
   const next = filteredQueue && filteredQueue.length > 1 ? filteredQueue[1] : null;
+  // Desktop-only preview of what is behind the current card. Starts at index
+  // 1 (the card under the top one) so it never repeats the card being decided.
+  const upcoming = useMemo(() => (filteredQueue ?? []).slice(1, 5), [filteredQueue]);
 
   // Set only by the ✓/✕ buttons and arrow keys, to trigger the same
   // fly-off exit animation a drag gesture produces. The drag gesture
@@ -285,16 +317,22 @@ function HomeContent() {
         setQueue((prev) => (prev ? prev.filter((j) => j.id !== target.id) : prev));
         setJustApplied(decision === "right" ? target : null);
         setJustPassed(decision === "left" ? { job: target, applicationId: application.id } : null);
-      } catch (err) {
-        setActionError(
-          err instanceof ApiError ? err.message : "No se pudo registrar tu decisión. Intenta de nuevo."
+        announce(
+          decision === "right"
+            ? `Guardado: ${target.title} en ${target.company}.`
+            : `Pasaste: ${target.title} en ${target.company}. Pulsa U para deshacer.`
         );
+      } catch (err) {
+        const message =
+          err instanceof ApiError ? err.message : "No se pudo registrar tu decisión. Intenta de nuevo.";
+        setActionError(message);
+        announce(message, "assertive");
       } finally {
         setPending(false);
         setPendingDecision(null);
       }
     },
-    [current, pending]
+    [current, pending, announce]
   );
 
   const handleUndoPass = useCallback(async () => {
@@ -303,13 +341,16 @@ function HomeContent() {
     try {
       await applicationsApi.undo(justPassed.applicationId);
       setQueue((prev) => (prev ? [justPassed.job, ...prev] : [justPassed.job]));
+      announce(`Deshecho. ${justPassed.job.title} vuelve a tu cola.`);
       setJustPassed(null);
     } catch (err) {
-      setActionError(err instanceof ApiError ? err.message : "No se pudo deshacer.");
+      const message = err instanceof ApiError ? err.message : "No se pudo deshacer.";
+      setActionError(message);
+      announce(message, "assertive");
     } finally {
       setUndoing(false);
     }
-  }, [justPassed, undoing]);
+  }, [justPassed, undoing, announce]);
 
   useEffect(() => {
     if (!justPassed) return;
@@ -325,14 +366,54 @@ function HomeContent() {
     [current, pending, pendingDecision]
   );
 
+  // Keyboard is the primary input on a desktop, where there is no thumb to
+  // swipe with. The swipe stays exactly as it is — this is the same decision
+  // reachable a second way, not a replacement for it.
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
-      if (e.key === "ArrowRight") requestDecision("right");
-      if (e.key === "ArrowLeft") requestDecision("left");
+      // Never decide on a card the user cannot see or is not looking at. The
+      // scope sheet renders ON TOP of the card, so an arrow key pressed with
+      // it open used to pass or save a job that was hidden behind the panel —
+      // an invisible decision on a real posting, with only an 8-second undo.
+      if (document.querySelector('[role="dialog"]')) return;
+
+      // Typing somewhere should type, not swipe.
+      const el = document.activeElement as HTMLElement | null;
+      if (
+        el &&
+        (el.tagName === "INPUT" ||
+          el.tagName === "TEXTAREA" ||
+          el.tagName === "SELECT" ||
+          el.isContentEditable)
+      ) {
+        return;
+      }
+
+      // Leave browser and OS shortcuts alone (Alt+Left is Back).
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+      if (e.key === "ArrowRight") {
+        e.preventDefault();
+        requestDecision("right");
+      }
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        requestDecision("left");
+      }
+      // Desktop conveniences: U undoes the last pass without reaching for the
+      // mouse, Enter opens the card under review.
+      if ((e.key === "u" || e.key === "U") && justPassed) {
+        e.preventDefault();
+        handleUndoPass();
+      }
+      if (e.key === "Enter" && current) {
+        e.preventDefault();
+        router.push(`/jobs/${current.id}`);
+      }
     }
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [requestDecision]);
+  }, [requestDecision, justPassed, handleUndoPass, current, router]);
 
   if (loading) return <HomeSkeleton />;
   if (loadError) return <ErrorNotice message={loadError} onRetry={load} />;
@@ -404,7 +485,28 @@ function HomeContent() {
           />
         )}
 
-        {!current && !hiddenByScope && (
+        {/* A brand-new account has an empty queue for a completely different
+            reason than someone who swiped through everything, and telling
+            them "Ya estás al día — revisaste todo" is simply false: they have
+            reviewed nothing. Worse, the only button sent them to Buscar,
+            which cannot fill the queue either — without a profile there is
+            nothing for the match engine to score against. This is the one
+            place the app could lose someone permanently, so it gets its own
+            branch pointing at the actual next step. */}
+        {!current && !hiddenByScope && hasProfile === false && (
+          <EmptyState
+            icon={<PinGlyph />}
+            title="Empieza por tu CV"
+            body="Súbelo en PDF y lo leemos por ti. Con tu perfil listo, las vacantes aparecen aquí solas, ya puntuadas."
+            action={
+              <Link href="/profile" className={buttonClass({ size: "sm" })}>
+                Subir mi CV
+              </Link>
+            }
+          />
+        )}
+
+        {!current && !hiddenByScope && hasProfile !== false && (
           <EmptyState
             icon={<CheckGlyph />}
             title="Ya estás al día"
@@ -448,6 +550,69 @@ function HomeContent() {
             label="Guardar"
             tone="save"
           />
+        </div>
+      )}
+
+      {/* Desktop only (`hidden lg:block`). The swipe column is capped at
+          max-w-md because that is the right width for a card you flick with a
+          thumb — on a 1440px laptop that left two thirds of the screen empty.
+          This fills it with the one thing the phone cannot show: what is
+          coming next, so deciding has context instead of being blind. Nothing
+          about the swipe changes. */}
+      {upcoming.length > 0 && (
+        <div className="hidden w-full max-w-md lg:block">
+          <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-gray-400 dark:text-gray-500">
+            A continuación
+          </p>
+          <ul className="space-y-1.5">
+            {upcoming.map((job) => (
+              <li key={job.id}>
+                <Link
+                  href={`/jobs/${job.id}`}
+                  className="flex items-center justify-between gap-3 rounded-xl bg-white px-3 py-2 text-left shadow-soft ring-1 ring-gray-100 transition-colors hover:bg-gray-50 dark:bg-gray-900 dark:ring-gray-800 dark:hover:bg-gray-800"
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate text-[13px] font-semibold text-gray-900 dark:text-gray-100">
+                      {job.title}
+                    </span>
+                    <span className="block truncate text-[11px] text-gray-500 dark:text-gray-400">
+                      {job.company}
+                      {job.location ? ` · ${job.location}` : ""}
+                    </span>
+                  </span>
+                  {job.match?.overall_score != null && (
+                    <span className="tabular shrink-0 rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-bold text-brand-700 dark:bg-brand-500/15 dark:text-brand-300">
+                      {Math.round(job.match.overall_score)}
+                    </span>
+                  )}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Desktop only (`hidden sm:flex`). On a phone the swipe IS the
+          interface and this would be noise; on a laptop there is no thumb to
+          swipe with, the shortcuts already existed, and nothing ever said so.
+          The swipe itself is untouched — this just makes the second way in
+          discoverable. */}
+      {current && (
+        <div className="hidden w-full max-w-md items-center justify-center gap-4 pt-1 text-[11px] text-gray-400 sm:flex dark:text-gray-500">
+          <span className="flex items-center gap-1.5">
+            <Kbd>←</Kbd> Pasar
+          </span>
+          <span className="flex items-center gap-1.5">
+            <Kbd>→</Kbd> Guardar
+          </span>
+          <span className="flex items-center gap-1.5">
+            <Kbd>Enter</Kbd> Ver detalle
+          </span>
+          {justPassed && (
+            <span className="flex items-center gap-1.5 text-brand-500 dark:text-brand-300">
+              <Kbd>U</Kbd> Deshacer
+            </span>
+          )}
         </div>
       )}
 
@@ -511,6 +676,15 @@ function HomeContent() {
           bar's edge. */}
       </div>
     </PullToRefresh>
+  );
+}
+
+/** A keycap. Only ever rendered on `sm:` and up — see the shortcut hint row. */
+function Kbd({ children }: { children: React.ReactNode }) {
+  return (
+    <kbd className="rounded-md border border-gray-200 bg-white px-1.5 py-0.5 font-sans text-[10px] font-bold leading-none text-gray-500 shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400">
+      {children}
+    </kbd>
   );
 }
 

@@ -1,10 +1,17 @@
+# NOTE: the AI / PDF / SMTP helpers below are synchronous by design, but
+# uvicorn runs one event loop: calling one directly from an `async def`
+# handler freezes EVERY other request for its whole duration (5-15s for a
+# Claude call, up to the SMTP timeout for a slow mail server). They are
+# dispatched with asyncio.to_thread so only the calling request waits -
+# the same pattern services/match_engine.py already documents.
+import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import RedirectResponse
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
@@ -35,6 +42,11 @@ from app.services import email
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 logger = logging.getLogger("jobflow.auth")
+
+# A real bcrypt hash of a value nobody can supply, used only to spend the
+# same ~100ms on a login for an address that has no account as on one that
+# does. Computed once at import so it never costs anything per request.
+_DUMMY_PASSWORD_HASH = hash_password("jobflow-timing-equalizer-not-a-real-password")
 
 _VERIFY_PURPOSE = "email_verify"
 _VERIFY_TOKEN_MINUTES = 10  # short-lived on purpose — request a resend if it expires
@@ -90,7 +102,7 @@ async def register(request: Request, payload: UserRegister, db: AsyncSession = D
     await db.commit()
     await db.refresh(user)
 
-    _send_verification_email(user)
+    await asyncio.to_thread(_send_verification_email, user)
 
     access_token, refresh_token = await _issue_token_pair(user, db)
     return TokenResponse(access_token=access_token, refresh_token=refresh_token, user=UserSchema.model_validate(user))
@@ -101,7 +113,17 @@ async def register(request: Request, payload: UserRegister, db: AsyncSession = D
 async def login(request: Request, payload: UserLogin, db: AsyncSession = Depends(get_db)) -> TokenResponse:
     result = await db.execute(select(User).where(User.email == payload.email.lower()))
     user = result.scalar_one_or_none()
-    if user is None or not verify_password(payload.password, user.hashed_password):
+    if user is None:
+        # Hash the supplied password against a throwaway value anyway. Short-
+        # circuiting on "no such user" skipped bcrypt entirely, so a missing
+        # account answered measurably faster than a wrong password — a timing
+        # oracle that turns "is this email registered?" into a stopwatch
+        # question. Costs one bcrypt round on a path that should be rare.
+        await asyncio.to_thread(verify_password, payload.password, _DUMMY_PASSWORD_HASH)
+        raise HTTPException(status_code=401, detail="Invalid email or password.")
+    # bcrypt is deliberately slow (~100ms+); off the event loop it goes, or
+    # every concurrent request waits behind this one.
+    if not await asyncio.to_thread(verify_password, payload.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid email or password.")
 
     access_token, refresh_token = await _issue_token_pair(user, db)
@@ -123,7 +145,30 @@ async def refresh(request: Request, payload: RefreshRequest, db: AsyncSession = 
     token_hash = hash_refresh_token(payload.refresh_token)
     result = await db.execute(select(RefreshToken).where(RefreshToken.token_hash == token_hash))
     stored = result.scalar_one_or_none()
-    if stored is None or stored.revoked_at is not None or stored.expires_at < datetime.now(timezone.utc):
+    if stored is None or stored.expires_at < datetime.now(timezone.utc):
+        raise invalid
+
+    if stored.revoked_at is not None:
+        # Reuse of an already-rotated token. The docstring above called this
+        # "a signal it leaked" but the code only rejected this one token, so
+        # the thief — who rotated first and holds the *current* token — kept
+        # full access for the rest of the 90-day window while the real user
+        # just saw one session drop. Detecting a leak and doing nothing about
+        # it is not a security control.
+        #
+        # Revoking the whole family ends both sessions. Whoever is legitimate
+        # logs in again with their password, which the attacker does not have.
+        now = datetime.now(timezone.utc)
+        await db.execute(
+            update(RefreshToken)
+            .where(RefreshToken.user_id == stored.user_id, RefreshToken.revoked_at.is_(None))
+            .values(revoked_at=now)
+        )
+        await db.commit()
+        logger.warning(
+            "refresh token reuse detected for user %s — revoked all active sessions",
+            stored.user_id,
+        )
         raise invalid
 
     result = await db.execute(select(User).where(User.id == stored.user_id))
@@ -162,7 +207,7 @@ async def resend_verification(
 ) -> ResendVerificationResponse:
     if current_user.email_verified:
         return ResendVerificationResponse(sent=False, detail="Your email is already verified.")
-    _send_verification_email(current_user)
+    await asyncio.to_thread(_send_verification_email, current_user)
     return ResendVerificationResponse(sent=True, detail="Verification email sent.")
 
 

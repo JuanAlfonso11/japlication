@@ -19,9 +19,9 @@ grounded material more fluently.
 
 from typing import Optional
 
-from app.services.anthropic_client import get_anthropic_client
+from app.services.anthropic_client import get_anthropic_client, log_ai_failure
+from app.core.config import settings
 
-ANTHROPIC_MODEL = "claude-sonnet-5"
 
 SYSTEM_PROMPT = """You prepare a candidate for a job interview.
 
@@ -164,7 +164,7 @@ def _try_anthropic_prep(profile, job, matched_skills, missing_skills, base: list
             '"tecnica"|"brecha"|"requisito"|"empresa", "why": str, "talking_points": [str]}]}'
         )
         response = client.messages.create(
-            model=ANTHROPIC_MODEL,
+            model=settings.ANTHROPIC_MODEL,
             max_tokens=1500,
             system=SYSTEM_PROMPT,
             messages=[{"role": "user", "content": user_prompt}],
@@ -198,9 +198,10 @@ def _try_anthropic_prep(profile, job, matched_skills, missing_skills, base: list
                 }
             )
         return cleaned or None
-    except Exception:
+    except Exception as exc:
         # Any failure (network, quota, malformed JSON) falls back to the
         # rule-based sheet, which is already useful — never an error page.
+        log_ai_failure("interview_prep", exc)
         return None
 
 

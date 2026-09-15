@@ -11,9 +11,9 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from app.services.anthropic_client import get_anthropic_client
+from app.services.anthropic_client import get_anthropic_client, log_ai_failure
+from app.core.config import settings
 
-ANTHROPIC_MODEL = "claude-sonnet-5"
 
 SYSTEM_PROMPT = """You are a career-writing assistant for JobFlow AI, writing a
 cover letter on behalf of a job candidate.
@@ -104,7 +104,7 @@ def _try_anthropic_generate(
             "Write the cover letter now."
         )
         response = client.messages.create(
-            model=ANTHROPIC_MODEL,
+            model=settings.ANTHROPIC_MODEL,
             max_tokens=800,
             system=SYSTEM_PROMPT,
             messages=[{"role": "user", "content": user_prompt}],
@@ -112,7 +112,8 @@ def _try_anthropic_generate(
         text = "".join(block.text for block in response.content if getattr(block, "type", None) == "text")
         text = text.strip()
         return text or None
-    except Exception:
+    except Exception as exc:
+        log_ai_failure("cover_letter", exc)
         return None
 
 

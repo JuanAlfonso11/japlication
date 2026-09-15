@@ -1,9 +1,31 @@
+import os
 import secrets
+import sys
 from functools import lru_cache
 from pathlib import Path
 from typing import Optional
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Secrets that must never reach a running deployment. The old default
+# ("dev-secret-change-me") is committed in this repo and in
+# docker-compose.yml, so anyone who reads the source can forge an access
+# token for any user. Booting with one of these is not a warning-level
+# problem — it is an unauthenticated-admin problem that looks completely
+# healthy from the outside, which is why _validate_secrets() below refuses
+# to start instead of logging and continuing.
+_PLACEHOLDER_JWT_SECRETS = frozenset(
+    {
+        "dev-secret-change-me",
+        "change-me-in-.env",
+        "change-me",
+        "changeme",
+        "secret",
+        "supersecret",
+        "your-secret-key",
+    }
+)
+_MIN_JWT_SECRET_LENGTH = 32
 
 # Persisted across container restarts via the bind-mounted ./backend/runtime
 # volume (see docker-compose.yml) — so an auto-generated heartbeat secret
@@ -39,6 +61,20 @@ class Settings(BaseSettings):
     #: anthropic-workspace-id header. Sent whenever it is set; see
     #: services/anthropic_client.py.
     ANTHROPIC_WORKSPACE_ID: Optional[str] = None
+    #: The model every AI feature uses. Was declared as a module constant in
+    #: all seven services, which is exactly the duplication anthropic_client
+    #: was created to remove — the model string just escaped it. Changing it
+    #: in six places and missing the seventh fails silently: that feature
+    #: keeps calling the old model and nothing complains.
+    ANTHROPIC_MODEL: str = "claude-sonnet-5"
+    #: Stop-the-bleeding ceiling on Anthropic calls per UTC day. Anthropic is
+    #: the only API here that bills rather than running out of a free quota,
+    #: and every caller falls back to an offline path on failure — so a
+    #: runaway loop would spend money with no visible symptom at all. Set far
+    #: above normal use (a sweep scores ~20 jobs every 2 hours); it exists to
+    #: catch a bug, not to throttle the feature. Also set a real spend limit
+    #: in the Anthropic console: this counter resets on container restart.
+    ANTHROPIC_DAILY_CALL_BUDGET: int = 250
 
     # Email (account verification). Without these set, the backend logs the
     # verification link instead of sending a real email — the app stays
@@ -145,11 +181,68 @@ def _load_or_create_heartbeat_secret() -> str:
         return secrets.token_urlsafe(32)
 
 
+def _running_under_pytest() -> bool:
+    # conftest.py imports pytest long before it imports app.core.config, so
+    # by the time this runs in a test session pytest is already in
+    # sys.modules. Checked this way (rather than via PYTEST_CURRENT_TEST,
+    # which is only set once a test *starts*) because validation happens at
+    # import time, during collection.
+    return "pytest" in sys.modules
+
+
+def _validate_secrets(settings: Settings) -> None:
+    """Refuse to boot with a guessable JWT_SECRET.
+
+    A weak secret here means anyone who can read this repository can mint a
+    valid access token for any account. There is no degraded mode worth
+    offering for that, so this raises instead of warning — the container
+    failing to start is a loud, obvious problem, whereas a forged-token
+    backend looks perfectly healthy while it is wide open.
+
+    Skipped under pytest (the suite never sets JWT_SECRET and does not need
+    to) and behind ALLOW_INSECURE_JWT_SECRET=1 for throwaway local runs.
+    """
+    if _running_under_pytest() or os.getenv("ALLOW_INSECURE_JWT_SECRET") == "1":
+        return
+
+    value = (settings.JWT_SECRET or "").strip()
+    problem: Optional[str] = None
+    if not value:
+        problem = "is empty"
+    elif value.lower() in _PLACEHOLDER_JWT_SECRETS:
+        problem = "is still the placeholder value shipped with the repo"
+    elif len(value) < _MIN_JWT_SECRET_LENGTH:
+        problem = f"is only {len(value)} characters (minimum {_MIN_JWT_SECRET_LENGTH})"
+
+    if problem:
+        raise RuntimeError(
+            f"JWT_SECRET {problem}. Anyone who can read this repo could forge an "
+            "access token for any account, so the backend will not start.\n"
+            "Generate one with:  python -c \"import secrets; print(secrets.token_urlsafe(48))\"\n"
+            "then set JWT_SECRET in .env and restart.\n"
+            "(For a throwaway local run only: ALLOW_INSECURE_JWT_SECRET=1)"
+        )
+
+
+def redact_secret(value: Optional[str]) -> str:
+    """Render a secret safe to put in a log line or an error payload.
+
+    Never returns the value itself. Keeps just enough shape to tell "the key
+    is configured" from "the key is missing" and to distinguish two keys
+    from each other while debugging — which is the only reason to print
+    anything about a credential at all.
+    """
+    if not value:
+        return "<unset>"
+    return f"<set:{len(value)} chars, ends …{value[-4:]}>"
+
+
 @lru_cache
 def get_settings() -> Settings:
     settings = Settings()
     if not settings.SYSTEM_HEARTBEAT_SECRET:
         settings.SYSTEM_HEARTBEAT_SECRET = _load_or_create_heartbeat_secret()
+    _validate_secrets(settings)
     return settings
 
 

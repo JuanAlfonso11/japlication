@@ -8,6 +8,7 @@ import PushNotificationsSetup from "@/components/PushNotificationsSetup";
 import BackButtonHandler from "@/components/BackButtonHandler";
 import UpdateChecker from "@/components/UpdateChecker";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import LiveRegionProvider from "@/components/LiveRegion";
 import { installErrorReporting } from "@/lib/errorReporting";
 
 export default function Providers({ children }: { children: React.ReactNode }) {
@@ -21,15 +22,19 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <PushNotificationsSetup />
-        <BackButtonHandler />
-        <UpdateChecker />
-        {/* Inside NavShell, not around it: a page crashing should leave the
-            tab bar and header alive so the user can navigate away, rather
-            than blanking the entire app. */}
-        <NavShell>
-          <ErrorBoundary>{children}</ErrorBoundary>
-        </NavShell>
+        {/* Outermost of the UI providers so any screen can announce, and so
+            the live region itself survives a page-level crash. */}
+        <LiveRegionProvider>
+          <PushNotificationsSetup />
+          <BackButtonHandler />
+          <UpdateChecker />
+          {/* Inside NavShell, not around it: a page crashing should leave the
+              tab bar and header alive so the user can navigate away, rather
+              than blanking the entire app. */}
+          <NavShell>
+            <ErrorBoundary>{children}</ErrorBoundary>
+          </NavShell>
+        </LiveRegionProvider>
       </AuthProvider>
     </ThemeProvider>
   );

@@ -21,6 +21,11 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    # Revision 0001 executes db/schema.sql as it stands today, and that file
+    # already creates error_logs — so on an empty database this table exists
+    # by the time we get here. See 0002 for the full explanation.
+    if sa.inspect(op.get_bind()).has_table("error_logs"):
+        return
     op.create_table(
         "error_logs",
         sa.Column(

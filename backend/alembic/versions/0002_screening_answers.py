@@ -24,14 +24,14 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "career_profiles",
-        sa.Column(
-            "screening_answers",
-            postgresql.JSONB(astext_type=sa.Text()),
-            nullable=False,
-            server_default=sa.text("'[]'::jsonb"),
-        ),
+    # IF NOT EXISTS, because revision 0001 does not carry a frozen snapshot of
+    # the schema — it executes db/schema.sql as it stands today, and that file
+    # already declares this column. Without the guard, `alembic upgrade head`
+    # on an empty database dies here with DuplicateColumn, which is exactly
+    # what scripts/check-schema-drift.ps1 caught.
+    op.execute(
+        "ALTER TABLE career_profiles "
+        "ADD COLUMN IF NOT EXISTS screening_answers JSONB NOT NULL DEFAULT '[]'::jsonb"
     )
 
 

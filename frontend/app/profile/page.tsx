@@ -8,6 +8,8 @@ import CVEvaluationCard from "@/components/CVEvaluationCard";
 import SkillGapsCard from "@/components/SkillGapsCard";
 import SegmentedTabs from "@/components/ui/SegmentedTabs";
 import ErrorLogPanel from "@/components/ErrorLogPanel";
+import { useAnnounce } from "@/components/LiveRegion";
+import useUnsavedGuard from "@/components/useUnsavedGuard";
 import SettingsPanel from "@/components/profile/SettingsPanel";
 import UsedResumesSection from "@/components/profile/UsedResumesSection";
 import SystemStatusPanel from "@/components/profile/SystemStatusPanel";
@@ -39,6 +41,34 @@ import type {
   ProfileLanguage,
 } from "@/lib/types";
 
+/** Normalizes a value for comparison: case, accents and punctuation removed,
+ * whitespace collapsed. "Ingeniería de Software" and "ingenieria de software"
+ * are the same entry typed twice. */
+function normKey(...parts: (string | null | undefined)[]): string {
+  return parts
+    .map((p) => (p ?? "").toString().trim().toLowerCase())
+    .join("|")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9|]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Appends only the entries of `incoming` that `current` does not already
+ * have, judged by `keyOf`. */
+function mergeUnique<T>(current: T[], incoming: T[], keyOf: (item: T) => string): T[] {
+  const seen = new Set(current.map(keyOf));
+  const added: T[] = [];
+  for (const item of incoming) {
+    const key = keyOf(item);
+    if (key && seen.has(key)) continue;
+    seen.add(key);
+    added.push(item);
+  }
+  return [...current, ...added];
+}
+
 function mergeCvDraft(current: CareerProfile, draft: CareerProfile): CareerProfile {
   const mergedContact = { ...current.contact_info };
   (Object.keys(draft.contact_info) as (keyof typeof draft.contact_info)[]).forEach((key) => {
@@ -47,19 +77,32 @@ function mergeCvDraft(current: CareerProfile, draft: CareerProfile): CareerProfi
     }
   });
 
-  const existingSkillNames = new Set(current.skills.map((s) => s.name.toLowerCase()));
-  const newSkills = draft.skills.filter((s) => !existingSkillNames.has(s.name.toLowerCase()));
-
+  // Every list used to be a plain concatenation, so re-importing a corrected
+  // PDF — the most natural thing to do when the first parse came out wrong —
+  // left every job, degree and certification in the profile TWICE. Skills
+  // were the only list that deduplicated. Cleaning eight duplicate entries by
+  // hand on a phone is exactly the work the import was supposed to save, and
+  // saving without noticing produced a duplicated CV.
+  //
+  // Identity per list is the field combination a person would call "the same
+  // entry", not object equality — the parser rarely returns byte-identical
+  // text twice.
   return {
     ...current,
     headline: current.headline || draft.headline || "",
     summary: current.summary || draft.summary || "",
     contact_info: mergedContact,
-    skills: [...current.skills, ...newSkills],
-    experience: [...current.experience, ...draft.experience],
-    education: [...current.education, ...draft.education],
-    certifications: [...current.certifications, ...draft.certifications],
-    languages: [...current.languages, ...draft.languages],
+    skills: mergeUnique(current.skills, draft.skills, (s) => normKey(s.name)),
+    experience: mergeUnique(current.experience, draft.experience, (e) =>
+      normKey(e.company, e.title, e.start_date)
+    ),
+    education: mergeUnique(current.education, draft.education, (e) =>
+      normKey(e.institution, e.degree, e.field)
+    ),
+    certifications: mergeUnique(current.certifications, draft.certifications, (c) =>
+      normKey(typeof c === "string" ? c : c?.name)
+    ),
+    languages: mergeUnique(current.languages, draft.languages, (l) => normKey(l.name)),
   };
 }
 
@@ -92,6 +135,7 @@ function ProfileContent() {
   // Used for the master CV's filename: it is what a recruiter sees when the
   // file is attached to an application.
   const { user } = useAuth();
+  const announce = useAnnounce();
 
   // Remembered across visits: coming back to Perfil to keep filling in the
   // answer bank and landing on the CV form every time is a small, repeated
@@ -223,6 +267,14 @@ function ProfileContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // The bottom nav sits under the thumb on a phone; one reflex tap used to
+  // discard everything typed since the last save, with no warning beyond a
+  // small amber line at the top of the page.
+  useUnsavedGuard(
+    dirty,
+    "Tienes cambios sin guardar en tu perfil. Si sales ahora se pierden.\n\n¿Salir de todas formas?"
+  );
+
   function patch(update: Partial<CareerProfile>) {
     setProfile((prev) => (prev ? { ...prev, ...update } : prev));
     setDirty(true);
@@ -308,6 +360,27 @@ function ProfileContent() {
     }
   }
 
+  /** Snapshot of the user's own wording, taken right before "Mejorar CV"
+   * overwrites it. The profile is described in the design as "the single
+   * source of factual truth", and this button rewrites the headline, the
+   * summary AND every achievement bullet in one shot. There was a text
+   * change-log but no before/after and no way back: the only escape was to
+   * leave without saving, which also threw away anything else edited in the
+   * same session. A tool that scary is a tool you stop using. */
+  const [preImproveProfile, setPreImproveProfile] = useState<Pick<
+    CareerProfile,
+    "headline" | "summary" | "experience"
+  > | null>(null);
+
+  function handleRevertImprove() {
+    if (!preImproveProfile) return;
+    patch(preImproveProfile);
+    setPreImproveProfile(null);
+    setImproveNotice(null);
+    setImprovePendingSave(false);
+    announce("Se restauró tu versión del CV.");
+  }
+
   async function handleImproveProfile() {
     setImproving(true);
     setImproveError(null);
@@ -315,6 +388,13 @@ function ProfileContent() {
     setPreImproveScore(evaluation?.overall_score ?? null);
     try {
       const result = await profileApi.improve();
+      if (profile) {
+        setPreImproveProfile({
+          headline: profile.headline,
+          summary: profile.summary,
+          experience: profile.experience,
+        });
+      }
       patch({
         headline: result.profile.headline,
         summary: result.profile.summary,
@@ -495,6 +575,20 @@ function ProfileContent() {
                   improveNotice.scoreAfter > improveNotice.scoreBefore &&
                   ` (+${Math.round(improveNotice.scoreAfter - improveNotice.scoreBefore)})`}
               </p>
+            )}
+            {preImproveProfile && (
+              <div className="mt-3 border-t border-amber-600/20 pt-2.5 dark:border-amber-400/20">
+                <p className="mb-2">
+                  Tu versión anterior sigue guardada aquí hasta que salgas de esta pantalla.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleRevertImprove}
+                  className="min-h-[36px] rounded-lg bg-amber-100 px-3 text-xs font-bold text-amber-900 transition-colors hover:bg-amber-200 active:scale-95 dark:bg-amber-400/20 dark:text-amber-100 dark:hover:bg-amber-400/30"
+                >
+                  Restaurar mi versión
+                </button>
+              </div>
             )}
           </div>
         )}

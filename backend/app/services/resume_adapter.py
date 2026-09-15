@@ -13,11 +13,11 @@ from __future__ import annotations
 import json
 from typing import Any, Optional
 
-from app.services.anthropic_client import get_anthropic_client
+from app.services.anthropic_client import get_anthropic_client, log_ai_failure
 from app.services.profile_i18n import LANGUAGE_NAMES, localize_profile, normalize_language
 from app.services.skills_taxonomy import canonical_skill_set, normalize_skill
+from app.core.config import settings
 
-ANTHROPIC_MODEL = "claude-sonnet-5"
 
 #: The description is the only field here with no natural size limit, and an
 #: importer that lands on a careers *index* page instead of one posting can
@@ -194,7 +194,7 @@ def _try_anthropic_adapt(profile, job, language: str) -> Optional[dict[str, Any]
 
     try:
         response = client.messages.create(
-            model=ANTHROPIC_MODEL,
+            model=settings.ANTHROPIC_MODEL,
             max_tokens=2000,
             system=SYSTEM_PROMPT.replace("{language_name}", LANGUAGE_NAMES[language]),
             messages=[
@@ -222,8 +222,9 @@ def _try_anthropic_adapt(profile, job, language: str) -> Optional[dict[str, Any]
                 f"{LANGUAGE_NAMES[language]}: reordered/reworded truthfully to match job terminology."
             ],
         }
-    except Exception:
+    except Exception as exc:
         # Any AI failure (network, parsing, quota) falls back to the deterministic adapter.
+        log_ai_failure("resume_adapter", exc)
         return None
 
 

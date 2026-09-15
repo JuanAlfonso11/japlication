@@ -24,9 +24,10 @@ from sqlalchemy import func
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.anthropic_client import get_anthropic_client
+from app.services.anthropic_client import get_anthropic_client, log_ai_failure
 from app.models.job_match import JobMatch
 from app.services.skills_taxonomy import SOFT_SKILLS, canonical_skill_set, normalize_skill
+from app.core.config import settings
 
 if TYPE_CHECKING:
     from app.models.career_profile import CareerProfile
@@ -36,7 +37,6 @@ TECHNICAL_WEIGHT = 0.5
 EXPERIENCE_WEIGHT = 0.3
 SEMANTIC_WEIGHT = 0.2
 
-ANTHROPIC_MODEL = "claude-sonnet-5"
 
 YEARS_RE = re.compile(
     r"(\d+)\s*\+?\s*(?:-|to|a)?\s*(\d+)?\s*\+?\s*(?:years?|yrs?|años|anos)",
@@ -279,7 +279,7 @@ def _try_anthropic_semantic_score(profile_text: str, job_text: str) -> Optional[
 
     try:
         response = client.messages.create(
-            model=ANTHROPIC_MODEL,
+            model=settings.ANTHROPIC_MODEL,
             max_tokens=16,
             messages=[
                 {
@@ -299,9 +299,10 @@ def _try_anthropic_semantic_score(profile_text: str, job_text: str) -> Optional[
         raw = "".join(block.text for block in response.content if getattr(block, "type", None) == "text")
         score = float(raw.strip())
         return round(max(0.0, min(score, 100.0)), 2)
-    except Exception:
+    except Exception as exc:
         # Any AI failure (network, quota, unparsable reply) falls back to
         # the deterministic offline scorer — see compute_match.
+        log_ai_failure("match_engine", exc)
         return None
 
 

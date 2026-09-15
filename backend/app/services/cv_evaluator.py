@@ -16,10 +16,10 @@ import json
 import re
 from typing import Any, Optional
 
-from app.services.anthropic_client import get_anthropic_client
+from app.services.anthropic_client import get_anthropic_client, log_ai_failure
 from app.services.skills_taxonomy import canonical_skill_set, normalize_skill
+from app.core.config import settings
 
-ANTHROPIC_MODEL = "claude-sonnet-5"
 
 CATEGORY_WEIGHTS = {
     "completeness": 0.35,
@@ -364,7 +364,7 @@ def _try_ai_summary(evaluation: dict[str, Any]) -> Optional[str]:
 
     try:
         response = client.messages.create(
-            model=ANTHROPIC_MODEL,
+            model=settings.ANTHROPIC_MODEL,
             max_tokens=300,
             system=SYSTEM_PROMPT,
             messages=[
@@ -376,7 +376,8 @@ def _try_ai_summary(evaluation: dict[str, Any]) -> Optional[str]:
         )
         text = "".join(block.text for block in response.content if getattr(block, "type", None) == "text").strip()
         return text or None
-    except Exception:
+    except Exception as exc:
+        log_ai_failure("cv_evaluator", exc)
         return None
 
 

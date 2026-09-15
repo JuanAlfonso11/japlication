@@ -1,3 +1,10 @@
+# NOTE: the AI / PDF / SMTP helpers below are synchronous by design, but
+# uvicorn runs one event loop: calling one directly from an `async def`
+# handler freezes EVERY other request for its whole duration (5-15s for a
+# Claude call, up to the SMTP timeout for a slow mail server). They are
+# dispatched with asyncio.to_thread so only the calling request waits -
+# the same pattern services/match_engine.py already documents.
+import asyncio
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
@@ -82,7 +89,8 @@ async def export_master_cv_pdf(
 ) -> Response:
     """The master CV as an ATS-safe PDF — see services/resume_pdf.py."""
     profile, content, code = await _master_cv(db, current_user, language)
-    pdf_bytes = render_resume_pdf(
+    pdf_bytes = await asyncio.to_thread(
+        render_resume_pdf,
         full_name=current_user.full_name,
         contact_info=profile.contact_info or {},
         content=content,
@@ -196,7 +204,7 @@ async def improve_profile_endpoint(
     if profile is None:
         raise HTTPException(status_code=404, detail="Create your career profile before improving it.")
 
-    improved = improve_profile(profile)
+    improved = await asyncio.to_thread(improve_profile, profile)
     return ProfileImprovementResult.model_validate(improved)
 
 
@@ -211,7 +219,8 @@ async def get_profile_evaluation(
     profile = result.scalar_one_or_none()
     if profile is None:
         raise HTTPException(status_code=404, detail="Create your career profile before evaluating it.")
-    return CVEvaluation.model_validate(evaluate_cv(profile))
+    evaluation = await asyncio.to_thread(evaluate_cv, profile)
+    return CVEvaluation.model_validate(evaluation)
 
 
 @router.post("/import-cv", response_model=CVUploadResult)
@@ -224,6 +233,10 @@ async def import_cv(
     """Parse an uploaded PDF resume into a draft CareerProfile. Nothing is
     persisted here — the frontend pre-fills the profile editor with the
     result and the user still has to review it and hit Save."""
+    # content_type is a header the client writes, not an inspection of the
+    # bytes — `curl -F 'file=@anything;type=application/pdf'` passes it. It
+    # stays as a cheap first filter; the real check is the %PDF- signature
+    # below, once we actually have the bytes.
     if file.content_type not in ("application/pdf", "application/x-pdf"):
         raise HTTPException(status_code=422, detail="Please upload a PDF file.")
 
@@ -252,5 +265,14 @@ async def import_cv(
     if not contents:
         raise HTTPException(status_code=422, detail="The uploaded file is empty.")
 
-    result = cv_upload.parse_cv(contents)
+    # The actual format check. Every PDF starts with "%PDF-"; anything else
+    # never reaches pypdf's parser, which is the one component here that
+    # processes untrusted bytes in depth.
+    if not contents.startswith(b"%PDF-"):
+        raise HTTPException(
+            status_code=422,
+            detail="Ese archivo no es un PDF. Sube tu CV en formato PDF.",
+        )
+
+    result = await asyncio.to_thread(cv_upload.parse_cv, contents)
     return CVUploadResult.model_validate(result)

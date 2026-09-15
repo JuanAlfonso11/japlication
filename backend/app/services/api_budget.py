@@ -28,7 +28,25 @@ from app.models.api_call_budget import ApiCallBudget
 
 DAILY_CALL_BUDGET = 8
 
-QUOTA_LIMITED_PROVIDERS = {"adzuna", "serpapi"}
+# Per-provider overrides. Anything listed here is budgeted; anything else is
+# unlimited. Kept as a dict rather than one global number because the
+# providers protect different things: Adzuna and SerpApi protect a monthly
+# *quota* (8/day is the real ceiling), while Anthropic protects a *bill*
+# — it has no free tier to run out of, so the only thing standing between a
+# runaway loop and a real invoice is a number like this one. 250/day is far
+# above normal use (a sweep scores ~20 jobs every 2 hours) and exists to
+# catch a bug, not to throttle the feature.
+PROVIDER_DAILY_BUDGETS: dict[str, int] = {
+    "adzuna": DAILY_CALL_BUDGET,
+    "serpapi": DAILY_CALL_BUDGET,
+    "anthropic": 250,
+}
+
+QUOTA_LIMITED_PROVIDERS = set(PROVIDER_DAILY_BUDGETS)
+
+
+def budget_for(provider: str) -> int:
+    return PROVIDER_DAILY_BUDGETS.get(provider, DAILY_CALL_BUDGET)
 
 
 async def try_consume_budget(provider: str) -> bool:
@@ -68,4 +86,4 @@ async def try_consume_budget(provider: str) -> bool:
         )
         new_count = (await db.execute(stmt)).scalar_one()
         await db.commit()
-    return new_count <= DAILY_CALL_BUDGET
+    return new_count <= budget_for(provider)

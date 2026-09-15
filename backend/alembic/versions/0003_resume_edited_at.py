@@ -25,10 +25,9 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "resume_versions",
-        sa.Column("edited_at", sa.DateTime(timezone=True), nullable=True),
-    )
+    # IF NOT EXISTS — see 0002: revision 0001 replays the live db/schema.sql,
+    # which already has this column.
+    op.execute("ALTER TABLE resume_versions ADD COLUMN IF NOT EXISTS edited_at TIMESTAMPTZ")
 
 
 def downgrade() -> None:
