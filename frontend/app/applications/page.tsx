@@ -108,11 +108,13 @@ function ApplicationRow({
 
   const job = application.job;
 
-  // El número congelado en el momento de la decisión. `job.match` es el de
-  // ahora y sirve para otra pregunta ("¿sigue encajando?"), no para esta.
-  const frozenScore =
+  // El número congelado en el momento de la decisión, y solo ese. `job.match`
+  // no llega hasta aquí: el endpoint de la lista serializa las vacantes con
+  // JobSummary, que a propósito no carga el match. Un respaldo a "el de ahora"
+  // seria ademas otra cosa — contesta "¿sigue encajando?", no "¿por qué la
+  // pasé?", que es la pregunta de esta pantalla.
+  const decisionScore =
     typeof application.match_score === "number" ? application.match_score : null;
-  const decisionScore = frozenScore ?? job?.match?.overall_score ?? null;
 
   return (
     <div
@@ -178,13 +180,9 @@ function ApplicationRow({
               <ScoreBadge score={decisionScore} size="sm" />
               <span
                 className="text-[10px] font-medium text-gray-400 dark:text-gray-500"
-                title={
-                  frozenScore !== null
-                    ? "El match que tenías delante cuando tomaste esta decisión"
-                    : "Match calculado ahora: esta fila es anterior a que se guardara el del momento"
-                }
+                title="El match que tenías delante cuando tomaste esta decisión"
               >
-                {frozenScore !== null ? "al decidir" : "ahora"}
+                al decidir
               </span>
             </div>
           )}
