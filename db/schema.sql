@@ -125,6 +125,15 @@ CREATE TABLE jobs (
     -- Fecha limite declarada por la oferta (NULL = no la dice, nunca "no hay").
     -- DATE y no timestamp: la oferta dice un dia, no una hora.
     deadline        DATE,
+
+    -- Donde se postula de verdad. Ninguna source_url apunta al formulario:
+    -- todas apuntan al listado del portal, y el formulario esta un salto mas
+    -- alla, en el ATS de la empresa. Ver app/services/apply_target.py.
+    apply_url       TEXT,
+    apply_ats       TEXT,          -- greenhouse|lever|ashby|... NULL = no reconocido
+    apply_email     TEXT,          -- la unica via por la que se puede enviar de verdad
+    apply_note      TEXT,          -- por que no se resolvio, cuando no se resolvio
+    apply_checked_at TIMESTAMPTZ,
     raw_html          TEXT,
     requires_cover_letter BOOLEAN NOT NULL DEFAULT FALSE,
     embedding         VECTOR(1536),
@@ -144,6 +153,7 @@ CREATE INDEX idx_jobs_imported_by ON jobs (imported_by);
 -- table grows ~20 rows every 2 hours from the sweep.
 CREATE INDEX idx_jobs_created_at ON jobs (created_at DESC);
 CREATE INDEX idx_jobs_deadline ON jobs (deadline) WHERE deadline IS NOT NULL;
+CREATE INDEX idx_jobs_apply_unchecked ON jobs (created_at) WHERE apply_checked_at IS NULL;
 
 -- =========================================================
 -- job_matches (cached hybrid match-engine output per user/job pair)

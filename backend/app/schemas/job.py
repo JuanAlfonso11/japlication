@@ -36,6 +36,9 @@ class JobCreate(BaseModel):
     salary_currency: Optional[str] = None
     posted_at: Optional[datetime] = None
     deadline: Optional[date] = None
+    apply_url: Optional[str] = None
+    apply_ats: Optional[str] = None
+    apply_email: Optional[str] = None
     source_url: Optional[str] = None
     requires_cover_letter: bool = False
 
@@ -62,6 +65,9 @@ class Job(BaseModel):
     salary_currency: Optional[str] = None
     posted_at: Optional[datetime] = None
     deadline: Optional[date] = None
+    apply_url: Optional[str] = None
+    apply_ats: Optional[str] = None
+    apply_email: Optional[str] = None
     requires_cover_letter: bool = False
     created_at: datetime
     updated_at: datetime
@@ -107,6 +113,9 @@ class ExternalJobResult(BaseModel):
     salary_currency: Optional[str] = None
     posted_at: Optional[datetime] = None
     deadline: Optional[date] = None
+    apply_url: Optional[str] = None
+    apply_ats: Optional[str] = None
+    apply_email: Optional[str] = None
     posted_at_text: Optional[str] = None
     via: Optional[str] = None
     apply_options: list[ApplyOption] = Field(default_factory=list)

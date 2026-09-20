@@ -130,6 +130,13 @@ MAX_REDIRECTS = 5
 
 
 async def fetch_html(url: str) -> str:
+    """Solo el HTML. Ver fetch_html_with_url cuando tambien haga falta saber
+    donde se acabo aterrizando."""
+    html, _final = await fetch_html_with_url(url)
+    return html
+
+
+async def fetch_html_with_url(url: str) -> tuple[str, str]:
     """Downloads a job posting page, refusing anything that points at
     internal infrastructure.
 
@@ -199,11 +206,17 @@ async def fetch_html(url: str) -> str:
 
                     body = b"".join(chunks)
                     encoding = resp.encoding or "utf-8"
+                    # `current` y no `url`: es la URL del ultimo salto, que es
+                    # donde de verdad vive la pagina. Un acortador o un
+                    # redirector del portal devolvia antes la URL de entrada,
+                    # asi que la vacante quedaba guardada apuntando al
+                    # redirector -- la deduplicacion por source_url fallaba y
+                    # "ver oferta original" reabria el salto, no el destino.
                     try:
-                        return body.decode(encoding, errors="replace")
+                        return body.decode(encoding, errors="replace"), current
                     except LookupError:
                         # Server declared a charset Python does not know.
-                        return body.decode("utf-8", errors="replace")
+                        return body.decode("utf-8", errors="replace"), current
 
             raise JobImportError("Demasiadas redirecciones.")
     except JobImportError:

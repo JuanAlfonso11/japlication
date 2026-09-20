@@ -45,6 +45,23 @@ class Job(Base):
     #: hora, y guardar medianoche en algun huso inventaria una precision que el
     #: dato no tiene. NULL significa "no la dice", nunca "no hay plazo".
     deadline: Mapped[date | None] = mapped_column(Date, nullable=True)
+
+    #: Donde se postula de verdad. Ninguna source_url apunta al formulario:
+    #: todas apuntan al listado del portal, y el formulario esta un salto mas
+    #: alla, en el ATS de la empresa. Ver services/apply_target.py.
+    apply_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: greenhouse | lever | ashby | ... | NULL. NULL significa "no
+    #: reconocido", nunca "no tiene": muchas empresas usan su propia pagina.
+    apply_ats: Mapped[str | None] = mapped_column(String, nullable=True)
+    #: Direccion a la que la oferta pide enviar la candidatura, si publica una.
+    #: Es la unica via por la que JobPilot puede enviar de verdad.
+    apply_email: Mapped[str | None] = mapped_column(String, nullable=True)
+    #: Por que no se pudo resolver. Guardado a proposito: una columna vacia no
+    #: distingue "fallo" de "no habia nada que encontrar".
+    apply_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    apply_checked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     raw_html: Mapped[str | None] = mapped_column(Text, nullable=True)
     requires_cover_letter: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false", default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
