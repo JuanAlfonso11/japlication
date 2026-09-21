@@ -32,6 +32,7 @@ from typing import Any, Awaitable, Callable, Optional
 from app.services import (
     adzuna,
     arbeitnow,
+    ats_boards,
     experience_level,
     getonbrd,
     hackernews,
@@ -273,6 +274,19 @@ async def _search_serpapi(p: SearchParams) -> dict[str, Any]:
     return await serpapi_jobs.search_serpapi_jobs(**_common(p))
 
 
+def _ats_search(ats: str):
+    """Greenhouse, Lever y Ashby comparten conector: solo cambia el ATS.
+    No paginan -- recorren todos los tableros de app/data/ats_companies.json
+    y devuelven lo mas reciente."""
+
+    async def search(p: SearchParams) -> dict[str, Any]:
+        return await ats_boards.search_ats_jobs(
+            ats, q=p.q, location=p.location, remote_type_filter=p.remote_type_filter
+        )
+
+    return search
+
+
 # --------------------------------------------------------------- registry
 # The single source of truth. Adding a provider is now one entry here plus
 # the connector module itself — no router edits, no regex to update, no
@@ -303,6 +317,13 @@ _SPECS: tuple[ProviderSpec, ...] = (
                  remoteok.get_cached_result, _search_remoteok),
     ProviderSpec("linkedin", "linkedin_job_id", linkedin_jobs.LinkedInError,
                  linkedin_jobs.get_cached_result, _search_linkedin),
+    # Directo del ATS de cada empresa: cada oferta trae su formulario real.
+    ProviderSpec("greenhouse", "ats_job_id", ats_boards.AtsBoardError,
+                 ats_boards.get_cached_result, _ats_search("greenhouse")),
+    ProviderSpec("lever", "ats_job_id", ats_boards.AtsBoardError,
+                 ats_boards.get_cached_result, _ats_search("lever")),
+    ProviderSpec("ashby", "ats_job_id", ats_boards.AtsBoardError,
+                 ats_boards.get_cached_result, _ats_search("ashby")),
     # These three need their own API key (see .env); without one they raise
     # their own error and the aggregate reports them as unconfigured.
     ProviderSpec("adzuna", "adzuna_job_id", adzuna.AdzunaError,

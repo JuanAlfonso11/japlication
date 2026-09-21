@@ -23,6 +23,10 @@ class JobSource(str, enum.Enum):
     remoteok = "remoteok"
     serpapi = "serpapi"
     linkedin = "linkedin"
+    # Tableros publicos de ATS (migration 0013, services/ats_boards.py)
+    greenhouse = "greenhouse"
+    lever = "lever"
+    ashby = "ashby"
     manual = "manual"
 
 

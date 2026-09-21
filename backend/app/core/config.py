@@ -105,6 +105,11 @@ class Settings(BaseSettings):
     #: listing in the swipe queue, which is worse than asking for a new search.
     EXTERNAL_JOBS_CACHE_TTL_HOURS: int = 48
 
+    #: Greenhouse/Lever/Ashby publican TODO lo de cada empresa, incluidas
+    #: plazas presenciales en oficinas lejanas. Por defecto solo remotas; un
+    #: filtro explicito de modalidad en la busqueda manda sobre esto.
+    ATS_REMOTE_ONLY: bool = True
+
     #: Deja registrar cuentas aunque ya exista una. Por defecto NO: JobPilot
     #: es de un solo operador, y con el registro abierto cualquiera que
     #: alcanzara el backend se creaba una cuenta y gastaba el presupuesto de

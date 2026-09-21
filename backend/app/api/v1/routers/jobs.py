@@ -37,6 +37,7 @@ from app.schemas.job_match import MatchResult
 # The 15 connector modules are no longer imported here: the router does not
 # name any provider any more, it looks them up in the registry.
 from app.services import api_budget, push_notifications
+from app.services.apply_target import detect_ats
 from app.services.job_dedupe import dedupe_external_results
 from app.services.job_importer import (
     JobImportError,
@@ -553,6 +554,12 @@ async def _get_or_create_external_job(
         posted_at=cached.get("posted_at"),
         deadline=cached.get("deadline"),
     )
+    if cached.get("apply_url"):
+        # Los tableros de ATS ya traen el formulario: no hace falta que
+        # run_daily_sweep lo busque luego (apply_checked_at queda puesto).
+        job.apply_url = cached["apply_url"]
+        job.apply_ats = cached.get("apply_ats") or detect_ats(cached["apply_url"])
+        job.apply_checked_at = datetime.now(timezone.utc)
     db.add(job)
     try:
         await db.commit()

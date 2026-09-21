@@ -100,7 +100,8 @@ CREATE TYPE job_source AS ENUM (
     'url_import', 'himalayas', 'arbeitnow', 'remotive', 'jobicy', 'remotejobs_org', 'themuse',
     'weworkremotely', 'hackernews', 'adzuna', 'usajobs', 'getonbrd', 'serpapi',
     'workingnomads', 'remoteok', 'manual',
-    'linkedin'   -- migration 0007
+    'linkedin',  -- migration 0007
+    'greenhouse', 'lever', 'ashby'  -- migration 0013
 );
 
 CREATE TABLE jobs (
