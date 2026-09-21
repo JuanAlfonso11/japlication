@@ -9,7 +9,7 @@ from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
@@ -21,7 +21,8 @@ from app.models.job import Job
 from app.models.job_match import JobMatch
 from app.models.user import User
 from app.schemas.job import Job as JobSchema
-from app.schemas.job import JobListResponse
+from app.schemas.job import JobListResponse, annotate_work_auth
+from app.services import work_authorization
 from app.models.enums import ApplicationStatus
 from app.schemas.interview_prep import InterviewPrepResponse
 from app.schemas.job_match import MatchResult, SkillGapsResponse
@@ -95,11 +96,17 @@ async def list_match_queue(
 ) -> JobListResponse:
     # Exclude jobs the user has already swiped/decided on.
     decided_job_ids_subq = select(Application.job_id).where(Application.user_id == current_user.id)
+    # Ni las que la empresa ya cerro (services/liveness.py) ni las que pasaron
+    # su fecha limite: un swipe a la derecha ahi es tiempo perdido.
+    still_open = (Job.closed_at.is_(None)) & (
+        Job.deadline.is_(None) | (Job.deadline >= func.current_date())
+    )
 
     stmt = (
         select(Job, JobMatch)
         .join(JobMatch, (JobMatch.job_id == Job.id) & (JobMatch.user_id == current_user.id))
         .where(Job.id.not_in(decided_job_ids_subq))
+        .where(still_open)
     )
     if min_score is not None:
         stmt = stmt.where(JobMatch.overall_score >= min_score)
@@ -108,6 +115,7 @@ async def list_match_queue(
         select(Job.id)
         .join(JobMatch, (JobMatch.job_id == Job.id) & (JobMatch.user_id == current_user.id))
         .where(Job.id.not_in(decided_job_ids_subq))
+        .where(still_open)
     )
     if min_score is not None:
         count_stmt = count_stmt.where(JobMatch.overall_score >= min_score)
@@ -122,6 +130,7 @@ async def list_match_queue(
         schema.match = MatchResult.model_validate(job_match)
         items.append(schema)
 
+    annotate_work_auth(items, await work_authorization.user_country(db, current_user.id))
     return JobListResponse(items=items, total=total)
 
 

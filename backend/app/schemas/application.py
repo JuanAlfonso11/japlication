@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional
 from uuid import UUID
 
@@ -17,6 +17,9 @@ class JobSummary(BaseModel):
     remote_type: Optional[str] = None
     employment_type: Optional[str] = None
     seniority: Optional[str] = None
+    #: Para el aviso "Cerrada" del pipeline (services/liveness.py).
+    closed_at: Optional[datetime] = None
+    deadline: Optional[date] = None
 
 
 class DecisionRequest(BaseModel):

@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.anthropic_client import get_anthropic_client, log_ai_failure
 from app.models.job_match import JobMatch
+from app.services import work_authorization
 from app.services.skills_taxonomy import SOFT_SKILLS, canonical_skill_set, normalize_skill
 from app.core.config import settings
 
@@ -36,6 +37,10 @@ if TYPE_CHECKING:
 TECHNICAL_WEIGHT = 0.5
 EXPERIENCE_WEIGHT = 0.3
 SEMANTIC_WEIGHT = 0.2
+
+#: Techo para una oferta que exige trabajar en un pais donde el candidato no
+#: esta: por debajo de lo que el usuario suele guardar, sin llegar a 0.
+WORK_AUTH_SCORE_CAP = 20.0
 
 
 YEARS_RE = re.compile(
@@ -448,6 +453,20 @@ def compute_match(profile, job, use_llm: bool = True) -> dict[str, Any]:
     concerns = build_concerns(
         required_years, relevant_years, missing_skills, job.seniority, profile.experience or []
     )
+
+    # Un bloqueo, no un factor mas (idea de career-ops): si la oferta exige
+    # poder trabajar en un pais donde el candidato no esta, que encajen las
+    # habilidades no la hace alcanzable. Se topa la puntuacion para que baje
+    # al fondo de la cola en vez de desaparecer: la heuristica puede fallar,
+    # y la razon queda escrita como primera preocupacion.
+    auth = work_authorization.detect(getattr(job, "description", ""), getattr(job, "location", None))
+    pais = work_authorization.profile_country(profile)
+    if auth.blocks(pais):
+        concerns.insert(
+            0,
+            f"{auth.label}. Tu perfil indica {work_authorization.region_name(pais)}.",
+        )
+        overall = min(overall, WORK_AUTH_SCORE_CAP)
 
     return {
         "overall_score": round(overall, 2),

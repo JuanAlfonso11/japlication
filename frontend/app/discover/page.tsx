@@ -1,5 +1,6 @@
 "use client";
 
+import WorkAuthBadge from "@/components/WorkAuthBadge";
 import { useEffect, useMemo, useState } from "react";
 import RouteGuard from "@/components/RouteGuard";
 import ErrorNotice from "@/components/ErrorNotice";
@@ -90,6 +91,7 @@ function ExternalResultCard({
           <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
             <SourceBadge source={result.source} />
             {result.seniority && <LevelBadge level={result.seniority} />}
+            <WorkAuthBadge workAuth={result.work_auth} />
           </div>
           <h3 className="font-display font-bold leading-snug text-gray-900 dark:text-gray-100">
             {result.title}

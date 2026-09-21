@@ -53,6 +53,11 @@ if [ -f .env ]; then
             # aspecto de URL o de nombre de host, para no bloquear un commit
             # por mencionar el hostname de la tailnet, que esta documentado a
             # proposito en docs/ANDROID_APP.md.
+            # Ajustes de busqueda, no secretos: LINKEDIN_LOCATION es un pais
+            # ("Dominican Republic"), y bloqueaba cualquier commit que
+            # nombrara ese pais -- como la lista de paises de
+            # work_authorization.py.
+            case "$key" in *_LOCATION|*_COUNTRY|*_QUERY|*_KEYWORDS) continue;; esac
             [ ${#val} -lt 16 ] && continue
             case "$val" in http*|*.ts.net*|*localhost*|*@*.*) continue;; esac
             if printf '%s' "$STAGED" | grep -qF -- "$val"; then

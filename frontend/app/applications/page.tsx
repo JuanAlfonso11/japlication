@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import RouteGuard from "@/components/RouteGuard";
 import ErrorNotice from "@/components/ErrorNotice";
 import StatusBadge, { STATUS_LABELS } from "@/components/StatusBadge";
+import { ClosedBadge } from "@/components/WorkAuthBadge";
 import ScoreBadge from "@/components/ScoreBadge";
 import { Select, textareaClass } from "@/components/ui/Field";
 import Button from "@/components/ui/Button";
@@ -168,6 +169,11 @@ function ApplicationRow({
         </button>
         <div className="flex shrink-0 flex-col items-end gap-1.5">
           <StatusBadge status={application.status} />
+          {/* Solo importa mientras no hayas postulado: avisa de que la
+              guardada ya no se puede enviar. */}
+          {(application.status === "saved" || application.status === "queued") && (
+            <ClosedBadge closedAt={application.job?.closed_at} />
+          )}
           {/* Debajo del estado, no encima: leyendo la fila, primero está qué
               hiciste con la vacante y después por qué. Y es el score que
               tenías delante al decidir (application.match_score, congelado),

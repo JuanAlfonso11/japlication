@@ -385,6 +385,8 @@ async def _assemble_email_application(job_id: UUID, user: User, db: AsyncSession
 
     if not job.apply_email:
         blockers.append("Esta vacante no publica un correo para postular.")
+    if job.closed_at is not None:
+        blockers.append("La oferta ya está cerrada: no se envía.")
     if not apply_by_email.is_configured():
         blockers.append("El correo no está configurado en el servidor (SMTP).")
 

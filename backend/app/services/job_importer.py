@@ -44,6 +44,18 @@ class JobImportError(RuntimeError):
     """
 
 
+class JobPostingGone(JobImportError):
+    """El servidor dice que la pagina ya no existe (404/410).
+
+    Subclase de JobImportError para que nada de lo que ya la captura cambie;
+    liveness.py la distingue para marcar la oferta como cerrada.
+    """
+
+    def __init__(self, status_code: int):
+        super().__init__(f"La oferta ya no existe (HTTP {status_code}).")
+        self.status_code = status_code
+
+
 USER_AGENT = (
     "Mozilla/5.0 (compatible; JobFlowAI/1.0; +https://jobflow.ai/bot) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
@@ -185,6 +197,8 @@ async def fetch_html_with_url(url: str) -> tuple[str, str]:
                         # worth downloading.
                         continue
 
+                    if resp.status_code in (404, 410):
+                        raise JobPostingGone(resp.status_code)
                     resp.raise_for_status()
 
                     # Cheap rejection first, when the server is honest about

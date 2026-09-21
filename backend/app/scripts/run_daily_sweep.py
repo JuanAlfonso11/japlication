@@ -53,6 +53,15 @@ async def run() -> None:
         await resolve_targets(limit=40, recheck=False)
     except Exception:
         logger.exception("No se pudieron resolver los destinos de postulacion")
+
+    # Y se retiran de la cola las que la empresa ya cerro. Mismo tope y misma
+    # razon: servidores de terceros. Cada vacante se revisa cada 3 dias.
+    try:
+        from app.scripts.check_liveness import run as check_liveness
+
+        await check_liveness(limit=40)
+    except Exception:
+        logger.exception("No se pudo comprobar si las vacantes siguen abiertas")
     await engine.dispose()
 
 

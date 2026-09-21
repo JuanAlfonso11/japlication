@@ -3,6 +3,7 @@
 import AtsCheckPanel from "@/components/AtsCheckPanel";
 import EmailApplyPanel from "@/components/EmailApplyPanel";
 import DeadlineBadge from "@/components/DeadlineBadge";
+import WorkAuthBadge, { ClosedBadge } from "@/components/WorkAuthBadge";
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import RouteGuard from "@/components/RouteGuard";
@@ -330,7 +331,13 @@ function JobDetailContent() {
                 <span className="font-semibold text-gray-700 dark:text-gray-300">{job.company}</span>
                 {job.location ? ` · ${job.location}` : ""}
                 {job.deadline ? <DeadlineBadge deadline={job.deadline} className="ml-2 align-middle" /> : null}
+                <ClosedBadge closedAt={job.closed_at} className="ml-2 align-middle" />
               </p>
+              {job.work_auth && job.work_auth.blocks_you !== false && (
+                <div className="mt-2">
+                  <WorkAuthBadge workAuth={job.work_auth} />
+                </div>
+              )}
               {job.requires_cover_letter && (
                 <span className="mt-2 inline-block rounded-full bg-accent-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-accent-700 ring-1 ring-inset ring-accent-600/20 dark:bg-accent-500/10 dark:text-accent-300 dark:ring-accent-400/30">
                   Requiere carta de presentación

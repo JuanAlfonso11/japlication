@@ -135,6 +135,9 @@ CREATE TABLE jobs (
     apply_email     TEXT,          -- la unica via por la que se puede enviar de verdad
     apply_note      TEXT,          -- por que no se resolvio, cuando no se resolvio
     apply_checked_at TIMESTAMPTZ,
+    -- Oferta que ya no existe en su origen (app/services/liveness.py).
+    closed_at       TIMESTAMPTZ,   -- NULL = abierta o sin comprobar
+    liveness_checked_at TIMESTAMPTZ,
     raw_html          TEXT,
     requires_cover_letter BOOLEAN NOT NULL DEFAULT FALSE,
     embedding         VECTOR(1536),

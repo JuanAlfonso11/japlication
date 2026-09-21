@@ -228,7 +228,20 @@ export interface Job {
   /** Dirección a la que la oferta pide enviar la candidatura. La única vía
    *  por la que JobPilot puede postular de verdad. */
   apply_email?: string | null;
+  /** La oferta ya no existe en su origen (backend/app/services/liveness.py). */
+  closed_at?: string | null;
+  work_auth?: WorkAuth | null;
   match?: MatchResult | null;
+}
+
+/** Dónde exige la oferta poder trabajar (backend/app/services/work_authorization.py).
+ *  `blocks_you`: true = tu país queda fuera; false = cabes; null = no se sabe. */
+export interface WorkAuth {
+  label: string;
+  regions: string[];
+  explicit: boolean;
+  no_sponsorship: boolean;
+  blocks_you?: boolean | null;
 }
 
 export interface JobImportPayload {
@@ -429,6 +442,7 @@ export interface ExternalJobResult {
   via?: string | null;
   apply_options?: ApplyOption[];
   thumbnail?: string | null;
+  work_auth?: WorkAuth | null;
 }
 
 export interface ExternalJobsSearchResponse {

@@ -62,6 +62,13 @@ class Job(Base):
     apply_checked_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    #: Cuando se comprobo que la oferta ya no existe en su origen (404/410, o
+    #: ya no esta en el tablero del ATS). NULL = abierta o sin comprobar.
+    #: Ver app/services/liveness.py.
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    liveness_checked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     raw_html: Mapped[str | None] = mapped_column(Text, nullable=True)
     requires_cover_letter: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false", default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

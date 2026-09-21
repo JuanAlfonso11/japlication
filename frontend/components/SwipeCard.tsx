@@ -5,6 +5,7 @@ import { motion, useMotionValue, useTransform, type PanInfo } from "framer-motio
 import Link from "next/link";
 import MatchBreakdown from "@/components/MatchBreakdown";
 import ScoreBadge from "@/components/ScoreBadge";
+import WorkAuthBadge from "@/components/WorkAuthBadge";
 import { REMOTE_TYPE_LABELS, type Job, type RemoteType } from "@/lib/types";
 
 function PinIcon() {
@@ -201,7 +202,7 @@ export default function SwipeCard({
             {match && <ScoreBadge score={match.overall_score} size="lg" />}
           </div>
 
-          {(job.location || job.remote_type) && (
+          {(job.location || job.remote_type || job.work_auth) && (
             <div className="mt-3 flex flex-wrap items-center gap-1.5">
               {job.remote_type && (
                 <span className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-2.5 py-1 text-[11px] font-semibold text-brand-700 dark:bg-brand-500/15 dark:text-brand-300">
@@ -214,6 +215,7 @@ export default function SwipeCard({
                   <span className="truncate">{job.location}</span>
                 </span>
               )}
+              <WorkAuthBadge workAuth={job.work_auth} />
             </div>
           )}
 

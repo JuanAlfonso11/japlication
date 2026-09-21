@@ -22,6 +22,7 @@ from app.models.job import Job
 from app.models.job_match import JobMatch
 from app.models.user import User
 from app.schemas.job import Job as JobSchema
+from app.schemas.job import annotate_work_auth
 from app.schemas.job import (
     AggregateSearchResponse,
     AggregateSourceStatus,
@@ -36,7 +37,7 @@ from app.schemas.job import (
 from app.schemas.job_match import MatchResult
 # The 15 connector modules are no longer imported here: the router does not
 # name any provider any more, it looks them up in the registry.
-from app.services import api_budget, push_notifications
+from app.services import api_budget, push_notifications, work_authorization
 from app.services.apply_target import detect_ats
 from app.services.job_dedupe import dedupe_external_results
 from app.services.job_importer import (
@@ -116,6 +117,7 @@ async def _attach_match(job: Job, user_id: UUID, db: AsyncSession) -> JobSchema:
     match = result.scalar_one_or_none()
     if match is not None:
         schema.match = MatchResult.model_validate(match)
+    annotate_work_auth([schema], await work_authorization.user_country(db, user_id))
     return schema
 
 
@@ -472,6 +474,7 @@ async def search_jobs_aggregate(
     ),
     category: Optional[str] = Query(None),
     current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ) -> AggregateSearchResponse:
     """Fans out to every job-search provider at once (Himalayas, Arbeitnow,
     Remotive, Jobicy, RemoteJobs.org, The Muse, We Work Remotely, Hacker
@@ -518,6 +521,7 @@ async def search_jobs_aggregate(
     # provider returned, which is what makes them useful for spotting a
     # provider that quietly went empty.
     all_results = dedupe_external_results(all_results)
+    annotate_work_auth(all_results, await work_authorization.user_country(db, current_user.id))
     return AggregateSearchResponse(results=all_results, sources=sources)
 
 

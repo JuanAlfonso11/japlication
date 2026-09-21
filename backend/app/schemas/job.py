@@ -2,10 +2,51 @@ from datetime import date, datetime
 from typing import Any, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.models.enums import JobSource
 from app.schemas.job_match import MatchResult
+from app.services import work_authorization
+
+
+class WorkAuthInfo(BaseModel):
+    """Donde exige la oferta poder trabajar (services/work_authorization.py).
+
+    Se calcula al servir, no se guarda: es una regex sobre la descripcion y
+    la ubicacion, y asi mejorar el detector corrige todas las vacantes sin
+    migrar nada.
+    """
+
+    label: str
+    regions: list[str] = Field(default_factory=list)
+    explicit: bool = False
+    no_sponsorship: bool = False
+    #: Lo rellenan los endpoints que conocen al usuario: True = su pais queda
+    #: fuera; False = cabe; None = no se sabe (perfil sin pais, u oferta que
+    #: no nombra ninguno).
+    blocks_you: Optional[bool] = None
+
+
+def _work_auth_for(description: Optional[str], location: Optional[str]) -> Optional[WorkAuthInfo]:
+    wa = work_authorization.detect(description, location)
+    if not wa.restricted:
+        return None
+    return WorkAuthInfo(
+        label=wa.label or "",
+        regions=list(wa.regions),
+        explicit=wa.explicit,
+        no_sponsorship=wa.no_sponsorship,
+    )
+
+
+def annotate_work_auth(items, user_country: Optional[str]) -> None:
+    """Marca blocks_you en cada Job/ExternalJobResult ya construido."""
+    for item in items:
+        info = getattr(item, "work_auth", None)
+        if info is None:
+            continue
+        wa = work_authorization.WorkAuth(tuple(info.regions), info.explicit, info.no_sponsorship)
+        info.blocks_you = wa.blocks(user_country)
 
 
 class JobImportRequest(BaseModel):
@@ -69,9 +110,18 @@ class Job(BaseModel):
     apply_ats: Optional[str] = None
     apply_email: Optional[str] = None
     requires_cover_letter: bool = False
+    #: La oferta ya no existe en su origen (services/liveness.py).
+    closed_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
     match: Optional[MatchResult] = None
+    work_auth: Optional[WorkAuthInfo] = None
+
+    @model_validator(mode="after")
+    def _fill_work_auth(self):
+        if self.work_auth is None:
+            self.work_auth = _work_auth_for(self.description, self.location)
+        return self
 
 
 class JobListResponse(BaseModel):
@@ -120,6 +170,13 @@ class ExternalJobResult(BaseModel):
     via: Optional[str] = None
     apply_options: list[ApplyOption] = Field(default_factory=list)
     thumbnail: Optional[str] = None
+    work_auth: Optional[WorkAuthInfo] = None
+
+    @model_validator(mode="after")
+    def _fill_work_auth(self):
+        if self.work_auth is None:
+            self.work_auth = _work_auth_for(self.description, self.location)
+        return self
 
 
 class ExternalJobsSearchResponse(BaseModel):
