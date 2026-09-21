@@ -5,11 +5,12 @@
 # dispatched with asyncio.to_thread so only the calling request waits -
 # the same pattern services/match_engine.py already documents.
 import asyncio
+import json
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -26,6 +27,11 @@ from app.models.resume_version import ResumeVersion
 from app.models.user import User
 from app.schemas.application import Application as ApplicationSchema
 from app.schemas.application import ApplicationListResponse, ApplicationUpdate, DecisionRequest, JobSummary
+from app.schemas.application import EmailApplyAttachment, EmailApplyPreview, EmailApplySend
+from app.core.rate_limit import limiter
+from app.services import apply_by_email, ats_check
+from app.services.cover_letter_pdf import render_cover_letter_pdf
+from app.services.resume_pdf import render_resume_pdf
 from app.scripts.check_stale_applications import STALE_AFTER_DAYS
 from app.services.cover_letter_generator import generate_cover_letter
 
@@ -357,3 +363,209 @@ async def undo_application(
         )
     await db.delete(row)
     await db.commit()
+
+
+# --- Postular por correo -----------------------------------------------------
+# La unica via de envio directo que existe. El resto de las vacantes se queda
+# como estaba: guardadas en el pipeline, para postular a mano. Las razones y
+# las reglas estan en app/services/apply_by_email.py.
+
+
+async def _assemble_email_application(job_id: UUID, user: User, db: AsyncSession):
+    """Arma el correo para esta vacante y devuelve (preview, app, job, cv, carta).
+
+    Nunca lanza por un requisito que falta: lo anota en `blockers` y sigue,
+    para que la vista previa enseñe todo lo que se pueda aunque aun no se
+    pueda enviar."""
+    job = (await db.execute(select(Job).where(Job.id == job_id))).scalar_one_or_none()
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found.")
+
+    blockers: list[str] = []
+
+    if not job.apply_email:
+        blockers.append("Esta vacante no publica un correo para postular.")
+    if not apply_by_email.is_configured():
+        blockers.append("El correo no está configurado en el servidor (SMTP).")
+
+    ya = (
+        await db.execute(
+            select(Application).where(Application.user_id == user.id, Application.job_id == job_id)
+        )
+    ).scalar_one_or_none()
+    if ya is not None and ya.status == ApplicationStatus.applied:
+        blockers.append("Ya postulaste a esta vacante; no se reenvía.")
+
+    cv = (
+        await db.execute(
+            select(ResumeVersion)
+            .where(ResumeVersion.user_id == user.id, ResumeVersion.job_id == job_id)
+            .order_by(ResumeVersion.created_at.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    carta = (
+        await db.execute(
+            select(CoverLetter)
+            .where(CoverLetter.user_id == user.id, CoverLetter.job_id == job_id)
+            .order_by(CoverLetter.created_at.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+
+    if cv is None:
+        blockers.append("Genera primero el CV adaptado para esta vacante.")
+        return EmailApplyPreview(to=job.apply_email, blockers=blockers), None, job, None, carta
+
+    profile = (
+        await db.execute(select(CareerProfile).where(CareerProfile.id == cv.career_profile_id))
+    ).scalar_one_or_none()
+    contact = profile.contact_info if profile is not None else {}
+
+    def _render():
+        cv_pdf = render_resume_pdf(
+            full_name=user.full_name,
+            contact_info=contact,
+            content=cv.content,
+            language=cv.language,
+            email=user.email,
+        )
+        carta_pdf = (
+            render_cover_letter_pdf(
+                full_name=user.full_name, contact_info=contact, content=carta.content, email=user.email
+            )
+            if carta is not None
+            else None
+        )
+        # El mismo PDF que va adjunto: si una maquina no puede leerlo, no
+        # tiene sentido mandarlo.
+        informe = ats_check.check_resume_pdf(
+            cv_pdf,
+            full_name=user.full_name,
+            email=user.email,
+            content=cv.content,
+            language=cv.language,
+        )
+        return cv_pdf, carta_pdf, informe
+
+    cv_pdf, carta_pdf, informe = await asyncio.to_thread(_render)
+    if not informe.readable:
+        motivos = "; ".join(f.message for f in informe.findings if f.level == "error")
+        blockers.append(f"Un ATS no podría leer tu CV: {motivos}")
+
+    app_email = apply_by_email.build_email_application(
+        to=job.apply_email or "",
+        reply_to=user.email,
+        full_name=user.full_name,
+        job_title=job.title,
+        company=job.company,
+        cover_letter_text=carta.content if carta else None,
+        resume_pdf=cv_pdf,
+        cover_letter_pdf=carta_pdf,
+        language=cv.language,
+        # El origen de cada PDF, no sus bytes: ver Attachment.source.
+        resume_source=json.dumps(
+            {"content": cv.content, "language": cv.language, "contact": contact,
+             "name": user.full_name, "email": user.email},
+            sort_keys=True, default=str,
+        ).encode("utf-8"),
+        cover_letter_source=(carta.content.encode("utf-8") if carta else None),
+    )
+    preview = EmailApplyPreview(
+        to=app_email.to or None,
+        reply_to=app_email.reply_to,
+        subject=app_email.subject,
+        body=app_email.body,
+        attachments=[
+            EmailApplyAttachment(filename=a.filename, size_bytes=len(a.content))
+            for a in app_email.attachments
+        ],
+        fingerprint=app_email.fingerprint(),
+        blockers=blockers,
+    )
+    return preview, app_email, job, cv, carta
+
+
+@router.get("/jobs/{job_id}/apply-email", response_model=EmailApplyPreview)
+async def preview_email_application(
+    job_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> EmailApplyPreview:
+    """Lo que se enviaria, sin enviar nada."""
+    preview, *_ = await _assemble_email_application(job_id, current_user, db)
+    return preview
+
+
+@router.post("/jobs/{job_id}/apply-email", response_model=ApplicationSchema)
+@limiter.limit("10/hour")
+async def send_email_application(
+    request: Request,
+    job_id: UUID,
+    payload: EmailApplySend,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> ApplicationSchema:
+    """Envia la candidatura por correo y la marca como postulada.
+
+    Vuelve a armar el correo desde cero y compara su huella con la de la vista
+    previa. Si no coinciden, algo cambio desde que el usuario lo miro, y no se
+    envia: lo que sale con su nombre tiene que ser lo que leyo."""
+    preview, app_email, job, cv, carta = await _assemble_email_application(
+        job_id, current_user, db
+    )
+    if preview.blockers:
+        raise HTTPException(status_code=409, detail=preview.blockers[0])
+    if app_email is None or preview.fingerprint != payload.fingerprint:
+        raise HTTPException(
+            status_code=409,
+            detail="El correo cambió desde la vista previa. Revísalo otra vez antes de enviar.",
+        )
+
+    try:
+        await asyncio.to_thread(apply_by_email.send_email_application, app_email)
+    except apply_by_email.ApplyEmailError as exc:
+        # 502 y no 500: nuestro codigo esta bien, el que fallo es el servidor
+        # de correo. Y nada se marca como postulado, porque no lo esta.
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    ahora = datetime.now(timezone.utc)
+    nota = f"Enviada por correo a {app_email.to} el {ahora:%Y-%m-%d %H:%M} UTC."
+    existing = (
+        await db.execute(
+            select(Application).where(
+                Application.user_id == current_user.id, Application.job_id == job_id
+            )
+        )
+    ).scalar_one_or_none()
+    match_row = (
+        await db.execute(
+            select(JobMatch).where(JobMatch.user_id == current_user.id, JobMatch.job_id == job_id)
+        )
+    ).scalar_one_or_none()
+
+    if existing is None:
+        app_row = Application(
+            user_id=current_user.id,
+            job_id=job_id,
+            status=ApplicationStatus.applied,
+            decision=SwipeDecision.right,
+            match_score=match_row.overall_score if match_row else None,
+            resume_version_id=cv.id,
+            cover_letter_id=carta.id if carta else None,
+            applied_at=ahora,
+            notes=nota,
+        )
+        db.add(app_row)
+    else:
+        existing.status = ApplicationStatus.applied
+        existing.resume_version_id = cv.id
+        if carta is not None:
+            existing.cover_letter_id = carta.id
+        existing.applied_at = existing.applied_at or ahora
+        existing.notes = f"{existing.notes}\n{nota}" if existing.notes else nota
+        app_row = existing
+
+    await db.commit()
+    await db.refresh(app_row, ["job"])
+    return _serialize(app_row)

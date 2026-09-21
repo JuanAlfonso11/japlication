@@ -63,3 +63,29 @@ class Application(BaseModel):
 class ApplicationListResponse(BaseModel):
     items: list[Application]
     total: int
+
+
+class EmailApplyAttachment(BaseModel):
+    filename: str
+    size_bytes: int
+
+
+class EmailApplyPreview(BaseModel):
+    """Exactamente lo que se enviaria. Ver services/apply_by_email.py.
+
+    `blockers` no vacio = no se puede enviar, y dice por que. La vista previa
+    se devuelve igual, para que el usuario vea el correo aunque falte algo."""
+
+    to: Optional[str] = None
+    reply_to: Optional[str] = None
+    subject: Optional[str] = None
+    body: Optional[str] = None
+    attachments: list[EmailApplyAttachment] = []
+    #: Hay que devolverla tal cual al enviar. Si lo que se enviaria cambio
+    #: desde la vista previa, el envio se rechaza.
+    fingerprint: Optional[str] = None
+    blockers: list[str] = []
+
+
+class EmailApplySend(BaseModel):
+    fingerprint: str

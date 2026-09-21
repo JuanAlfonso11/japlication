@@ -221,6 +221,13 @@ export interface Job {
   /** Fecha límite declarada por la oferta (YYYY-MM-DD). null = no la dice,
    *  nunca "no hay plazo" — ver backend/app/models/job.py. */
   deadline?: string | null;
+  /** El formulario real, un salto más allá del listado del portal. Ver
+   *  backend/app/services/apply_target.py. */
+  apply_url?: string | null;
+  apply_ats?: string | null;
+  /** Dirección a la que la oferta pide enviar la candidatura. La única vía
+   *  por la que JobPilot puede postular de verdad. */
+  apply_email?: string | null;
   match?: MatchResult | null;
 }
 
@@ -728,4 +735,16 @@ export type AtsReport = {
   findings: AtsFinding[];
   keywords_found: string[];
   keywords_missing: string[];
+};
+
+/** Exactamente lo que se enviaría por correo. `blockers` no vacío = no se
+ *  puede enviar todavía, y dice por qué. */
+export type EmailApplyPreview = {
+  to: string | null;
+  reply_to: string | null;
+  subject: string | null;
+  body: string | null;
+  attachments: { filename: string; size_bytes: number }[];
+  fingerprint: string | null;
+  blockers: string[];
 };

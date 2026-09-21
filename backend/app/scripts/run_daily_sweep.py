@@ -42,6 +42,17 @@ async def run() -> None:
                 logger.exception("Sweep failed for %s", user.email)
                 continue
             logger.info("Swept %s: imported %d job(s).", user.email, result.imported)
+
+    # Despues de importar, se busca el formulario real de lo recien llegado.
+    # Acotado a proposito: sale a servidores de terceros, y 40 cada 2 horas
+    # alcanza de sobra para lo que trae un barrido (tope de 20 por usuario).
+    # Si falla, el barrido ya hizo su trabajo -- esto nunca lo invalida.
+    try:
+        from app.scripts.resolve_apply_targets import run as resolve_targets
+
+        await resolve_targets(limit=40, recheck=False)
+    except Exception:
+        logger.exception("No se pudieron resolver los destinos de postulacion")
     await engine.dispose()
 
 

@@ -1,6 +1,7 @@
 "use client";
 
 import AtsCheckPanel from "@/components/AtsCheckPanel";
+import EmailApplyPanel from "@/components/EmailApplyPanel";
 import DeadlineBadge from "@/components/DeadlineBadge";
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
@@ -221,7 +222,11 @@ function JobDetailContent() {
     // counts this as "triggered by a user gesture" and doesn't block it —
     // once we've awaited anything, some browsers (Safari especially) treat
     // a later window.open() as an unrequested popup and kill it.
-    if (job?.source_url) window.open(job.source_url, "_blank", "noopener,noreferrer");
+    // El formulario real cuando está resuelto; si no, el listado como antes.
+    // Ninguna source_url apunta al formulario -- todas al listado del portal,
+    // un salto antes -- así que esto ahorra buscar el botón cada vez.
+    const destino = job?.apply_url ?? job?.source_url;
+    if (destino) window.open(destino, "_blank", "noopener,noreferrer");
 
     setApplying(true);
     setApplyError(null);
@@ -349,6 +354,19 @@ function JobDetailContent() {
           </div>
         )}
 
+        {/* Solo cuando la oferta publica un correo: es la única vía por la
+            que JobPilot puede postular de verdad. Para el resto, el bloque de
+            abajo sigue exactamente como estaba. */}
+        {job.apply_email && !applied && (
+          <div className="mt-4">
+            <EmailApplyPanel
+              jobId={job.id}
+              applyEmail={job.apply_email}
+              onSent={() => setApplied(true)}
+            />
+          </div>
+        )}
+
         <div className="mt-4 rounded-xl bg-brand-50 p-3 dark:bg-brand-900/20">
           {/* Three steps instead of a six-line paragraph: this sits between
               the user and the button they came to press, and what it says is
@@ -356,7 +374,10 @@ function JobDetailContent() {
           {job.source_url ? (
             <ol className="space-y-1 text-xs font-medium text-brand-800 dark:text-brand-300">
               <li>1. Descarga tu CV en PDF, y lo genera si falta.</li>
-              <li>2. Abre la vacante real en otra pestaña para que subas ese PDF ahí.</li>
+              <li>
+                2. Abre {job.apply_url ? "el formulario de la empresa" : "la vacante"} en otra pestaña
+                para que subas ese PDF ahí.
+              </li>
               <li>3. La registra en tu pipeline como aplicada.</li>
             </ol>
           ) : (
@@ -366,7 +387,9 @@ function JobDetailContent() {
             </p>
           )}
           <p className="mt-2 text-[11px] leading-snug text-brand-700 dark:text-brand-400">
-            Completar y mandar el formulario sigue siendo tuyo: JobPilot nunca lo envía por ti.
+            {job.apply_email
+              ? "O postula tú en el sitio original: el formulario ahí lo envías tú."
+              : "Completar y mandar el formulario sigue siendo tuyo: JobPilot nunca lo envía por ti."}
           </p>
           {applyError && (
             <div className="mt-2">

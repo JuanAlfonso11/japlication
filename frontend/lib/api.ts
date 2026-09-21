@@ -1,5 +1,6 @@
 import type {
   AtsReport,
+  EmailApplyPreview,
   ProfileLanguage,
   LanguageStatus,
   AggregateSearchResponse,
@@ -589,6 +590,12 @@ export const applicationsApi = {
   // "Deshacer" — only valid while status is still "passed" (see the
   // backend's own guard); puts the job straight back in Home's queue.
   undo: (id: string) => request<void>(`/applications/${id}`, { method: "DELETE" }),
+  /** Lo que se enviaría por correo, sin enviar nada. */
+  previewEmail: (jobId: string) => request<EmailApplyPreview>(`/jobs/${jobId}/apply-email`),
+  /** Envía de verdad. `fingerprint` tiene que ser el de la vista previa: si
+   *  algo cambió desde entonces, el backend lo rechaza. */
+  sendEmail: (jobId: string, fingerprint: string) =>
+    request<Application>(`/jobs/${jobId}/apply-email`, { method: "POST", body: { fingerprint } }),
   // Powers the red badge on the "Pipeline" nav icon (NavShell.tsx) — same
   // staleness definition as the daily push reminder, in case the user
   // missed or dismissed that notification.
