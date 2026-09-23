@@ -1,15 +1,15 @@
 "use client";
 
 import { Component, type ErrorInfo, type ReactNode } from "react";
-import { reportClientError } from "@/lib/errorReporting";
+import { captureClientError } from "@/lib/errorReporting";
 
 /** Catches a render crash instead of letting React blank the screen.
  *
  * A component throwing during render unmounts the whole tree — on the phone
  * that shows up as the app suddenly going white, with nothing to report
- * beyond "se puso en blanco". This turns that into a readable message plus
- * a row in `error_logs` with the component stack, which is what actually
- * says *which* component broke.
+ * beyond "se puso en blanco". This turns that into a readable message and
+ * offers "Reportar el fallo" (CrashReportDialog) with the component stack,
+ * which is what actually says *which* component broke.
  *
  * Class component because error boundaries have no hooks equivalent —
  * `componentDidCatch` and `getDerivedStateFromError` exist only here.
@@ -30,7 +30,7 @@ export default class ErrorBoundary extends Component<
     const withComponentStack = new Error(error.message);
     withComponentStack.name = error.name;
     withComponentStack.stack = `${error.stack ?? ""}\n\nComponent stack:${info.componentStack ?? ""}`;
-    reportClientError(withComponentStack, { kind: "ReactRenderError" });
+    captureClientError(withComponentStack, { kind: "ReactRenderError" });
   }
 
   render() {
@@ -49,8 +49,7 @@ export default class ErrorBoundary extends Component<
           Esta pantalla se rompió
         </p>
         <p className="max-w-[38ch] text-sm leading-relaxed text-gray-500 dark:text-gray-400">
-          Ya quedó registrado con el detalle técnico: lo puedes ver en Perfil → Análisis → Errores
-          recientes.
+          Reintenta o vuelve al inicio. Si reportas el fallo, lo revisamos para arreglarlo.
         </p>
         <div className="mt-2 flex gap-2">
           <button

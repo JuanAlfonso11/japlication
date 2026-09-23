@@ -13,6 +13,8 @@ export interface User {
   email_verified: boolean;
   email_verified_at?: string | null;
   created_at?: string;
+  /** The install's operator (first account). Only GET /auth/me sets it. */
+  is_admin?: boolean;
 }
 
 export interface ResendVerificationResponse {

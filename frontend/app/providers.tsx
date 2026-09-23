@@ -8,6 +8,7 @@ import PushNotificationsSetup from "@/components/PushNotificationsSetup";
 import BackButtonHandler from "@/components/BackButtonHandler";
 import UpdateChecker from "@/components/UpdateChecker";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import CrashReportDialog from "@/components/CrashReportDialog";
 import LiveRegionProvider from "@/components/LiveRegion";
 import { installErrorReporting } from "@/lib/errorReporting";
 
@@ -28,6 +29,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
           <PushNotificationsSetup />
           <BackButtonHandler />
           <UpdateChecker />
+          <CrashReportDialog />
           {/* Inside NavShell, not around it: a page crashing should leave the
               tab bar and header alive so the user can navigate away, rather
               than blanking the entire app. */}

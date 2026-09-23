@@ -202,11 +202,10 @@ async def test_errors_can_be_filtered_by_side(async_client, user_and_headers):
     assert [e["source"] for e in backend_only] == ["backend"]
 
 
-async def test_other_users_only_see_their_own_errors(async_client, user_and_headers):
-    """Registration is open: a second account must not read the operator's
-    (first account's) error log."""
+async def test_only_the_operator_reads_the_error_log(async_client, user_and_headers):
+    """Registration is open: the first account is the admin; a later
+    account can still report errors but not read anyone's log."""
     _, operator_headers = user_and_headers
-    await async_client.post("/system/client-errors", headers=operator_headers, json={"message": "del operador"})
 
     async with AsyncSessionLocal() as session:
         other = User(email="otro@example.com", hashed_password=hash_password("Test1234!"), full_name="Otro")
@@ -214,9 +213,12 @@ async def test_other_users_only_see_their_own_errors(async_client, user_and_head
         await session.commit()
         await session.refresh(other)
     other_headers = {"Authorization": f"Bearer {create_access_token(str(other.id))}"}
-    await async_client.post("/system/client-errors", headers=other_headers, json={"message": "del otro"})
+    sent = await async_client.post("/system/client-errors", headers=other_headers, json={"message": "del otro"})
+    assert sent.status_code == 204
 
-    mine = (await async_client.get("/system/errors", headers=other_headers)).json()
-    assert [e["message"] for e in mine] == ["del otro"]
+    assert (await async_client.get("/system/errors", headers=other_headers)).status_code == 403
     everything = (await async_client.get("/system/errors", headers=operator_headers)).json()
-    assert {e["message"] for e in everything} == {"del operador", "del otro"}
+    assert [e["message"] for e in everything] == ["del otro"]
+
+    assert (await async_client.get("/auth/me", headers=operator_headers)).json()["is_admin"] is True
+    assert (await async_client.get("/auth/me", headers=other_headers)).json()["is_admin"] is False

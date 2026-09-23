@@ -38,3 +38,19 @@ async def get_current_user(
     if user is None:
         raise credentials_exception
     return user
+
+
+async def is_operator(user: User, db: AsyncSession) -> bool:
+    """The operator (admin) is the first account ever created — the person
+    running this install. Everyone who registered after is a regular user."""
+    first_id = (await db.execute(select(User.id).order_by(User.created_at).limit(1))).scalar_one_or_none()
+    return user.id == first_id
+
+
+async def require_operator(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    if not await is_operator(current_user, db):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Solo el administrador puede ver esto.")
+    return current_user

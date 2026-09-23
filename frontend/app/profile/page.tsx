@@ -585,8 +585,9 @@ function ProfileContent() {
           <SystemStatusPanel />
 
           {/* Last: the thing you go looking for only when something already
-              went wrong. */}
-          <ErrorLogPanel />
+              went wrong. Admin only — everyone else reports crashes through
+              CrashReportDialog, and the backend answers 403 to them. */}
+          {user?.is_admin && <ErrorLogPanel />}
         </>
       )}
 

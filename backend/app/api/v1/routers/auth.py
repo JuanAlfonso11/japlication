@@ -15,7 +15,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, is_operator
 from app.core.config import settings
 from app.core.rate_limit import limiter, login_lockout
 from app.core.security import (
@@ -244,8 +244,10 @@ async def logout(payload: RefreshRequest, db: AsyncSession = Depends(get_db)) ->
 
 
 @router.get("/me", response_model=UserSchema)
-async def me(current_user: User = Depends(get_current_user)) -> UserSchema:
-    return UserSchema.model_validate(current_user)
+async def me(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> UserSchema:
+    user = UserSchema.model_validate(current_user)
+    user.is_admin = await is_operator(current_user, db)
+    return user
 
 
 @router.post("/resend-verification", response_model=ResendVerificationResponse)

@@ -88,6 +88,8 @@ class User(BaseModel):
     email_verified_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
+    #: Only GET /auth/me fills this; login/register answers leave it False.
+    is_admin: bool = False
 
 
 class TokenResponse(BaseModel):

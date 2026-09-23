@@ -14,7 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, require_operator
 from app.core.config import settings
 from app.core.rate_limit import limiter
 from app.db.session import get_db
@@ -117,23 +117,17 @@ async def report_client_error(
 async def list_errors(
     limit: int = Query(50, ge=1, le=200),
     source: Optional[str] = Query(None, pattern="^(backend|frontend)$"),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_operator),
     db: AsyncSession = Depends(get_db),
 ) -> list[ErrorLogEntry]:
     """The most recent failures, newest first — what Profile's system panel
     reads so you can diagnose from the phone instead of `docker compose logs`.
 
-    The operator (the first account created) sees everything, including a
-    tester's crash you'd otherwise never hear about. Everyone else sees only
-    their own errors: with registration open, the full log would hand any
-    stranger other users' paths, messages and stack traces.
+    Operator only (the first account): it lists every user's errors,
+    including a tester's crash you'd otherwise never hear about. Everyone
+    else reports failures through the app's "Reportar el fallo" popup.
     """
     stmt = select(ErrorLog).order_by(ErrorLog.created_at.desc()).limit(limit)
-    operator_id = (
-        await db.execute(select(User.id).order_by(User.created_at).limit(1))
-    ).scalar_one_or_none()
-    if current_user.id != operator_id:
-        stmt = stmt.where(ErrorLog.user_id == current_user.id)
     if source:
         stmt = stmt.where(ErrorLog.source == source)
     rows = (await db.execute(stmt)).scalars().all()
