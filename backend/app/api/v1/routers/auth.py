@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.core.config import settings
-from app.core.rate_limit import limiter
+from app.core.rate_limit import limiter, login_lockout
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -98,9 +98,11 @@ async def register(request: Request, payload: UserRegister, db: AsyncSession = D
     #     registered would look like success and then silently never log you in;
     #   * the endpoint is rate-limited to 5/minute, so enumerating any real
     #     list of addresses is not practical here;
-    #   * the app is reachable only inside the owner's Tailscale network.
+    #   * registration is closed after the first account (below), so on this
+    #     public (tailscale funnel) install a stranger gets the 403 first and
+    #     never reaches this check.
     #
-    # If JobPilot is ever exposed publicly, this is the first thing to change:
+    # If registration is ever reopened for other people, change this first:
     # return 201 either way and send "someone tried to register with your
     # address" to the existing account instead. The login path does NOT make
     # the same trade — see the dummy hash there, which removes the timing
@@ -143,7 +145,17 @@ async def register(request: Request, payload: UserRegister, db: AsyncSession = D
 @router.post("/login", response_model=TokenResponse)
 @limiter.limit("10/minute")
 async def login(request: Request, payload: UserLogin, db: AsyncSession = Depends(get_db)) -> TokenResponse:
-    result = await db.execute(select(User).where(User.email == payload.email.lower()))
+    address = payload.email.lower()
+    wait = login_lockout.retry_after(address)
+    if wait:
+        minutes = -(-wait // 60)
+        raise HTTPException(
+            status_code=429,
+            detail=f"Demasiados intentos fallidos con este correo. Espera {minutes} min y vuelve a intentarlo.",
+            headers={"Retry-After": str(wait)},
+        )
+
+    result = await db.execute(select(User).where(User.email == address))
     user = result.scalar_one_or_none()
     if user is None:
         # Hash the supplied password against a throwaway value anyway. Short-
@@ -152,11 +164,14 @@ async def login(request: Request, payload: UserLogin, db: AsyncSession = Depends
         # oracle that turns "is this email registered?" into a stopwatch
         # question. Costs one bcrypt round on a path that should be rare.
         await asyncio.to_thread(verify_password, payload.password, _DUMMY_PASSWORD_HASH)
+        login_lockout.record_failure(address)
         raise HTTPException(status_code=401, detail="Invalid email or password.")
     # bcrypt is deliberately slow (~100ms+); off the event loop it goes, or
     # every concurrent request waits behind this one.
     if not await asyncio.to_thread(verify_password, payload.password, user.hashed_password):
+        login_lockout.record_failure(address)
         raise HTTPException(status_code=401, detail="Invalid email or password.")
+    login_lockout.reset(address)
 
     access_token, refresh_token = await _issue_token_pair(user, db)
     return TokenResponse(access_token=access_token, refresh_token=refresh_token, user=UserSchema.model_validate(user))
