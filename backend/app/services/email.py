@@ -167,3 +167,60 @@ def send_verification_email(to_email: str, full_name: str, verification_url: str
     html_body = _email_shell(inner_html)
 
     _send(to_email, subject, text_body, html_body)
+
+
+def send_password_reset_email(to_email: str, full_name: str, reset_url: str, expires_minutes: int) -> None:
+    first_name = (full_name or "").split(" ")[0] or "there"
+    expiry_text = _format_expiry(expires_minutes)
+    subject = "Restablece tu contraseña de JobPilot"
+
+    text_body = (
+        f"Hola {first_name},\n\n"
+        f"Recibimos una solicitud para restablecer la contraseña de tu cuenta de JobPilot ({to_email}). "
+        "Te enviamos este correo porque alguien tocó «¿Olvidaste tu contraseña?» en la app con esta dirección.\n\n"
+        f"Crea tu nueva contraseña con este enlace (válido por {expiry_text}, un solo uso):"
+        f"\n\n{reset_url}\n\n"
+        "Si no fuiste tú, ignora este mensaje: tu contraseña actual sigue funcionando y nadie "
+        "puede cambiarla sin este enlace.\n\n"
+        "— El equipo de JobPilot"
+    )
+
+    inner_html = f"""\
+      <h1 style="margin:0 0 16px;font-size:22px;font-weight:500;color:#202124;text-align:center;">
+        Restablece tu contraseña
+      </h1>
+      <p style="margin:0 0 16px;font-size:14px;line-height:22px;color:#3c4043;text-align:center;">
+        Hola {first_name}, recibimos una solicitud para restablecer la contraseña de tu cuenta de
+        <strong>JobPilot</strong> (<strong>{to_email}</strong>).
+      </p>
+      <p style="margin:0 0 24px;font-size:14px;line-height:22px;color:#3c4043;text-align:center;">
+        Te enviamos este correo porque alguien tocó <em>¿Olvidaste tu contraseña?</em> en la app con
+        esta dirección. Pulsa el botón para crear una nueva.
+      </p>
+      <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto 24px;">
+        <tr>
+          <td style="border-radius:8px;background:{BRAND_BLUE};">
+            <a href="{reset_url}"
+               style="display:inline-block;padding:12px 32px;font-size:14px;font-weight:600;
+                      color:#ffffff;text-decoration:none;border-radius:8px;">
+              Crear nueva contraseña
+            </a>
+          </td>
+        </tr>
+      </table>
+      <p style="margin:0 0 8px;font-size:12px;line-height:18px;color:#80868b;text-align:center;">
+        Este enlace vence en {expiry_text} y solo sirve una vez.
+      </p>
+      <p style="margin:24px 0 0;font-size:12px;line-height:18px;color:#80868b;text-align:center;
+                word-break:break-all;">
+        ¿El botón no funciona? Copia y pega este enlace en tu navegador:<br>
+        <a href="{reset_url}" style="color:{BRAND_BLUE};">{reset_url}</a>
+      </p>
+      <p style="margin:24px 0 0;font-size:13px;line-height:20px;color:#3c4043;text-align:center;">
+        <strong>¿No fuiste tú?</strong> Ignora este mensaje. Tu contraseña actual sigue funcionando
+        y nadie puede cambiarla sin este enlace.
+      </p>
+    """
+    html_body = _email_shell(inner_html)
+
+    _send(to_email, subject, text_body, html_body)

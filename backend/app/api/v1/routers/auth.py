@@ -5,11 +5,12 @@
 # dispatched with asyncio.to_thread so only the calling request waits -
 # the same pattern services/match_engine.py already documents.
 import asyncio
+import hashlib
 import logging
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,8 +30,11 @@ from app.core.security import (
 from app.db.session import get_db
 from app.models.refresh_token import RefreshToken
 from app.models.user import User
+from app.schemas.common import ErrorResponse
 from app.schemas.user import (
+    ForgotPasswordRequest,
     RefreshRequest,
+    ResetPasswordRequest,
     RefreshResponse,
     ResendVerificationResponse,
     TokenResponse,
@@ -286,3 +290,80 @@ async def verify_email(request: Request, token: str, db: AsyncSession = Depends(
         await db.commit()
 
     return RedirectResponse(f"{target}?status=success")
+
+
+_RESET_PURPOSE = "password_reset"
+_RESET_TOKEN_MINUTES = 30
+
+
+def _password_fingerprint(user: User) -> str:
+    # Baked into the reset token so it dies the moment the password changes:
+    # single-use without a table of spent tokens.
+    return hashlib.sha256(user.hashed_password.encode()).hexdigest()[:16]
+
+
+def _send_password_reset_email(user: User) -> None:
+    token = create_state_token(
+        f"{user.id}:{_password_fingerprint(user)}", purpose=_RESET_PURPOSE, expires_minutes=_RESET_TOKEN_MINUTES
+    )
+    reset_url = f"{settings.FRONTEND_ORIGIN.rstrip('/')}/reset-password?token={token}"
+    try:
+        email.send_password_reset_email(user.email, user.full_name, reset_url, _RESET_TOKEN_MINUTES)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Failed to send password reset email to %s: %s", user.email, exc)
+
+
+@router.post("/forgot-password", response_model=ErrorResponse)
+@limiter.limit("3/minute")
+async def forgot_password(
+    request: Request,
+    payload: ForgotPasswordRequest,
+    background: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+) -> ErrorResponse:
+    """Same answer whether or not the address has an account, and the email
+    goes out after the response, so neither the text nor the timing tells a
+    stranger who is registered."""
+    result = await db.execute(select(User).where(User.email == payload.email.lower()))
+    user = result.scalar_one_or_none()
+    if user is not None:
+        background.add_task(_send_password_reset_email, user)
+    return ErrorResponse(
+        detail="Si existe una cuenta con ese correo, te enviamos un enlace para crear una nueva contraseña."
+    )
+
+
+@router.post("/reset-password", response_model=ErrorResponse)
+@limiter.limit("10/minute")
+async def reset_password(
+    request: Request, payload: ResetPasswordRequest, db: AsyncSession = Depends(get_db)
+) -> ErrorResponse:
+    invalid = HTTPException(
+        status_code=400,
+        detail="El enlace no es válido o ya venció. Pide uno nuevo desde «¿Olvidaste tu contraseña?».",
+    )
+    subject = decode_state_token(payload.token, purpose=_RESET_PURPOSE)
+    user_id, _, fingerprint = (subject or "").partition(":")
+    try:
+        uid = UUID(user_id)
+    except ValueError:
+        raise invalid
+    user = (await db.execute(select(User).where(User.id == uid))).scalar_one_or_none()
+    if user is None or fingerprint != _password_fingerprint(user):
+        raise invalid
+
+    user.hashed_password = await asyncio.to_thread(hash_password, payload.password)
+    # Opening the link proves they own the inbox.
+    if not user.email_verified:
+        user.email_verified = True
+        user.email_verified_at = datetime.now(timezone.utc)
+    # Whoever knew the old password (maybe the reason for the reset) loses
+    # every session they had.
+    await db.execute(
+        update(RefreshToken)
+        .where(RefreshToken.user_id == user.id, RefreshToken.revoked_at.is_(None))
+        .values(revoked_at=datetime.now(timezone.utc))
+    )
+    await db.commit()
+    login_lockout.reset(user.email)
+    return ErrorResponse(detail="Listo. Ya puedes iniciar sesión con tu nueva contraseña.")

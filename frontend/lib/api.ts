@@ -483,6 +483,10 @@ export const authApi = {
   login: (payload: LoginPayload) =>
     request<AuthResponse>("/auth/login", { method: "POST", body: payload, auth: false }),
   me: () => request<User>("/auth/me"),
+  forgotPassword: (email: string) =>
+    request<{ detail: string }>("/auth/forgot-password", { method: "POST", body: { email }, auth: false }),
+  resetPassword: (token: string, password: string) =>
+    request<{ detail: string }>("/auth/reset-password", { method: "POST", body: { token, password }, auth: false }),
   resendVerification: () =>
     request<ResendVerificationResponse>("/auth/resend-verification", { method: "POST" }),
   // Not used directly by app code (request()/uploadFile() call the raw
