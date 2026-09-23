@@ -38,7 +38,7 @@ services:
       # in app/core/config.py — this just stops the container from ever
       # booting without one.
       JWT_SECRET: "${JWT_SECRET:?falta JWT_SECRET en .env - generalo con python -c 'import secrets; print(secrets.token_urlsafe(48))'}"
-      ALLOW_EXTRA_REGISTRATIONS: ${ALLOW_EXTRA_REGISTRATIONS:-0}
+      ALLOW_EXTRA_REGISTRATIONS: ${ALLOW_EXTRA_REGISTRATIONS:-1}
       ENABLE_API_DOCS: ${ENABLE_API_DOCS:-0}
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
       REFRESH_TOKEN_EXPIRE_DAYS: ${REFRESH_TOKEN_EXPIRE_DAYS:-90}

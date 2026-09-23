@@ -31,7 +31,7 @@ Funnel se habilita en la tailnet desde el enlace que imprime el comando (atribut
 política de acceso).
 
 Qué protege la app ahora que es pública:
-- **Registro cerrado** tras la primera cuenta (`ALLOW_EXTRA_REGISTRATIONS`).
+- **Registro abierto**: cada persona que instala el APK se crea su cuenta (`ALLOW_EXTRA_REGISTRATIONS=0` lo cierra tras la primera).
 - **Todas las rutas de datos exigen login**. Las únicas abiertas: login/refresh/logout, verificar
   correo, `/app/android-update` (solo la versión) y `/system/heartbeat` (pide secreto).
 - **Rate limit por IP real**: uvicorn con `--proxy-headers` (`backend/Dockerfile`). Los puertos de

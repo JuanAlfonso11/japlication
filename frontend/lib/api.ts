@@ -569,6 +569,8 @@ export const jobsApi = {
     remote_type?: RemoteType;
     category?: string;
   }) => request<AggregateSearchResponse>("/jobs/search/aggregate", { query: params }),
+  /** Job titles pulled from the user's CV, most precise first. */
+  searchSuggestions: () => request<string[]>("/jobs/search/suggestions"),
   importExternal: (payload: ExternalJobImportPayload) =>
     request<Job>("/jobs/search/import", { method: "POST", body: payload }),
   autoImport: () => request<AutoImportResponse>("/jobs/search/auto-import", { method: "POST" }),

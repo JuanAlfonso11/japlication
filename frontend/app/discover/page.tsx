@@ -397,6 +397,9 @@ function DiscoverContent() {
   // True when the user chose "Otro…" and is typing a title the list does not
   // have. Restored below if a remembered filter is not one of the presets.
   const [customTitle, setCustomTitle] = useState(false);
+  // Titles from the user's own CV, shown first and preselected so a doctor's
+  // search defaults to medicine and an engineer's to engineering.
+  const [cvTitles, setCvTitles] = useState<string[]>([]);
   const [location, setLocation] = useState("");
   const [remoteType, setRemoteType] = useState<RemoteType | "">("remote");
   const [experienceLevelFilter, setExperienceLevelFilter] = useState<ExperienceLevel | "">("");
@@ -431,6 +434,18 @@ function DiscoverContent() {
       setExperienceLevelFilter(stored.level as ExperienceLevel);
     }
     if (stored.minSalary) setMinSalary(stored.minSalary);
+
+    jobsApi
+      .searchSuggestions()
+      .then((titles) => {
+        setCvTitles(titles);
+        if (!stored.q && titles[0]) setQ(titles[0]);
+        if (stored.q && titles.includes(stored.q)) setCustomTitle(false);
+      })
+      .catch(() => {
+        // No suggestions just means the plain list; the backend still falls
+        // back to the CV title when the search goes out empty.
+      });
   }, []);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -553,7 +568,16 @@ function DiscoverContent() {
                   }}
                   className="col-span-2 sm:min-w-[180px] sm:flex-1"
                 >
-                  <option value="">Puesto</option>
+                  <option value="">{cvTitles.length ? "Puesto (según tu CV)" : "Puesto"}</option>
+                  {cvTitles.length > 0 && (
+                    <optgroup label="Según tu CV">
+                      {cvTitles.map((title) => (
+                        <option key={title} value={title}>
+                          {title}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
                   {JOB_TITLE_GROUPS.map((group) => (
                     <optgroup key={group.label} label={group.label}>
                       {group.options.map((title) => (

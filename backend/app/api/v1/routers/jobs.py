@@ -488,7 +488,14 @@ async def search_jobs_aggregate(
     geographic (e.g. "Mexico"); `remote_type` (remote/hybrid/onsite) is
     independent and defaults to "remote" to preserve the historical
     default of showing only remote-friendly postings when no filters are
-    set."""
+    set.
+
+    Sin `q`, busca por el puesto del CV (el primero de _profile_search_terms)
+    en vez de traer lo que publiquen las fuentes: sin esto un medico que
+    tocaba "Buscar" sin elegir puesto recibia ofertas de software."""
+    if not (q or "").strip():
+        terms = await _user_search_terms(current_user.id, db)
+        q = terms[0] if terms else None
     tasks = {
         provider: asyncio.create_task(
             _run_search_provider(provider, q, location, experience_level_filter, remote_type_filter, category)
@@ -703,6 +710,22 @@ def _profile_search_terms(profile: CareerProfile) -> list[str]:
             add(skill.get("name"))
 
     return terms[:4]
+
+
+async def _user_search_terms(user_id: UUID, db: AsyncSession) -> list[str]:
+    profile = (
+        await db.execute(select(CareerProfile).where(CareerProfile.user_id == user_id))
+    ).scalar_one_or_none()
+    return _profile_search_terms(profile) if profile else []
+
+
+@router.get("/jobs/search/suggestions", response_model=list[str])
+async def search_suggestions(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> list[str]:
+    """Puestos sacados del CV, para la lista "Segun tu CV" de Buscar."""
+    return await _user_search_terms(current_user.id, db)
 
 
 def _profile_search_query(profile: CareerProfile) -> Optional[str]:

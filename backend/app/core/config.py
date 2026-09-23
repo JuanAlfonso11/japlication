@@ -110,12 +110,11 @@ class Settings(BaseSettings):
     #: filtro explicito de modalidad en la busqueda manda sobre esto.
     ATS_REMOTE_ONLY: bool = True
 
-    #: Deja registrar cuentas aunque ya exista una. Por defecto NO: JobPilot
-    #: es de un solo operador, y con el registro abierto cualquiera que
-    #: alcanzara el backend se creaba una cuenta y gastaba el presupuesto de
-    #: Anthropic y las cuotas de las APIs de empleo. Ponlo a 1 en .env solo
-    #: mientras des de alta a alguien mas, y quitalo despues.
-    ALLOW_EXTRA_REGISTRATIONS: bool = False
+    #: Registro abierto: quien descarga el APK se crea su cuenta sin VPN. Los
+    #: topes diarios de api_budget (Anthropic, Adzuna, SerpApi) son globales y
+    #: siguen protegiendo la factura. Ponlo a 0 en .env para cerrar el registro
+    #: despues de la primera cuenta.
+    ALLOW_EXTRA_REGISTRATIONS: bool = True
 
     # /docs, /redoc and /openapi.json. Off by default: the app is public and
     # the full API map helps nobody but an attacker. ENABLE_API_DOCS=1 in

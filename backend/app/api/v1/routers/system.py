@@ -123,11 +123,17 @@ async def list_errors(
     """The most recent failures, newest first — what Profile's system panel
     reads so you can diagnose from the phone instead of `docker compose logs`.
 
-    Deliberately NOT filtered to the calling user: this is a single-operator
-    app, and the point is to see everything that broke, including a tester's
-    crash you'd otherwise never hear about.
+    The operator (the first account created) sees everything, including a
+    tester's crash you'd otherwise never hear about. Everyone else sees only
+    their own errors: with registration open, the full log would hand any
+    stranger other users' paths, messages and stack traces.
     """
     stmt = select(ErrorLog).order_by(ErrorLog.created_at.desc()).limit(limit)
+    operator_id = (
+        await db.execute(select(User.id).order_by(User.created_at).limit(1))
+    ).scalar_one_or_none()
+    if current_user.id != operator_id:
+        stmt = stmt.where(ErrorLog.user_id == current_user.id)
     if source:
         stmt = stmt.where(ErrorLog.source == source)
     rows = (await db.execute(stmt)).scalars().all()

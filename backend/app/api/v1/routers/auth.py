@@ -98,23 +98,20 @@ async def register(request: Request, payload: UserRegister, db: AsyncSession = D
     #     registered would look like success and then silently never log you in;
     #   * the endpoint is rate-limited to 5/minute, so enumerating any real
     #     list of addresses is not practical here;
-    #   * registration is closed after the first account (below), so on this
-    #     public (tailscale funnel) install a stranger gets the 403 first and
-    #     never reaches this check.
+    #   * with registration open (the default now), the per-IP rate limit is
+    #     the only thing standing in the way — accepted for now.
     #
-    # If registration is ever reopened for other people, change this first:
-    # return 201 either way and send "someone tried to register with your
-    # address" to the existing account instead. The login path does NOT make
+    # Upgrade path if that stops being enough: return 201 either way and send
+    # "someone tried to register with your address" to the existing account
+    # instead (needs the app to stop auto-logging in after signup). The login path does NOT make
     # the same trade — see the dummy hash there, which removes the timing
     # oracle for an endpoint that is not rate-limited per address.
-    # JobPilot es de un solo operador, pero el backend no lo sabia: quien
-    # alcanzara el puerto 8000 se creaba una cuenta y con ella gastaba el
-    # presupuesto de Anthropic (que se paga) y las cuotas de Adzuna y SerpApi,
-    # ademas de leer GET /system/errors, que a proposito no filtra por usuario
-    # porque asume que solo hay uno. Ese supuesto ahora se cumple de verdad.
+    # Registro abierto por defecto: cualquiera que instale el APK se crea su
+    # cuenta. Los topes globales de api_budget protegen la factura de
+    # Anthropic y las cuotas de Adzuna/SerpApi, y GET /system/errors solo le
+    # muestra el log completo a la primera cuenta (el operador).
     #
-    # ALLOW_EXTRA_REGISTRATIONS=1 en .env vuelve a abrirlo, para cuando haga
-    # falta dar de alta a alguien mas o recrear la cuenta desde cero.
+    # ALLOW_EXTRA_REGISTRATIONS=0 en .env lo cierra tras la primera cuenta.
     if not settings.ALLOW_EXTRA_REGISTRATIONS:
         already = await db.execute(select(func.count()).select_from(User))
         if (already.scalar_one() or 0) > 0:

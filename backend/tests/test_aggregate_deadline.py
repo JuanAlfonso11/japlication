@@ -50,3 +50,29 @@ async def test_aggregate_answers_by_the_deadline_and_keeps_slow_providers_runnin
     assert not straggler.cancelled()
     await asyncio.sleep(0)  # let the done-callback drop the reference
     assert jobs._stragglers == set()
+
+
+@pytest.mark.asyncio
+async def test_empty_search_uses_the_cv_title(async_client, user_and_headers, monkeypatch):
+    """Sin puesto elegido, un medico debe buscar "Medico", no lo que haya."""
+    from app.db.session import AsyncSessionLocal
+    from app.models.career_profile import CareerProfile
+
+    user, headers = user_and_headers
+    async with AsyncSessionLocal() as session:
+        session.add(CareerProfile(user_id=user.id, headline="Médico general | Urgencias", skills=[], experience=[]))
+        await session.commit()
+
+    seen = []
+
+    async def fake_provider(provider, q, *_args):
+        seen.append(q)
+        return provider, [], None
+
+    monkeypatch.setattr(jobs, "_SEARCH_PROVIDERS", {"himalayas"})
+    monkeypatch.setattr(jobs, "_run_search_provider", fake_provider)
+
+    assert (await async_client.get("/jobs/search/aggregate", headers=headers)).status_code == 200
+    assert seen == ["Médico general"]
+    suggestions = (await async_client.get("/jobs/search/suggestions", headers=headers)).json()
+    assert suggestions[:2] == ["Médico general", "Urgencias"]
