@@ -101,7 +101,9 @@ CREATE TYPE job_source AS ENUM (
     'weworkremotely', 'hackernews', 'adzuna', 'usajobs', 'getonbrd', 'serpapi',
     'workingnomads', 'remoteok', 'manual',
     'linkedin',  -- migration 0007
-    'greenhouse', 'lever', 'ashby'  -- migration 0013
+    'greenhouse', 'lever', 'ashby',  -- migration 0013
+    'tecnoempleo',  -- migration 0015 (fuente quitada; valor sin uso)
+    'web3career'  -- migration 0016
 );
 
 CREATE TABLE jobs (

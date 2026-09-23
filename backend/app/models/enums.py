@@ -27,6 +27,7 @@ class JobSource(str, enum.Enum):
     greenhouse = "greenhouse"
     lever = "lever"
     ashby = "ashby"
+    web3career = "web3career"  # migration 0016
     manual = "manual"
 
 

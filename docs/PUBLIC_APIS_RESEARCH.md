@@ -26,6 +26,8 @@ francés); el resto quedó documentado como descartado, con el motivo.
 | 12 | SerpApi (Google Jobs) | API key gratis (registro instantáneo) | Sí (2026-09) |
 | 13 | Working Nomads | Ninguna | Sí (2026-09) |
 | 14 | Remote OK | Ninguna | Sí (2026-09) — **reevaluada**, ver nota |
+| — | Tecnoempleo (España) | Ninguna (RSS público) | **No** — se integró y se quitó el mismo día, ver nota |
+| 15 | Web3.career | Token gratis (registro en su web) | Sí (2026-09-23) |
 | — | France Travail (ex-Pôle Emploi) | OAuth2 client credentials (registro instantáneo) | **No** — se integró y probó, pero se quitó (ver nota) |
 | — | RemoteOK | Ninguna en teoría | **No** — ver nota |
 | — | Reed.co.uk | API key gratis | **No** — ver nota |
@@ -125,6 +127,23 @@ que el filtrado se hace localmente sobre el feed cacheado, igual que We Work Rem
   empresa, no por búsqueda — habría que curar una lista de compañías. Quedan como la mejor candidata
   para una próxima ronda, porque son la fuente canónica (el ATS real de la empresa), sin el retraso
   de un agregador.
+
+### Lista de ~30 plataformas de un video (2026-09-23)
+
+Revisadas una por una en vivo. Ya estaban integradas: HN Who is Hiring, We Work Remotely, Remote OK,
+Remotive, Himalayas, Get on Board, LinkedIn (páginas públicas) y Google for Jobs (SerpApi); Wellfound y
+Toptal ya eran accesos directos.
+
+- **Tecnoempleo**: RSS público sin auth (`alertas-empleo-rss.php?te=<palabra>`). Se integró y se quitó
+  el mismo día por pedido del usuario: es solo empleo en España. De 107 avisos remotos revisados,
+  ninguno aceptaba residentes de LatAm (las menciones a "LATAM" eran texto corporativo, y varios
+  exigían residir en España). El valor `tecnoempleo` queda en el ENUM `job_source` (migración 0015)
+  sin uso, igual que `francetravail`.
+- **Web3.career**: API JSON con token gratis → integrada (sección 14).
+- **Sin API ni RSS pública → accesos directos** en `frontend/lib/externalPlatforms.ts`: Work at a Startup
+  (406 sin sesión), Levels.fyi, Arc.dev, Lemon.io, Talently, Built In, Dice, Welcome to the Jungle,
+  Glassdoor, Indeed, FlexJobs (de pago), Teamblind y WeRemoto.
+- **No se agregó**: Remotelys (el dominio está aparcado) e InfoJobs (registro de apps cerrado, ver arriba).
 
 ---
 
@@ -372,6 +391,26 @@ Portado de la skill `linkedin-search` de [MadsLorentzen/ai-job-search](https://g
   (BairesDev, Flatiron Software, FullStack, BlackStone eIT, Truelogic…), 9 con descripción completa.
 - **Campos útiles**: título, empresa, ubicación, fecha, descripción, nivel y tipo de empleo. Las tarjetas
   no traen salario. Si una ficha falla, la vacante sale igual, sin descripción.
+
+## 14. Web3.career
+
+- **Endpoint**: `GET https://web3.career/api/v1?token=...` — token gratis en
+  https://web3.career/web3-jobs-api (`WEB3CAREER_TOKEN` en `.env`)
+- **Parámetros**: `tag` (un slug, ej. `react`), `remote=true`, `country=<slug>` (ej. `united-states`),
+  `limit` (máx. 100), `show_description`. **No hay búsqueda de texto libre**: la palabra clave de
+  Discover se manda como `tag`
+- **Formato**: una lista de 3 elementos, no un objeto: `["Web3 Jobs API ...", "<ayuda>", [avisos]]`.
+  Cada aviso: `id`, `date_epoch`, `is_remote` (bool), `title`, `company`, `location`, `apply_url`,
+  `tags[]`, `salary_min_value`/`salary_max_value`/`salary_currency` (casi siempre `null`),
+  `estimated_*_salary` (estimación de ellos, no se usa) y `description` (HTML)
+- **Token inválido**: responde 200 con una página HTML, no con un error — se reporta como "revisa
+  WEB3CAREER_TOKEN"
+- **Términos**: enlazar con `apply_url` sin modificarlo y nombrar a web3.career como fuente, o suspenden
+  el acceso. `source_url` es siempre `apply_url` tal cual, y cada tarjeta muestra el proveedor
+- **Ubicación/alcance**: Web3/cripto, mayormente EE.UU. o "Remote" sin país (~25% en una muestra de 100)
+- **Límites**: devuelve 429 si se excede (sin cifra publicada); se cachea 1 h por combinación de
+  parámetros. Como fuente con clave, la búsqueda automática solo la usa con el primer término
+- **Implementación**: `backend/app/services/web3career.py`
 
 ## Investigación adicional: ¿cómo se consigue acceso a las APIs de Indeed y LinkedIn?
 
