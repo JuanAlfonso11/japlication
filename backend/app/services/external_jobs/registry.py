@@ -45,6 +45,7 @@ from app.services import (
     serpapi_jobs,
     themuse,
     usajobs,
+    web3career,
     weworkremotely,
     workingnomads,
 )
@@ -94,8 +95,8 @@ class ProviderSpec:
     get_cached: Callable[[str], Optional[dict[str, Any]]]
     #: (SearchParams) -> {"results": [...], "has_more": bool}
     search: Callable[[SearchParams], Awaitable[dict[str, Any]]]
-    #: False for the three that need their own API key (adzuna, usajobs,
-    #: serpapi). Used to be a separately maintained set of names.
+    #: False for the ones that need their own API key (adzuna, usajobs,
+    #: serpapi, web3career). Used to be a separately maintained set of names.
     no_auth: bool = True
 
 
@@ -270,6 +271,10 @@ async def _search_linkedin(p: SearchParams) -> dict[str, Any]:
     return await linkedin_jobs.search_linkedin_jobs(**_common(p))
 
 
+async def _search_web3career(p: SearchParams) -> dict[str, Any]:
+    return await web3career.search_web3career_jobs(**_common(p))
+
+
 async def _search_serpapi(p: SearchParams) -> dict[str, Any]:
     return await serpapi_jobs.search_serpapi_jobs(**_common(p))
 
@@ -324,7 +329,7 @@ _SPECS: tuple[ProviderSpec, ...] = (
                  ats_boards.get_cached_result, _ats_search("lever")),
     ProviderSpec("ashby", "ats_job_id", ats_boards.AtsBoardError,
                  ats_boards.get_cached_result, _ats_search("ashby")),
-    # These three need their own API key (see .env); without one they raise
+    # These four need their own API key (see .env); without one they raise
     # their own error and the aggregate reports them as unconfigured.
     ProviderSpec("adzuna", "adzuna_job_id", adzuna.AdzunaError,
                  adzuna.get_cached_result, _search_adzuna, no_auth=False),
@@ -332,6 +337,8 @@ _SPECS: tuple[ProviderSpec, ...] = (
                  usajobs.get_cached_result, _search_usajobs, no_auth=False),
     ProviderSpec("serpapi", "serpapi_job_id", serpapi_jobs.SerpApiError,
                  serpapi_jobs.get_cached_result, _search_serpapi, no_auth=False),
+    ProviderSpec("web3career", "web3career_job_id", web3career.Web3CareerError,
+                 web3career.get_cached_result, _search_web3career, no_auth=False),
 )
 
 PROVIDERS: dict[str, ProviderSpec] = {spec.name: spec for spec in _SPECS}

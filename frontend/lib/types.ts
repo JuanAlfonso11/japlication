@@ -285,7 +285,8 @@ export type ExternalProvider =
   | "linkedin"
   | "greenhouse"
   | "lever"
-  | "ashby";
+  | "ashby"
+  | "web3career";
 
 export const PROVIDER_LABELS: Record<ExternalProvider, string> = {
   himalayas: "Himalayas",
@@ -306,6 +307,7 @@ export const PROVIDER_LABELS: Record<ExternalProvider, string> = {
   greenhouse: "Greenhouse (directo)",
   lever: "Lever (directo)",
   ashby: "Ashby (directo)",
+  web3career: "Web3.career",
 };
 
 export type ExperienceLevel = "internship" | "entry" | "mid" | "senior" | "lead";

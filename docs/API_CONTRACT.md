@@ -130,7 +130,7 @@ Search results are **not persisted** — pick one and call the import endpoint t
 `hackernews`, `getonbrd`, `workingnomads`, `remoteok`, `linkedin`.
 
 Three need their own key in `.env` and are skipped — reported in `sources`, never a hard failure —
-when it is missing: `adzuna`, `usajobs`, `serpapi`.
+when it is missing: `adzuna`, `usajobs`, `serpapi`, `web3career`.
 
 LinkedIn is reached through its public job pages, not a credentialed API. See
 `docs/PUBLIC_APIS_RESEARCH.md` for the research behind every source, including why Google Jobs and

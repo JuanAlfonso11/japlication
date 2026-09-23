@@ -41,6 +41,9 @@ export const EXTERNAL_PLATFORM_GROUPS: ExternalPlatformGroup[] = [
       { name: "Revelo", url: "https://www.revelo.com/", note: "Confirma nómina en 18 países LatAm incl. RD" },
       { name: "TECLA", url: "https://www.tecla.io/", note: "Aplica con perfil" },
       { name: "Near", url: "https://www.near.io/", note: "Aplica con perfil" },
+      { name: "Arc.dev", url: "https://arc.dev/", note: "Marketplace global, perfil de developer gratis" },
+      { name: "Lemon.io", url: "https://lemon.io/for-developers/", note: "Pool de talento; ~1-2% de aceptación" },
+      { name: "Talently", url: "https://talently.tech/", note: "LatAm, aplica con perfil" },
     ],
   },
   {
@@ -48,6 +51,21 @@ export const EXTERNAL_PLATFORM_GROUPS: ExternalPlatformGroup[] = [
     platforms: [
       { name: "Wellfound (ex-AngelList)", url: "https://wellfound.com/location/latin-america-8", note: "Filtro \"Latin America\" — revisa zona horaria por oferta" },
       { name: "Torre.ai", url: "https://torre.ai/", note: "Más red de networking que bolsa masiva" },
+      { name: "WeRemoto", url: "https://weremoto.com/", note: "Remoto para LatAm" },
+    ],
+  },
+  {
+    label: "Bolsas tech sin API pública",
+    platforms: [
+      { name: "Work at a Startup (YC)", url: "https://www.workatastartup.com/", note: "Startups de Y Combinator, salarios visibles" },
+      { name: "Levels.fyi Jobs", url: "https://www.levels.fyi/jobs", note: "Compensación estimada en cada oferta" },
+      { name: "Built In", url: "https://builtin.com/jobs/remote", note: "Enfocada en EE.UU." },
+      { name: "Dice", url: "https://www.dice.com/jobs", note: "Tech en EE.UU." },
+      { name: "Welcome to the Jungle", url: "https://www.welcometothejungle.com/en/jobs", note: "Fichas de empresa detalladas" },
+      { name: "Glassdoor", url: "https://www.glassdoor.com/Job/index.htm", note: "Útil para ver reseñas y salarios" },
+      { name: "Indeed", url: "https://www.indeed.com/", note: "De todo, mucho ruido" },
+      { name: "FlexJobs", url: "https://www.flexjobs.com/", note: "De pago, filtra estafas" },
+      { name: "Teamblind", url: "https://www.teamblind.com/jobs", note: "Comunidad anónima de empleados tech" },
     ],
   },
   {

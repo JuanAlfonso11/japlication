@@ -160,6 +160,10 @@ class Settings(BaseSettings):
     # https://serpapi.com/users/sign_up.
     SERPAPI_API_KEY: Optional[str] = None
 
+    # Web3.career (Web3/crypto jobs). Free token at
+    # https://web3.career/web3-jobs-api.
+    WEB3CAREER_TOKEN: Optional[str] = None
+
     # Where LinkedIn searches when Discover sends no location. LinkedIn needs
     # one, and for remote postings it decides which count as open to you.
     LINKEDIN_LOCATION: str = "Worldwide"
