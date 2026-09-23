@@ -9,7 +9,7 @@ export const THEME_STORAGE_KEY = "jobflow_theme";
 /** Inlined into <head> (see app/layout.tsx) and run before hydration so the
  * correct theme class is on <html> for the very first paint — otherwise a
  * dark-mode user would see a flash of the light theme while React mounts.
- * Its exact text is allowed by hash in the CSP (next.config.mjs). */
+ */
 export const THEME_NO_FLASH_SCRIPT = `
 (function () {
   try {
