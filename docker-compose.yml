@@ -12,7 +12,7 @@ services:
     # For a psql shell use:
     #     docker compose exec db psql -U jobflow -d jobflow
     ports:
-      - "127.0.0.1:5432:5432"
+      - "127.0.0.1:${DB_PORT:-5432}:5432"
     volumes:
       - jobflow_db_data:/var/lib/postgresql/data
       - ./db/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
@@ -86,7 +86,7 @@ services:
       # No rompe el acceso desde el movil: `tailscale serve` corre en el host y
       # proxea a http://localhost:3000 y :8000 (verificado con `serve status`),
       # asi que sigue alcanzando ambos.
-      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:${BACKEND_PORT:-8000}:8000"
 
   frontend:
     build:
@@ -97,7 +97,7 @@ services:
     depends_on:
       - backend
     ports:
-      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:${FRONTEND_PORT:-3000}:3000"
 
 volumes:
   jobflow_db_data:
