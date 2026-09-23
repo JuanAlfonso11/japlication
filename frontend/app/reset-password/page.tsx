@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { useAuth } from "@/context/AuthContext";
 import { inputClass } from "@/components/ui/Field";
 import Button, { buttonClass } from "@/components/ui/Button";
 import AuthLayout from "@/components/ui/AuthLayout";
@@ -14,6 +15,7 @@ const linkClass =
 
 function ResetPasswordContent() {
   const token = useSearchParams().get("token") ?? "";
+  const { token: session, logout } = useAuth();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -36,6 +38,9 @@ function ResetPasswordContent() {
     setSubmitting(true);
     try {
       const res = await authApi.resetPassword(token, password);
+      // The reset revoked every session server-side; drop the one stored in
+      // the app too, or /login would bounce straight back to Home.
+      if (session) logout();
       setDone(res.detail);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "No se pudo cambiar la contraseña. Intenta de nuevo.");

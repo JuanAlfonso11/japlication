@@ -19,19 +19,16 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- Lets Android offer JobPilot as a handler for links to its own
-                 Tailscale hostname — both the backend (:8000, where the
-                 verification email link itself points first) and the
-                 frontend (:3000, where it redirects to, and any other app
-                 link) — instead of always forcing them open in the browser.
-                 No android:autoVerify — that requires Google to fetch a
-                 publicly-reachable /.well-known/assetlinks.json over HTTPS
-                 to confirm domain ownership, which a Tailscale-only host can
-                 never satisfy. Without it, Android shows the normal "Open
-                 with…" chooser (or lets the user set JobPilot as the default
-                 for this host in its App info settings) rather than opening
-                 automatically and silently. -->
-            <intent-filter>
+            <!-- Verified Android App Links: tapping a link to JobPilot's own
+                 host (the password-reset and verification emails, any shared
+                 link) opens the app directly instead of the browser. The
+                 host is public since Tailscale Funnel, so Android can fetch
+                 https://<host>/.well-known/assetlinks.json (served from
+                 frontend/public) and match it against the APK's signing
+                 certificate. If verification fails (e.g. the APK is signed
+                 with a different key than the one listed there) Android
+                 simply falls back to the browser. -->
+            <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />

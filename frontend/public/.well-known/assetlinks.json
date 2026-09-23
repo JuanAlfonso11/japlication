@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "ai.jobflow.app",
+      "sha256_cert_fingerprints": [
+        "CD:3F:E6:DF:F6:2A:B5:A7:AF:3F:4F:1F:8B:7B:23:61:A5:42:DC:45:A1:67:DE:FA:11:33:EB:F3:E1:5A:5B:9E"
+      ]
+    }
+  }
+]
