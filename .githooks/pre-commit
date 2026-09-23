@@ -126,6 +126,22 @@ if git diff --cached --name-only | grep -q '^frontend/'; then
         echo "[pre-commit] WARNING: no docker and no npm — frontend tests NOT run."
     fi
 
+    # A dependency change must not bring in a known high/critical hole: Next 14
+    # sat here for months with a public RCE. Only when the manifests change —
+    # scripts/check-deps.ps1 covers advisories published later, weekly.
+    if git diff --cached --name-only | grep -qE '^frontend/package(-lock)?\.json$' && command -v docker >/dev/null 2>&1; then
+        echo "[pre-commit] Auditing frontend dependencies (npm audit)..."
+        if ! MSYS_NO_PATHCONV=1 docker run --rm \
+            -v "$(pwd -W 2>/dev/null || pwd)/frontend/package.json:/app/package.json:ro" \
+            -v "$(pwd -W 2>/dev/null || pwd)/frontend/package-lock.json:/app/package-lock.json:ro" \
+            -w /app node:22-slim npm audit --omit=dev --audit-level=high; then
+            echo "[pre-commit] Frontend dependencies have high/critical advisories — commit blocked."
+            echo "[pre-commit] Upgrade them, or bypass with: git commit --no-verify"
+            exit 1
+        fi
+        echo "[pre-commit] npm audit passed."
+    fi
+
     if command -v docker >/dev/null 2>&1; then
         echo "[pre-commit] Verifying frontend build (docker compose build frontend)..."
         if ! docker compose build frontend; then

@@ -4,7 +4,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 from uuid import UUID
 
-from jose import JWTError, jwt
+import jwt
+from jwt import PyJWTError
 from passlib.context import CryptContext
 
 from app.core.config import settings
@@ -64,7 +65,7 @@ def decode_access_token(token: str) -> Optional[str]:
     """
     try:
         payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
-    except JWTError:
+    except PyJWTError:
         return None
     if payload.get("purpose") is not None:
         return None
@@ -87,7 +88,7 @@ def decode_state_token(token: str, purpose: str) -> Optional[str]:
     if invalid/expired/wrong purpose."""
     try:
         payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
-    except JWTError:
+    except PyJWTError:
         return None
     if payload.get("purpose") != purpose:
         return None

@@ -5,6 +5,14 @@ $RepoDir = Split-Path -Parent $PSScriptRoot
 $Tailscale = "C:\Program Files\Tailscale\tailscale.exe"
 $DockerDesktop = "$env:ProgramFiles\Docker\Docker\Docker Desktop.exe"
 
+# Re-points :443 (real app <-> offline page) with whichever of `serve`
+# (tailnet only) or `funnel` (public) is active now. A plain `serve` on a
+# funneled port would quietly take the app off the internet.
+function Set-Https443([string]$target) {
+    $mode = if ((& $Tailscale funnel status 2>$null) -match "Funnel on") { "funnel" } else { "serve" }
+    & $Tailscale $mode --bg --https=443 $target *> $null
+}
+
 # -- Palette. Mirrors frontend/tailwind.config.ts exactly, so this window
 #    and the app read as the same product: brand-600 #6d28f5, brand-700
 #    #5b1fd6, and the ink neutrals (gray-50/900/500/200). The dot colours
@@ -84,7 +92,7 @@ function Start-JobPilot {
     # instead (see Stop-JobPilot). scripts\offline-page\serve-offline.ps1
     # (started at login, independent of Docker) keeps answering on :3001
     # either way; only where tailscale serve forwards to changes.
-    & $Tailscale serve --bg --https=443 http://localhost:3000 *> $null
+    Set-Https443 "http://localhost:3000"
 
     # A job-matching sweep runs every 2 hours while the app is on
     # (install-job-sweep-schedule.ps1) — also fire one right now, in the
@@ -112,7 +120,7 @@ function Stop-JobPilot {
     # BEFORE stopping the containers, so there's no gap where the real
     # app is down but the URL still points at it (which would just show a
     # connection error instead of the "JobPilot esta descansando" page).
-    & $Tailscale serve --bg --https=443 http://localhost:3001 *> $null
+    Set-Https443 "http://localhost:3001"
     docker compose stop *> $null
 
     Update-Status

@@ -119,11 +119,13 @@ Write-Host "[ship] Copied APK to $apkDest"
 
 Write-Host "[ship] Updating .env..."
 $envPath = Join-Path $repoDir ".env"
-$envContent = Get-Content $envPath -Raw
+# UTF-8 both ways: Windows PowerShell 5.1 defaults to ANSI and mangled
+# accented letters in the update notes. WriteAllText writes UTF-8 without a BOM.
+$envContent = Get-Content $envPath -Raw -Encoding UTF8
 $envContent = $envContent -replace 'ANDROID_LATEST_VERSION_CODE=.*', "ANDROID_LATEST_VERSION_CODE=$newCode"
 $envContent = $envContent -replace 'ANDROID_LATEST_VERSION_NAME=.*', "ANDROID_LATEST_VERSION_NAME=$VersionName"
 $envContent = $envContent -replace 'ANDROID_UPDATE_NOTES=.*', "ANDROID_UPDATE_NOTES=$Notes"
-Set-Content -Path $envPath -Value $envContent -NoNewline
+[IO.File]::WriteAllText($envPath, $envContent)
 
 Write-Host "[ship] Restarting backend so it picks up the new .env values..."
 # `docker compose` writes its progress lines ("Container cld-db-1 Running")

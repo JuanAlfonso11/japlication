@@ -8,18 +8,7 @@ import { inputClass } from "@/components/ui/Field";
 import Button from "@/components/ui/Button";
 import AuthLayout from "@/components/ui/AuthLayout";
 import { ApiError } from "@/lib/api";
-
-/** The same four rules the backend enforces in `UserRegister`
- * (`backend/app/schemas/user.py`). Kept as data so the form can show them
- * as a live checklist instead of only failing after a submit — the old
- * flow surfaced them as one red sentence *after* the user had already
- * picked a password, which is the worst possible moment to learn them. */
-const PASSWORD_RULES: { label: string; test: (v: string) => boolean }[] = [
-  { label: "8+ caracteres", test: (v) => v.length >= 8 },
-  { label: "Una mayúscula", test: (v) => /[A-Z]/.test(v) },
-  { label: "Un número", test: (v) => /\d/.test(v) },
-  { label: "Un carácter especial", test: (v) => /[^A-Za-z0-9]/.test(v) },
-];
+import { PASSWORD_RULES } from "@/lib/passwordRules";
 
 export default function RegisterPage() {
   const { register, token, isLoading } = useAuth();

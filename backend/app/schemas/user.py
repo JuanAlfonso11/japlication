@@ -21,10 +21,10 @@ _SPECIAL_RE = re.compile(r"[^A-Za-z0-9]")
 _BCRYPT_MAX_BYTES = 72
 
 
-class UserRegister(BaseModel):
-    email: EmailStr
+class _NewPassword(BaseModel):
+    """Password rules shared by signup and password reset."""
+
     password: str = Field(min_length=8, max_length=128)
-    full_name: str = Field(min_length=1, max_length=200)
 
     @field_validator("password")
     @classmethod
@@ -50,6 +50,11 @@ class UserRegister(BaseModel):
             raise ValueError(f"La contraseña debe incluir al menos {', '.join(missing)}.")
         return v
 
+
+class UserRegister(_NewPassword):
+    email: EmailStr
+    full_name: str = Field(min_length=1, max_length=200)
+
     @field_validator("email")
     @classmethod
     def _reject_disposable_email(cls, v: str) -> str:
@@ -58,6 +63,14 @@ class UserRegister(BaseModel):
                 "No se permiten correos temporales/desechables — usa un correo permanente."
             )
         return v
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(_NewPassword):
+    token: str = Field(min_length=1, max_length=2048)
 
 
 class UserLogin(BaseModel):

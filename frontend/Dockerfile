@@ -32,10 +32,14 @@ ENV NODE_ENV=production
 ENV PORT=3000
 
 COPY --from=builder /app/public ./public
-COPY --from=builder /app/.next ./.next
+# .next is owned by the unprivileged `node` user (shipped with the image)
+# because Next writes its cache there at runtime; everything else stays
+# root-owned and read-only to the server.
+COPY --from=builder --chown=node:node /app/.next ./.next
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/next.config.mjs ./next.config.mjs
 
+USER node
 EXPOSE 3000
 CMD ["npm", "run", "start"]

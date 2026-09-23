@@ -7,15 +7,54 @@ most frontend changes never require rebuilding the `.apk` — only changing the 
 adding a native plugin, or changing the icon does.
 
 Because of that, the app needs your JobFlow AI server to be reachable from your phone, wherever
-you are. **We use [Tailscale](https://tailscale.com/) for this — a private, encrypted VPN mesh
-between only your own devices — instead of opening any port on your home router.**
-Port-forwarding would expose the app directly to the public internet, and it isn't hardened for
-that (no rate limiting, no WAF, etc.). Tailscale traffic never touches the public internet at all,
-and unlike a self-hosted WireGuard road-warrior server, it needs **zero router configuration** —
-no port forwarding, no admin/master keys — which is why we switched to it after running into
-trouble getting router access for WireGuard.
+you are. **We use [Tailscale Funnel](https://tailscale.com/kb/1223/funnel) for this**: it publishes
+the PC's `*.ts.net` HTTPS name on the public internet, so the phone opens the app like any other
+app — no VPN on the phone, no router port-forwarding, no domain to buy, free.
 
-## Current configuration (already done)
+## Acceso público (Tailscale Funnel)
+
+Tailscale corre **solo en la PC**. El teléfono ya no lo necesita: la URL sigue siendo
+`jobpilot.tailb3d4c1.ts.net`, que ahora resuelve en internet público. Por eso la APK no cambió:
+`capacitor.config.ts`, el intent-filter del manifest y `MainActivity.ALLOWED_HOST` siguen valiendo.
+Con Tailscale encendido en el teléfono también funciona.
+
+```
+tailscale funnel --bg --https=443   http://localhost:3000   # frontend
+tailscale funnel --bg --https=8443  http://localhost:8000   # backend
+tailscale funnel --bg --https=10000 http://localhost:8446   # APK update server
+tailscale funnel status                                     # los tres deben decir "Funnel on"
+```
+
+Funnel solo permite los puertos 443, 8443 y 10000; por eso el servidor de la APK pasó del 8444 al
+10000 (`.env`: `ANDROID_UPDATE_APK_URL=https://jobpilot.tailb3d4c1.ts.net:10000/`). La primera vez,
+Funnel se habilita en la tailnet desde el enlace que imprime el comando (atributo `funnel` en la
+política de acceso).
+
+Qué protege la app ahora que es pública:
+- **Registro abierto**: cada persona que instala el APK se crea su cuenta (`ALLOW_EXTRA_REGISTRATIONS=0` lo cierra tras la primera).
+- **Todas las rutas de datos exigen login**. Las únicas abiertas: login/refresh/logout, verificar
+  correo, `/app/android-update` (solo la versión) y `/system/heartbeat` (pide secreto).
+- **Rate limit por IP real**: uvicorn con `--proxy-headers` (`backend/Dockerfile`). Los puertos de
+  Docker escuchan solo en `127.0.0.1`, así que nadie salta el proxy. Tailscale reescribe
+  `X-Forwarded-For`, así que una IP inventada por el cliente no se cuela (comprobado).
+- **Bloqueo por cuenta**: 10 logins fallidos en 15 min cierran ese correo 15 min, venga de la IP
+  que venga (`LoginLockout` en `backend/app/core/rate_limit.py`).
+- **Cabeceras de seguridad**: CSP con nonce por petición en el frontend (`frontend/middleware.ts`)
+  y CSP `default-src 'none'` en la API, más HSTS, `nosniff` y `frame-ancestors 'none'`. En el
+  WebView de Android los scripts caen a `'unsafe-inline'` porque Capacitor inyecta su puente
+  inline sin nonce.
+- **`/docs` y `/openapi.json` ocultos** salvo con `ENABLE_API_DOCS=1`.
+- **Contenedores sin root** y optimizador de imágenes de Next apagado.
+- **Dependencias vigiladas**: `scripts/check-deps.ps1` cada semana (instalar con
+  `scripts/install-deps-audit-schedule.ps1`) y `npm audit` en el pre-commit.
+- **Los scripts de encendido/apagado respetan el modo**: `start-jobpilot.bat` y
+  `jobpilot-control.ps1` usan `funnel` si ya está activo, para no sacar la app de internet
+  al re-apuntar el 443.
+- **Tu contraseña** sigue siendo la barrera principal: larga y única.
+
+Si la PC está apagada, la app muestra `offline.html` — eso no cambia con Funnel.
+
+## Configuración anterior (solo tailnet, antes de Funnel)
 
 - Tailscale installed on this PC and logged in. Its MagicDNS hostname: **`jobpilot.tailb3d4c1.ts.net`**.
 - **HTTPS Certificates** enabled for the tailnet (Tailscale admin console →
@@ -36,10 +75,9 @@ trouble getting router access for WireGuard.
   hands out `scripts\apk-server\jobpilot.apk` — the file `ship-android-update.ps1` writes and
   `UpdateChecker.tsx` downloads for the in-app update banner. Two things worth knowing about it:
 
-  - **It has no authentication.** Any device on your tailnet can `GET` the APK. That's acceptable
-    because the tailnet is only your own devices and the APK contains no secrets (the app is a
-    WebView shell; every credential lives behind the backend's login). It would *not* be acceptable
-    to expose that port with `tailscale funnel`, which puts it on the public internet — don't.
+  - **It has no authentication.** With Funnel, anyone can `GET` the APK. That's acceptable because
+    the APK contains no secrets (the app is a WebView shell; every credential lives behind the
+    backend's login).
   - **It runs outside Docker**, as a login-time scheduled task. If the update banner ever says a
     new version exists but the download fails, check that process first (`Get-Process powershell`,
     or just re-run `install-apk-server-autostart.ps1`); the containers being healthy says nothing

@@ -45,3 +45,6 @@ scripts/apk-server/*.apk
 # Editors
 .vscode/
 .idea/
+
+# Notas internas de desarrollo (no para usuarios)
+README.dev.md

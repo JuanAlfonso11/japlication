@@ -5,18 +5,19 @@
 # dispatched with asyncio.to_thread so only the calling request waits -
 # the same pattern services/match_engine.py already documents.
 import asyncio
+import hashlib
 import logging
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.core.config import settings
-from app.core.rate_limit import limiter
+from app.core.rate_limit import limiter, login_lockout
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -29,8 +30,11 @@ from app.core.security import (
 from app.db.session import get_db
 from app.models.refresh_token import RefreshToken
 from app.models.user import User
+from app.schemas.common import ErrorResponse
 from app.schemas.user import (
+    ForgotPasswordRequest,
     RefreshRequest,
+    ResetPasswordRequest,
     RefreshResponse,
     ResendVerificationResponse,
     TokenResponse,
@@ -98,21 +102,20 @@ async def register(request: Request, payload: UserRegister, db: AsyncSession = D
     #     registered would look like success and then silently never log you in;
     #   * the endpoint is rate-limited to 5/minute, so enumerating any real
     #     list of addresses is not practical here;
-    #   * the app is reachable only inside the owner's Tailscale network.
+    #   * with registration open (the default now), the per-IP rate limit is
+    #     the only thing standing in the way — accepted for now.
     #
-    # If JobPilot is ever exposed publicly, this is the first thing to change:
-    # return 201 either way and send "someone tried to register with your
-    # address" to the existing account instead. The login path does NOT make
+    # Upgrade path if that stops being enough: return 201 either way and send
+    # "someone tried to register with your address" to the existing account
+    # instead (needs the app to stop auto-logging in after signup). The login path does NOT make
     # the same trade — see the dummy hash there, which removes the timing
     # oracle for an endpoint that is not rate-limited per address.
-    # JobPilot es de un solo operador, pero el backend no lo sabia: quien
-    # alcanzara el puerto 8000 se creaba una cuenta y con ella gastaba el
-    # presupuesto de Anthropic (que se paga) y las cuotas de Adzuna y SerpApi,
-    # ademas de leer GET /system/errors, que a proposito no filtra por usuario
-    # porque asume que solo hay uno. Ese supuesto ahora se cumple de verdad.
+    # Registro abierto por defecto: cualquiera que instale el APK se crea su
+    # cuenta. Los topes globales de api_budget protegen la factura de
+    # Anthropic y las cuotas de Adzuna/SerpApi, y GET /system/errors solo le
+    # muestra el log completo a la primera cuenta (el operador).
     #
-    # ALLOW_EXTRA_REGISTRATIONS=1 en .env vuelve a abrirlo, para cuando haga
-    # falta dar de alta a alguien mas o recrear la cuenta desde cero.
+    # ALLOW_EXTRA_REGISTRATIONS=0 en .env lo cierra tras la primera cuenta.
     if not settings.ALLOW_EXTRA_REGISTRATIONS:
         already = await db.execute(select(func.count()).select_from(User))
         if (already.scalar_one() or 0) > 0:
@@ -143,7 +146,17 @@ async def register(request: Request, payload: UserRegister, db: AsyncSession = D
 @router.post("/login", response_model=TokenResponse)
 @limiter.limit("10/minute")
 async def login(request: Request, payload: UserLogin, db: AsyncSession = Depends(get_db)) -> TokenResponse:
-    result = await db.execute(select(User).where(User.email == payload.email.lower()))
+    address = payload.email.lower()
+    wait = login_lockout.retry_after(address)
+    if wait:
+        minutes = -(-wait // 60)
+        raise HTTPException(
+            status_code=429,
+            detail=f"Demasiados intentos fallidos con este correo. Espera {minutes} min y vuelve a intentarlo.",
+            headers={"Retry-After": str(wait)},
+        )
+
+    result = await db.execute(select(User).where(User.email == address))
     user = result.scalar_one_or_none()
     if user is None:
         # Hash the supplied password against a throwaway value anyway. Short-
@@ -152,11 +165,14 @@ async def login(request: Request, payload: UserLogin, db: AsyncSession = Depends
         # oracle that turns "is this email registered?" into a stopwatch
         # question. Costs one bcrypt round on a path that should be rare.
         await asyncio.to_thread(verify_password, payload.password, _DUMMY_PASSWORD_HASH)
+        login_lockout.record_failure(address)
         raise HTTPException(status_code=401, detail="Invalid email or password.")
     # bcrypt is deliberately slow (~100ms+); off the event loop it goes, or
     # every concurrent request waits behind this one.
     if not await asyncio.to_thread(verify_password, payload.password, user.hashed_password):
+        login_lockout.record_failure(address)
         raise HTTPException(status_code=401, detail="Invalid email or password.")
+    login_lockout.reset(address)
 
     access_token, refresh_token = await _issue_token_pair(user, db)
     return TokenResponse(access_token=access_token, refresh_token=refresh_token, user=UserSchema.model_validate(user))
@@ -274,3 +290,80 @@ async def verify_email(request: Request, token: str, db: AsyncSession = Depends(
         await db.commit()
 
     return RedirectResponse(f"{target}?status=success")
+
+
+_RESET_PURPOSE = "password_reset"
+_RESET_TOKEN_MINUTES = 30
+
+
+def _password_fingerprint(user: User) -> str:
+    # Baked into the reset token so it dies the moment the password changes:
+    # single-use without a table of spent tokens.
+    return hashlib.sha256(user.hashed_password.encode()).hexdigest()[:16]
+
+
+def _send_password_reset_email(user: User) -> None:
+    token = create_state_token(
+        f"{user.id}:{_password_fingerprint(user)}", purpose=_RESET_PURPOSE, expires_minutes=_RESET_TOKEN_MINUTES
+    )
+    reset_url = f"{settings.FRONTEND_ORIGIN.rstrip('/')}/reset-password?token={token}"
+    try:
+        email.send_password_reset_email(user.email, user.full_name, reset_url, _RESET_TOKEN_MINUTES)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Failed to send password reset email to %s: %s", user.email, exc)
+
+
+@router.post("/forgot-password", response_model=ErrorResponse)
+@limiter.limit("3/minute")
+async def forgot_password(
+    request: Request,
+    payload: ForgotPasswordRequest,
+    background: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+) -> ErrorResponse:
+    """Same answer whether or not the address has an account, and the email
+    goes out after the response, so neither the text nor the timing tells a
+    stranger who is registered."""
+    result = await db.execute(select(User).where(User.email == payload.email.lower()))
+    user = result.scalar_one_or_none()
+    if user is not None:
+        background.add_task(_send_password_reset_email, user)
+    return ErrorResponse(
+        detail="Si existe una cuenta con ese correo, te enviamos un enlace para crear una nueva contraseña."
+    )
+
+
+@router.post("/reset-password", response_model=ErrorResponse)
+@limiter.limit("10/minute")
+async def reset_password(
+    request: Request, payload: ResetPasswordRequest, db: AsyncSession = Depends(get_db)
+) -> ErrorResponse:
+    invalid = HTTPException(
+        status_code=400,
+        detail="El enlace no es válido o ya venció. Pide uno nuevo desde «¿Olvidaste tu contraseña?».",
+    )
+    subject = decode_state_token(payload.token, purpose=_RESET_PURPOSE)
+    user_id, _, fingerprint = (subject or "").partition(":")
+    try:
+        uid = UUID(user_id)
+    except ValueError:
+        raise invalid
+    user = (await db.execute(select(User).where(User.id == uid))).scalar_one_or_none()
+    if user is None or fingerprint != _password_fingerprint(user):
+        raise invalid
+
+    user.hashed_password = await asyncio.to_thread(hash_password, payload.password)
+    # Opening the link proves they own the inbox.
+    if not user.email_verified:
+        user.email_verified = True
+        user.email_verified_at = datetime.now(timezone.utc)
+    # Whoever knew the old password (maybe the reason for the reset) loses
+    # every session they had.
+    await db.execute(
+        update(RefreshToken)
+        .where(RefreshToken.user_id == user.id, RefreshToken.revoked_at.is_(None))
+        .values(revoked_at=datetime.now(timezone.utc))
+    )
+    await db.commit()
+    login_lockout.reset(user.email)
+    return ErrorResponse(detail="Listo. Ya puedes iniciar sesión con tu nueva contraseña.")

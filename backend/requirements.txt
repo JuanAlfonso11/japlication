@@ -1,26 +1,23 @@
-fastapi==0.115.6
+fastapi==0.141.1
 uvicorn[standard]==0.32.1
 sqlalchemy>=2.0.36
 asyncpg==0.30.0
 alembic==1.14.0
 pydantic>=2.9
 pydantic-settings==2.6.1
-# 3.3.0 carries two known advisories: CVE-2024-33663 (algorithm confusion
-# with an OpenSSH ECDSA public key) and CVE-2024-33664 (a compressed JWE
-# that expands to gigabytes — a decompression bomb). This app's usage
-# happens to sidestep both (HS256 with an explicit `algorithms=` allowlist,
-# and no JWE anywhere), but running a version with published CVEs against
-# tokens is not a position worth defending.
-python-jose[cryptography]==3.4.0
+# PyJWT, not python-jose: jose is barely maintained and pulls in `ecdsa`
+# (an advisory with no fix) and an old pyasn1. Same HS256 tokens, so
+# sessions issued by jose keep validating after the switch.
+PyJWT==2.14.0
 passlib[bcrypt]==1.7.4
 bcrypt==4.0.1
 httpx==0.27.2
 beautifulsoup4==4.12.3
-lxml==5.3.0
+lxml==6.1.3
 anthropic==0.40.0
-python-multipart==0.0.17
+python-multipart==0.0.32
 email-validator==2.2.0
-pypdf==5.1.0
+pypdf==6.19.0
 reportlab==4.2.5
 slowapi==0.1.9
 firebase-admin==6.6.0

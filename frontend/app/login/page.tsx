@@ -93,6 +93,14 @@ export default function LoginPage() {
               {showPassword ? <EyeOffIcon /> : <EyeIcon />}
             </button>
           </div>
+          <div className="mt-2 text-right">
+            <Link
+              href="/forgot-password"
+              className="inline-block py-1 text-sm font-semibold text-brand-600 transition-colors hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+            >
+              ¿Olvidaste tu contraseña?
+            </Link>
+          </div>
         </div>
 
         <Button type="submit" size="lg" fullWidth loading={submitting}>

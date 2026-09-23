@@ -74,7 +74,11 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
   // /verify-email included here too so the "check your email" gate right
   // after signup reads as a standalone step, not just another app page.
   const isAuthScreen =
-    pathname === "/login" || pathname === "/register" || pathname === "/verify-email";
+    pathname === "/login" ||
+    pathname === "/register" ||
+    pathname === "/verify-email" ||
+    pathname === "/forgot-password" ||
+    pathname === "/reset-password";
 
   if (isAuthScreen || !token) {
     return <div className="min-h-dvh bg-gray-50 dark:bg-gray-950">{children}</div>;

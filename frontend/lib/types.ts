@@ -394,6 +394,42 @@ export const JOB_TITLE_GROUPS: { label: string; options: string[] }[] = [
     ],
   },
   {
+    label: "Salud",
+    options: [
+      "Physician",
+      "Nurse",
+      "Pharmacist",
+      "Dentist",
+      "Physical Therapist",
+      "Psychologist",
+      "Medical Technologist",
+      "Veterinarian",
+      "Nutritionist",
+    ],
+  },
+  {
+    label: "Educación y ciencia",
+    options: ["Teacher", "Professor", "Tutor", "Research Scientist", "Laboratory Technician", "Biologist", "Chemist"],
+  },
+  {
+    label: "Negocios y derecho",
+    options: ["Lawyer", "Paralegal", "Accountant", "Financial Analyst", "Auditor", "Business Analyst", "Administrative Assistant"],
+  },
+  {
+    label: "Oficios, logística y servicios",
+    options: [
+      "Electrician",
+      "Technician",
+      "Construction Supervisor",
+      "Architect",
+      "Logistics Coordinator",
+      "Driver",
+      "Chef / Cook",
+      "Hotel / Hospitality",
+      "Retail",
+    ],
+  },
+  {
     label: "Producto y diseño",
     options: ["Product Manager", "Product Designer", "UX Designer", "UI Designer", "UX Researcher"],
   },

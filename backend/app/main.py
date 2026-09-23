@@ -20,7 +20,14 @@ from app.core.config import settings
 from app.core.error_middleware import ErrorLoggingMiddleware
 from app.core.rate_limit import limiter
 
-app = FastAPI(title=settings.PROJECT_NAME, version="1.0.0")
+_docs = settings.ENABLE_API_DOCS
+app = FastAPI(
+    title=settings.PROJECT_NAME,
+    version="1.0.0",
+    docs_url="/docs" if _docs else None,
+    redoc_url="/redoc" if _docs else None,
+    openapi_url="/openapi.json" if _docs else None,
+)
 app.state.limiter = limiter
 
 # Order matters: middleware wraps in reverse registration order, so CORS is
@@ -39,6 +46,28 @@ app.add_middleware(
     # So the frontend can read the correlation id off a response.
     expose_headers=["X-Request-Id"],
 )
+
+
+_SECURITY_HEADERS = {
+    # The API only ever answers JSON or a file download: nothing it returns
+    # should run script, load resources, or be framed.
+    "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
+    "Strict-Transport-Security": "max-age=31536000",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+}
+
+
+# Registered after CORS, so it wraps it and stamps error responses too.
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    if _docs and request.url.path in ("/docs", "/redoc"):
+        return response
+    for name, value in _SECURITY_HEADERS.items():
+        response.headers.setdefault(name, value)
+    return response
 
 
 @app.exception_handler(RateLimitExceeded)

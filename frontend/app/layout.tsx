@@ -1,8 +1,9 @@
 import type { Metadata, Viewport } from "next";
+import { headers } from "next/headers";
 import { Plus_Jakarta_Sans, Source_Sans_3 } from "next/font/google";
 import "./globals.css";
 import Providers from "./providers";
-import { THEME_NO_FLASH_SCRIPT } from "@/context/ThemeContext";
+import { THEME_NO_FLASH_SCRIPT } from "@/lib/themeScript";
 
 /* Two faces, each doing one job: Source Sans 3 for UI/body text (humanist,
  * built for small sizes and dense forms), Plus Jakarta Sans for headings and
@@ -57,11 +58,13 @@ export const viewport: Viewport = {
   ],
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // Set by middleware.ts; the CSP only lets inline scripts carrying it run.
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
   return (
     <html lang="es" className={`${sans.variable} ${jakarta.variable}`} suppressHydrationWarning>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: THEME_NO_FLASH_SCRIPT }} />
+        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: THEME_NO_FLASH_SCRIPT }} />
       </head>
       <body className="bg-gray-50 font-sans text-gray-900 antialiased dark:bg-gray-950 dark:text-gray-100">
         <Providers>{children}</Providers>

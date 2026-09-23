@@ -1,4 +1,4 @@
-"""Transactional email — currently just account-verification messages.
+"""Transactional email — account verification and password reset.
 
 Uses plain `smtplib` so it works with any SMTP provider (Gmail app
 password, Mailtrap for local dev, SendGrid/Postmark/SES SMTP relay, ...).
@@ -9,11 +9,10 @@ mirrors the app's established pattern for every other optional external
 service (Claude, SerpApi, ...): fully functional offline, better with
 credentials.
 
-The logo is embedded inline (Content-ID, not a linked <img src="https://...">)
-because the app is normally only reachable over Tailscale — an email client
-fetching a linked image would be doing so from its own servers (e.g. Gmail's
-image proxy), which can't reach a private VPN address at all. Embedding
-sidesteps that entirely.
+The logo (the app icon, frontend/public/icons/icon-192.png) is embedded
+inline (Content-ID, not a linked <img src="https://...">): it shows even
+when the PC serving the app is off, and clients that block remote images
+by default still render it.
 """
 
 from __future__ import annotations
@@ -31,7 +30,13 @@ logger = logging.getLogger("jobflow.email")
 _LOGO_PATH = Path(__file__).resolve().parent.parent / "data" / "logo_email.png"
 _LOGO_CID = "jobpilot-logo"
 
-BRAND_BLUE = "#2547e9"
+# Same palette as the app (frontend/tailwind.config.ts): graphite brand,
+# cool gray ink. Kept as hex literals because email clients ignore CSS vars.
+BRAND = "#1f1f23"  # brand-700: button and links
+INK = "#1b2030"  # gray-900: headings
+BODY = "#3f465c"  # gray-700: body text
+MUTED = "#6e7691"  # gray-500: fine print (4.9:1 on white)
+BACKDROP = "#eceef5"  # gray-100
 
 
 class EmailError(RuntimeError):
@@ -87,13 +92,13 @@ def _format_expiry(expires_minutes: int) -> str:
 
 
 def _email_shell(inner_html: str) -> str:
-    """Google-style shell: light gray backdrop, centered white card, logo
-    up top, muted footer with a signature — reused by every email so new
+    """Light gray backdrop, centered white card, logo up top, muted footer
+    with a signature, in the app's own palette — reused by every email so new
     message types stay visually consistent."""
     return f"""\
 <!doctype html>
 <html>
-  <body style="margin:0;padding:32px 16px;background:#f1f3f4;font-family:'Google Sans',Roboto,Helvetica,Arial,sans-serif;">
+  <body style="margin:0;padding:32px 16px;background:{BACKDROP};font-family:'Source Sans 3','Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;margin:0 auto;">
       <tr>
         <td style="text-align:center;padding-bottom:24px;">
@@ -103,12 +108,12 @@ def _email_shell(inner_html: str) -> str:
       </tr>
       <tr>
         <td style="background:#ffffff;border-radius:16px;padding:40px 32px;
-                   box-shadow:0 1px 3px rgba(60,64,67,.15);">
+                   box-shadow:0 1px 3px rgba(27,32,48,.08);">
           {inner_html}
         </td>
       </tr>
       <tr>
-        <td style="text-align:center;padding-top:24px;color:#5f6368;font-size:12px;line-height:18px;">
+        <td style="text-align:center;padding-top:24px;color:{MUTED};font-size:12px;line-height:18px;">
           — El equipo de JobPilot<br>
           Este es un mensaje automático, por favor no respondas a este correo.
         </td>
@@ -134,34 +139,91 @@ def send_verification_email(to_email: str, full_name: str, verification_url: str
     )
 
     inner_html = f"""\
-      <h1 style="margin:0 0 16px;font-size:22px;font-weight:500;color:#202124;text-align:center;">
+      <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;letter-spacing:-0.02em;color:{INK};text-align:center;">
         Confirma tu cuenta
       </h1>
-      <p style="margin:0 0 24px;font-size:14px;line-height:22px;color:#3c4043;text-align:center;">
+      <p style="margin:0 0 24px;font-size:14px;line-height:22px;color:{BODY};text-align:center;">
         Hola {first_name}, gracias por registrarte en <strong>JobPilot</strong>. Un solo clic y quedas listo
         para empezar a hacer swipe en tus próximas vacantes.
       </p>
       <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto 24px;">
         <tr>
-          <td style="border-radius:8px;background:{BRAND_BLUE};">
+          <td style="border-radius:12px;background:{BRAND};">
             <a href="{verification_url}"
                style="display:inline-block;padding:12px 32px;font-size:14px;font-weight:600;
-                      color:#ffffff;text-decoration:none;border-radius:8px;">
+                      color:#ffffff;text-decoration:none;border-radius:12px;">
               Verificar mi cuenta
             </a>
           </td>
         </tr>
       </table>
-      <p style="margin:0 0 8px;font-size:12px;line-height:18px;color:#80868b;text-align:center;">
+      <p style="margin:0 0 8px;font-size:12px;line-height:18px;color:{MUTED};text-align:center;">
         Este enlace vence en {expiry_text}. Si ya venció, puedes pedir uno nuevo desde la app.
       </p>
-      <p style="margin:24px 0 0;font-size:12px;line-height:18px;color:#80868b;text-align:center;
+      <p style="margin:24px 0 0;font-size:12px;line-height:18px;color:{MUTED};text-align:center;
                 word-break:break-all;">
         ¿El botón no funciona? Copia y pega este enlace en tu navegador:<br>
-        <a href="{verification_url}" style="color:{BRAND_BLUE};">{verification_url}</a>
+        <a href="{verification_url}" style="color:{BRAND};">{verification_url}</a>
       </p>
-      <p style="margin:24px 0 0;font-size:12px;line-height:18px;color:#80868b;text-align:center;">
+      <p style="margin:24px 0 0;font-size:12px;line-height:18px;color:{MUTED};text-align:center;">
         Si no creaste esta cuenta, puedes ignorar este mensaje con confianza.
+      </p>
+    """
+    html_body = _email_shell(inner_html)
+
+    _send(to_email, subject, text_body, html_body)
+
+
+def send_password_reset_email(to_email: str, full_name: str, reset_url: str, expires_minutes: int) -> None:
+    first_name = (full_name or "").split(" ")[0] or "there"
+    expiry_text = _format_expiry(expires_minutes)
+    subject = "Restablece tu contraseña de JobPilot"
+
+    text_body = (
+        f"Hola {first_name},\n\n"
+        f"Recibimos una solicitud para restablecer la contraseña de tu cuenta de JobPilot ({to_email}). "
+        "Te enviamos este correo porque alguien tocó «¿Olvidaste tu contraseña?» en la app con esta dirección.\n\n"
+        f"Crea tu nueva contraseña con este enlace (válido por {expiry_text}, un solo uso):"
+        f"\n\n{reset_url}\n\n"
+        "Si no fuiste tú, ignora este mensaje: tu contraseña actual sigue funcionando y nadie "
+        "puede cambiarla sin este enlace.\n\n"
+        "— El equipo de JobPilot"
+    )
+
+    inner_html = f"""\
+      <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;letter-spacing:-0.02em;color:{INK};text-align:center;">
+        Restablece tu contraseña
+      </h1>
+      <p style="margin:0 0 16px;font-size:14px;line-height:22px;color:{BODY};text-align:center;">
+        Hola {first_name}, recibimos una solicitud para restablecer la contraseña de tu cuenta de
+        <strong>JobPilot</strong> (<strong>{to_email}</strong>).
+      </p>
+      <p style="margin:0 0 24px;font-size:14px;line-height:22px;color:{BODY};text-align:center;">
+        Te enviamos este correo porque alguien tocó <em>¿Olvidaste tu contraseña?</em> en la app con
+        esta dirección. Pulsa el botón para crear una nueva.
+      </p>
+      <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto 24px;">
+        <tr>
+          <td style="border-radius:12px;background:{BRAND};">
+            <a href="{reset_url}"
+               style="display:inline-block;padding:12px 32px;font-size:14px;font-weight:600;
+                      color:#ffffff;text-decoration:none;border-radius:12px;">
+              Crear nueva contraseña
+            </a>
+          </td>
+        </tr>
+      </table>
+      <p style="margin:0 0 8px;font-size:12px;line-height:18px;color:{MUTED};text-align:center;">
+        Este enlace vence en {expiry_text} y solo sirve una vez.
+      </p>
+      <p style="margin:24px 0 0;font-size:12px;line-height:18px;color:{MUTED};text-align:center;
+                word-break:break-all;">
+        ¿El botón no funciona? Copia y pega este enlace en tu navegador:<br>
+        <a href="{reset_url}" style="color:{BRAND};">{reset_url}</a>
+      </p>
+      <p style="margin:24px 0 0;font-size:13px;line-height:20px;color:{BODY};text-align:center;">
+        <strong>¿No fuiste tú?</strong> Ignora este mensaje. Tu contraseña actual sigue funcionando
+        y nadie puede cambiarla sin este enlace.
       </p>
     """
     html_body = _email_shell(inner_html)
