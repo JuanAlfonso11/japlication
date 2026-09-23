@@ -2,7 +2,7 @@
 # start automatically at Windows login, same pattern as the offline
 # placeholder page's own autostart (install-offline-page-autostart.ps1).
 # This is what makes the in-app "there's an update" banner's download
-# link (https://jobpilot.tailb3d4c1.ts.net:8444) work without needing the
+# link (https://jobpilot.tailb3d4c1.ts.net:10000) work without needing the
 # phone plugged in by cable. Run once.
 
 $ErrorActionPreference = "Stop"
@@ -38,13 +38,13 @@ $shortcut.WindowStyle = 7  # minimized
 $shortcut.Description = "Serves JobPilot's latest Android APK on localhost:8446 for the in-app update banner"
 $shortcut.Save()
 
-# tailscale serve's mapping persists in tailscaled's own config across
+# tailscale funnel's mapping persists in tailscaled's own config across
 # reboots (unlike the HttpListener above, which is just a normal process)
 # -- set once here, never needs to run again after this.
 $Tailscale = "C:\Program Files\Tailscale\tailscale.exe"
-& $Tailscale serve --bg --https=8444 http://localhost:8446 *> $null
+& $Tailscale funnel --bg --https=10000 http://localhost:8446 *> $null
 
 Write-Host "Installed: the APK update server will now start automatically when you log in."
 Write-Host "Shortcut: $shortcutPath"
-Write-Host "Serving at: https://jobpilot.tailb3d4c1.ts.net:8444/"
-Write-Host "To undo: delete that shortcut, and run 'tailscale serve --https=8444 off'."
+Write-Host "Serving at: https://jobpilot.tailb3d4c1.ts.net:10000/"
+Write-Host "To undo: delete that shortcut, and run 'tailscale funnel --https=10000 off'."

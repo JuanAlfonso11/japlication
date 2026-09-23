@@ -1,6 +1,6 @@
 # Always-on static server for the latest built Android APK, on
-# http://localhost:8446 -- `tailscale serve` maps
-# https://jobpilot.tailb3d4c1.ts.net:8444 to this port (set up once, see
+# http://localhost:8446 -- `tailscale funnel` maps
+# https://jobpilot.tailb3d4c1.ts.net:10000 to this port (public; set up once, see
 # docs/ANDROID_APP.md), which is what the in-app update banner
 # (GET /app/android-update -> ANDROID_UPDATE_APK_URL) links to. Runs
 # independently of Docker/JobPilot itself, same as offline-page's server,
