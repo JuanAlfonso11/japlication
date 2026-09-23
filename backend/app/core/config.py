@@ -117,6 +117,11 @@ class Settings(BaseSettings):
     #: mientras des de alta a alguien mas, y quitalo despues.
     ALLOW_EXTRA_REGISTRATIONS: bool = False
 
+    # /docs, /redoc and /openapi.json. Off by default: the app is public and
+    # the full API map helps nobody but an attacker. ENABLE_API_DOCS=1 in
+    # .env brings them back while developing.
+    ENABLE_API_DOCS: bool = False
+
     # CORS. FRONTEND_ORIGIN is also used to build the email-verification link,
     # so it stays the single "canonical" origin. CORS_EXTRA_ORIGINS is a
     # comma-separated list of additional origins allowed to call the API —

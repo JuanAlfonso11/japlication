@@ -20,7 +20,14 @@ from app.core.config import settings
 from app.core.error_middleware import ErrorLoggingMiddleware
 from app.core.rate_limit import limiter
 
-app = FastAPI(title=settings.PROJECT_NAME, version="1.0.0")
+_docs = settings.ENABLE_API_DOCS
+app = FastAPI(
+    title=settings.PROJECT_NAME,
+    version="1.0.0",
+    docs_url="/docs" if _docs else None,
+    redoc_url="/redoc" if _docs else None,
+    openapi_url="/openapi.json" if _docs else None,
+)
 app.state.limiter = limiter
 
 # Order matters: middleware wraps in reverse registration order, so CORS is
@@ -56,6 +63,8 @@ _SECURITY_HEADERS = {
 @app.middleware("http")
 async def security_headers(request: Request, call_next):
     response = await call_next(request)
+    if _docs and request.url.path in ("/docs", "/redoc"):
+        return response
     for name, value in _SECURITY_HEADERS.items():
         response.headers.setdefault(name, value)
     return response
