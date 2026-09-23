@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans, Source_Sans_3 } from "next/font/google";
 import "./globals.css";
 import Providers from "./providers";
-import { THEME_NO_FLASH_SCRIPT } from "@/context/ThemeContext";
+import { THEME_NO_FLASH_SCRIPT } from "@/lib/themeScript";
 
 /* Two faces, each doing one job: Source Sans 3 for UI/body text (humanist,
  * built for small sizes and dense forms), Plus Jakarta Sans for headings and

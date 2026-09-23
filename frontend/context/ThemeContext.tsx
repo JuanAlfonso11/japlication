@@ -1,5 +1,6 @@
 "use client";
 
+import { THEME_STORAGE_KEY } from "@/lib/themeScript";
 import {
   createContext,
   useCallback,
@@ -13,7 +14,7 @@ import {
 export type ThemePreference = "light" | "dark" | "system";
 type ResolvedTheme = "light" | "dark";
 
-const STORAGE_KEY = "jobflow_theme";
+const STORAGE_KEY = THEME_STORAGE_KEY;
 
 interface ThemeContextValue {
   theme: ThemePreference;
@@ -101,17 +102,3 @@ export function useTheme(): ThemeContextValue {
   return ctx;
 }
 
-/** Inlined into <head> (see app/layout.tsx) and run before hydration so the
- * correct theme class is on <html> for the very first paint — otherwise a
- * dark-mode user would see a flash of the light theme while React mounts. */
-export const THEME_NO_FLASH_SCRIPT = `
-(function () {
-  try {
-    var stored = window.localStorage.getItem("${STORAGE_KEY}");
-    var isDark = stored === "dark" || (stored !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
-    var root = document.documentElement;
-    if (isDark) root.classList.add("dark");
-    root.style.colorScheme = isDark ? "dark" : "light";
-  } catch (e) {}
-})();
-`;
