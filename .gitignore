@@ -48,3 +48,7 @@ scripts/apk-server/*.apk
 
 # Notas internas de desarrollo (no para usuarios)
 README.dev.md
+
+# Notas locales de agentes
+.delegate/
+.planning/

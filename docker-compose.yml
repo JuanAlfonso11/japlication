@@ -6,12 +6,13 @@ services:
       POSTGRES_USER: jobflow
       POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?falta POSTGRES_PASSWORD en .env - generala con python -c 'import secrets; print(secrets.token_urlsafe(32))'}"
       POSTGRES_DB: jobflow
-    # No `ports:` on purpose. Postgres is only ever reached from the backend
-    # container, over the compose network — publishing 5432 on the host put
-    # the database on every interface the host has, which with Tailscale
-    # means every node on the tailnet could connect with the credentials
-    # that are written in plain text right above. For a psql shell use:
+    # Bound to 127.0.0.1 only so VS Code / DB clients on this PC can connect.
+    # Never drop the 127.0.0.1 prefix: a bare "5432:5432" listens on every
+    # interface, and with Tailscale every node on the tailnet could connect.
+    # For a psql shell use:
     #     docker compose exec db psql -U jobflow -d jobflow
+    ports:
+      - "127.0.0.1:5432:5432"
     volumes:
       - jobflow_db_data:/var/lib/postgresql/data
       - ./db/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
