@@ -49,7 +49,12 @@ REM Make sure tailscale serve is pointed at the real frontend, not the
 REM offline placeholder page (jobpilot-control.ps1's Apagar button points
 REM it at the placeholder instead - if the PC was shut down/rebooted while
 REM off, that setting would otherwise still be in effect here).
-"%ProgramFiles%\Tailscale\tailscale.exe" serve --bg --https=443 http://localhost:3000 >nul 2>&1
+REM Same mode (serve = tailnet only, funnel = public) as is active now: a
+REM plain `serve` on a funneled port would quietly take the app off the
+REM internet.
+set "TSMODE=serve"
+"%ProgramFiles%\Tailscale\tailscale.exe" funnel status 2>nul | findstr /C:"Funnel on" >nul && set "TSMODE=funnel"
+"%ProgramFiles%\Tailscale\tailscale.exe" %TSMODE% --bg --https=443 http://localhost:3000 >nul 2>&1
 
 REM Catch up on job matches right away instead of waiting for the next
 REM scheduled 2-hour sweep (install-job-sweep-schedule.ps1) - covers
