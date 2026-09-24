@@ -116,7 +116,7 @@ async def suggest_reusable_resume(
     near-duplicate version — several jobs often ask for the same stack."""
     job = (await db.execute(select(Job).where(Job.id == job_id))).scalar_one_or_none()
     if job is None:
-        raise HTTPException(status_code=404, detail="Job not found.")
+        raise HTTPException(status_code=404, detail="No encontramos esa vacante.")
 
     code = normalize_language(language) if language else detect_language(job.description)
     resume_version, similarity, source_job = await _find_reusable_resume(
@@ -141,13 +141,13 @@ async def generate_resume(
 ) -> ResumeVersionSchema:
     job = (await db.execute(select(Job).where(Job.id == job_id))).scalar_one_or_none()
     if job is None:
-        raise HTTPException(status_code=404, detail="Job not found.")
+        raise HTTPException(status_code=404, detail="No encontramos esa vacante.")
 
     profile = (
         await db.execute(select(CareerProfile).where(CareerProfile.user_id == current_user.id))
     ).scalar_one_or_none()
     if profile is None:
-        raise HTTPException(status_code=400, detail="Create your career profile before generating a resume.")
+        raise HTTPException(status_code=400, detail="Primero sube tu CV en Perfil y guárdalo: de ahí sale el CV para esta vacante.")
 
     # No explicit choice means "write it in the language the ad is in" --
     # the default a person would pick, and the one that keeps the CV
@@ -206,7 +206,7 @@ async def get_resume_version(
         )
     ).scalar_one_or_none()
     if row is None:
-        raise HTTPException(status_code=404, detail="Resume version not found.")
+        raise HTTPException(status_code=404, detail="No encontramos ese CV.")
     return ResumeVersionSchema.model_validate(row)
 
 
@@ -234,7 +234,7 @@ async def update_resume_version(
         )
     ).scalar_one_or_none()
     if row is None:
-        raise HTTPException(status_code=404, detail="Resume version not found.")
+        raise HTTPException(status_code=404, detail="No encontramos ese CV.")
 
     if payload.title is not None:
         row.title = payload.title
@@ -293,7 +293,7 @@ async def export_resume_version(
         )
     ).scalar_one_or_none()
     if row is None:
-        raise HTTPException(status_code=404, detail="Resume version not found.")
+        raise HTTPException(status_code=404, detail="No encontramos ese CV.")
 
     text = _render_ats_text(row)
     filename = f"resume-{row.language}-{row.id}.txt"
@@ -330,7 +330,7 @@ async def export_resume_version_latex(
         )
     ).scalar_one_or_none()
     if row is None:
-        raise HTTPException(status_code=404, detail="Resume version not found.")
+        raise HTTPException(status_code=404, detail="No encontramos ese CV.")
 
     profile = (
         await db.execute(select(CareerProfile).where(CareerProfile.id == row.career_profile_id))
@@ -374,7 +374,7 @@ async def export_resume_version_pdf(
         )
     ).scalar_one_or_none()
     if row is None:
-        raise HTTPException(status_code=404, detail="Resume version not found.")
+        raise HTTPException(status_code=404, detail="No encontramos ese CV.")
 
     profile = (
         await db.execute(select(CareerProfile).where(CareerProfile.id == row.career_profile_id))
@@ -424,7 +424,7 @@ async def check_resume_ats(
         )
     ).scalar_one_or_none()
     if row is None:
-        raise HTTPException(status_code=404, detail="Resume version not found.")
+        raise HTTPException(status_code=404, detail="No encontramos ese CV.")
 
     profile = (
         await db.execute(select(CareerProfile).where(CareerProfile.id == row.career_profile_id))

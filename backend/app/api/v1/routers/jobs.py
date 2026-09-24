@@ -42,10 +42,11 @@ from app.services.apply_target import detect_ats
 from app.services.job_dedupe import dedupe_external_results
 from app.services.job_importer import (
     JobImportError,
+    strip_markup,
     _extract_remote_type,
     import_job_from_url,
 )
-from app.services.match_engine import compute_and_persist_match
+from app.services.match_engine import compute_and_persist_match, persist_matches_batch
 from app.services.external_jobs import (
     PROVIDER_NAMES,
     PROVIDER_NAMES_PATTERN,
@@ -176,7 +177,7 @@ async def import_job(
         if existing_job is not None:
             await _ensure_match(existing_job, current_user.id, db)
             return await _attach_match(existing_job, current_user.id, db)
-        raise HTTPException(status_code=422, detail="could not parse job posting")
+        raise HTTPException(status_code=422, detail="No pudimos leer esa vacante. Prueba con «Pegar manualmente».")
     await db.refresh(job)
     await _ensure_match(job, current_user.id, db)
     return await _attach_match(job, current_user.id, db)
@@ -191,7 +192,7 @@ async def create_job(
     if payload.source_url:
         existing = await db.execute(select(Job).where(Job.source_url == payload.source_url))
         if existing.scalar_one_or_none() is not None:
-            raise HTTPException(status_code=409, detail="A job with this source_url already exists.")
+            raise HTTPException(status_code=409, detail="Esa vacante ya estaba agregada.")
 
     job = Job(
         imported_by=current_user.id,
@@ -555,7 +556,7 @@ async def _get_or_create_external_job(
         remote_type=cached.get("remote_type"),
         employment_type=cached.get("employment_type"),
         seniority=cached.get("seniority"),
-        description=cached["description"],
+        description=strip_markup(cached["description"]),
         requirements=cached.get("requirements") or [],
         responsibilities=cached.get("responsibilities") or [],
         skills_required=cached.get("skills_required") or [],
@@ -602,7 +603,7 @@ async def import_external_job(
     that connector's in-memory copy, then from external_job_cache, which is
     the one that survives a restart."""
     if payload.source not in _SEARCH_PROVIDERS:
-        raise HTTPException(status_code=422, detail=f"Unknown source '{payload.source}'.")
+        raise HTTPException(status_code=422, detail=f"Fuente desconocida: '{payload.source}'.")
 
     # Was a 15-entry dict repeated here. Forgetting to add a new provider to
     # it left search working while "Add to queue" raised KeyError -> 500.
@@ -626,7 +627,7 @@ async def import_external_job(
     if cached is None:
         raise HTTPException(
             status_code=404,
-            detail="This search result has expired — run the search again and import it right away.",
+            detail="Este resultado ya venció: busca otra vez y agrégalo enseguida.",
         )
 
     try:
@@ -635,12 +636,12 @@ async def import_external_job(
         # Only a real uniqueness conflict means "already imported". This used
         # to be a bare `except Exception`, so a dropped database connection, a
         # value too long for its column or an invalid enum all reported
-        # "This job was already imported." — sending you to look for a row
+        # "Esta vacante ya estaba agregada." — sending you to look for a row
         # that was never written. Everything else now surfaces as a 500 and
         # gets recorded by error_middleware, which is where it can be found.
         await db.rollback()
         logger.info("import conflict for %s/%s: %s", payload.source, payload.external_id, exc.orig)
-        raise HTTPException(status_code=409, detail="This job was already imported.") from exc
+        raise HTTPException(status_code=409, detail="Esta vacante ya estaba agregada.") from exc
     await _ensure_match(job, current_user.id, db)
     return await _attach_match(job, current_user.id, db)
 
@@ -779,7 +780,7 @@ async def run_auto_import_for_user(user: User, db: AsyncSession) -> AutoImportRe
     # schedule with no request in sight, and a user without a profile is a
     # normal thing to skip there, not a 400 nobody is listening for.
     if profile is None:
-        raise SweepNotReady("Save your career profile before auto-searching for matches.")
+        raise SweepNotReady("Primero sube tu CV en Perfil y guárdalo: con él buscamos vacantes para ti.")
 
     terms = _profile_search_terms(profile)
     q = terms[0] if terms else None
@@ -850,7 +851,7 @@ async def run_auto_import_for_user(user: User, db: AsyncSession) -> AutoImportRe
     # copies that happen to share a URL.
     all_results = dedupe_external_results(all_results)
 
-    imported = 0
+    new_jobs: list[Job] = []
     skipped = 0
     # Walk the FULL sorted list (not a pre-sliced all_results[:import_limit])
     # and stop once import_limit NEW jobs are actually in — slicing first
@@ -860,7 +861,7 @@ async def run_auto_import_for_user(user: User, db: AsyncSession) -> AutoImportRe
     # re-examined duplicates and imported far fewer than import_limit even
     # though plenty of never-seen postings existed further down the list.
     for result in all_results:
-        if imported >= import_limit:
+        if len(new_jobs) >= import_limit:
             break
         try:
             job, created = await _get_or_create_external_job(
@@ -882,13 +883,12 @@ async def run_auto_import_for_user(user: User, db: AsyncSession) -> AutoImportRe
             continue
         if not created:
             continue
-        # use_llm=False: this loop can run once per newly-discovered job in
-        # a single sweep — keep it on the free, offline semantic scorer
-        # rather than firing one Anthropic call per job serially. On-demand
-        # single-job matches (_ensure_match above, GET /jobs/{id}/match)
-        # keep the higher-quality LLM default.
-        await compute_and_persist_match(profile, job, user.id, db, use_llm=False)
-        imported += 1
+        new_jobs.append(job)
+
+    # Scored together after the loop: one AI call for the whole batch
+    # instead of the offline scorer (see match_engine.batch_semantic_scores).
+    await persist_matches_batch(profile, new_jobs, user.id, db)
+    imported = len(new_jobs)
 
     if imported > 0 and push_notifications.is_configured():
         from firebase_admin import messaging
@@ -953,7 +953,7 @@ async def get_job(
     result = await db.execute(select(Job).where(Job.id == job_id))
     job = result.scalar_one_or_none()
     if job is None:
-        raise HTTPException(status_code=404, detail="Job not found.")
+        raise HTTPException(status_code=404, detail="No encontramos esa vacante.")
     return await _attach_match(job, current_user.id, db)
 
 
@@ -980,6 +980,6 @@ async def delete_job(
     if job is None:
         # Deliberately the same 404 whether the row is missing or belongs to
         # someone else — a distinct 403 would confirm the id exists.
-        raise HTTPException(status_code=404, detail="Job not found.")
+        raise HTTPException(status_code=404, detail="No encontramos esa vacante.")
     await db.delete(job)
     await db.commit()

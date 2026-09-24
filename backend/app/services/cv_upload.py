@@ -27,7 +27,14 @@ from fastapi import HTTPException
 from pypdf import PdfReader
 from pypdf.errors import PdfReadError
 
-from app.services.anthropic_client import ai_budget_exhausted, get_anthropic_client, log_ai_failure
+from app.services.anthropic_client import (
+    AI_MAX_TOKENS,
+    ai_budget_exhausted,
+    LOW_EFFORT,
+    get_anthropic_client,
+    log_ai_failure,
+    response_text,
+)
 from app.services.skills_taxonomy import extract_skills_from_text
 from app.core.config import settings
 
@@ -48,13 +55,13 @@ def extract_text_from_pdf(file_bytes: bytes) -> str:
         reader = PdfReader(io.BytesIO(file_bytes))
         pages = [page.extract_text() or "" for page in reader.pages]
     except (PdfReadError, ValueError) as exc:
-        raise HTTPException(status_code=422, detail="Could not read this file as a PDF.") from exc
+        raise HTTPException(status_code=422, detail="No pudimos leer ese archivo como PDF.") from exc
 
     text = "\n".join(pages).strip()
     if not text:
         raise HTTPException(
             status_code=422,
-            detail="This PDF has no extractable text (it may be a scanned image) — try a text-based PDF.",
+            detail="Este PDF no tiene texto (parece una imagen escaneada). Sube un PDF exportado desde Word o Google Docs.",
         )
     return text
 
@@ -97,10 +104,10 @@ def _heuristic_parse(text: str) -> dict[str, Any]:
         # sent the user (and the operator) looking for a missing key.
         reason = "Llegaste al límite diario de funciones con IA (se renueva mañana), así que"
     else:
-        reason = "Sin IA disponible,"
+        reason = "No pudimos leer tu CV completo automáticamente, así que"
     warnings = [
-        f"{reason} solo pudimos extraer habilidades y datos de contacto "
-        "automáticamente. Agrega tu experiencia y educación a mano abajo: no inventamos esa parte "
+        f"{reason} solo extrajimos habilidades y "
+        "datos de contacto. Agrega tu experiencia y educación a mano abajo: no inventamos esa parte "
         "para no arriesgar datos incorrectos."
     ]
     if not skills:
@@ -176,18 +183,12 @@ def _try_ai_parse(text: str) -> Optional[dict[str, Any]]:
     try:
         response = client.messages.create(
             model=settings.ANTHROPIC_MODEL,
-            # A CV with ten roles and their bullets does not fit in 4000
-            # output tokens. The reply was cut mid-JSON, failed to parse, and
-            # exactly the users with the most experience got the offline
-            # parse that leaves experience empty.
-            max_tokens=16000,
+            max_tokens=AI_MAX_TOKENS,
+            extra_body=LOW_EFFORT,
             system=SYSTEM_PROMPT,
             messages=[{"role": "user", "content": f"RESUME TEXT:\n{text[:20000]}"}],
         )
-        if getattr(response, "stop_reason", None) == "max_tokens":
-            raise ValueError("the model's reply was cut off at max_tokens")
-        raw = "".join(block.text for block in response.content if getattr(block, "type", None) == "text").strip()
-        profile = _extract_json_object(raw)
+        profile = _extract_json_object(response_text(response).strip())
     except Exception as exc:
         log_ai_failure("cv_upload", exc)
         return None

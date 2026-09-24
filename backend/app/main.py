@@ -74,7 +74,7 @@ async def security_headers(request: Request, call_next):
 async def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
     return JSONResponse(
         status_code=429,
-        content={"detail": "Too many attempts — please wait a moment and try again."},
+        content={"detail": "Demasiados intentos seguidos. Espera unos minutos y vuelve a intentarlo."},
     )
 
 

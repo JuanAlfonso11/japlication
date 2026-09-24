@@ -92,7 +92,7 @@ async def test_404_y_errores_de_red(monkeypatch):
         raise JobPostingGone(404)
 
     async def caida(url):
-        raise JobImportError("could not parse job posting")
+        raise JobImportError("No pudimos leer esa vacante. Prueba con «Pegar manualmente».")
 
     monkeypatch.setattr(liveness, "fetch_html_with_url", gone)
     assert (await liveness.check_liveness("https://empresa.example/jobs/1")).status == "closed"

@@ -119,6 +119,8 @@ interface RequestOptions {
   body?: unknown;
   auth?: boolean;
   query?: Record<string, string | number | boolean | undefined | null>;
+  /** For the calls that wait on an AI model or a 15-source fan-out. */
+  timeoutMs?: number;
 }
 
 function buildQueryString(
@@ -146,12 +148,13 @@ async function rawFetch(
   method: string,
   body: unknown,
   query: RequestOptions["query"],
-  token: string | null
+  token: string | null,
+  timeoutMs: number = REQUEST_TIMEOUT_MS
 ): Promise<Response> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (token) headers["Authorization"] = `Bearer ${token}`;
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     return await fetch(`${API_BASE_URL}${path}${buildQueryString(query)}`, {
       method,
@@ -162,11 +165,11 @@ async function rawFetch(
     });
   } catch (err) {
     if (err instanceof DOMException && err.name === "AbortError") {
-      throw new ApiError(0, "The server took too long to respond. Please try again.");
+      throw new ApiError(0, "El servidor tardó demasiado en responder. Intenta de nuevo.");
     }
     throw new ApiError(
       0,
-      "Could not reach the JobPilot server. Check your connection and try again."
+      "No pudimos conectar con JobPilot. Revisa tu conexión e intenta de nuevo."
     );
   } finally {
     clearTimeout(timeout);
@@ -212,21 +215,27 @@ async function parseResponse<T>(res: Response): Promise<T> {
 
   if (!res.ok) {
     const shape = (data ?? {}) as Partial<ApiErrorShape>;
-    throw new ApiError(
-      res.status,
-      shape.detail || `Request failed with status ${res.status}`,
-      shape.code
-    );
+    // FastAPI's own validation errors (422) send `detail` as a list of
+    // objects, which rendered as "[object Object]"; a 5xx has no detail.
+    const message =
+      typeof shape.detail === "string" && shape.detail
+        ? shape.detail
+        : res.status === 422
+        ? "Revisa los datos: alguno no es válido."
+        : res.status >= 500
+        ? "Algo falló en el servidor. Intenta de nuevo en un momento."
+        : `La solicitud falló (${res.status}).`;
+    throw new ApiError(res.status, message, shape.code);
   }
 
   return data as T;
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { method = "GET", body, auth = true, query } = options;
+  const { method = "GET", body, auth = true, query, timeoutMs } = options;
 
   const token = auth ? getToken() : null;
-  let res = await rawFetch(path, method, body, query, token);
+  let res = await rawFetch(path, method, body, query, token, timeoutMs);
 
   if (res.status === 401 && auth && token) {
     // The access token is short-lived by design — a 401 on an
@@ -235,7 +244,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     // request once before giving up.
     const newToken = await refreshAccessToken();
     if (newToken) {
-      res = await rawFetch(path, method, body, query, newToken);
+      res = await rawFetch(path, method, body, query, newToken, timeoutMs);
     } else {
       // Refresh also failed (refresh token missing/expired/revoked) — the
       // session really is over. Clear storage and let AuthContext know.
@@ -265,7 +274,12 @@ function safeJsonParse(text: string): unknown {
 // Longer than REQUEST_TIMEOUT_MS — this path includes Claude-based PDF
 // parsing (profile/import-cv), which legitimately takes longer than a
 // normal JSON request.
-const UPLOAD_TIMEOUT_MS = 60000;
+const UPLOAD_TIMEOUT_MS = 120000;
+
+/** Calls that wait on the AI model or on the 15+ source fan-out. The
+ * measured auto-import took 23s and interview prep 15s, against a 20s
+ * default that turned a successful search into "the server took too long". */
+const SLOW_TIMEOUT_MS = 90000;
 
 async function doUpload(path: string, fieldName: string, file: File, token: string | null): Promise<Response> {
   const headers: Record<string, string> = {};
@@ -286,9 +300,9 @@ async function doUpload(path: string, fieldName: string, file: File, token: stri
     });
   } catch (err) {
     if (err instanceof DOMException && err.name === "AbortError") {
-      throw new ApiError(0, "The server took too long to respond. Please try again.");
+      throw new ApiError(0, "El servidor tardó demasiado en responder. Intenta de nuevo.");
     }
-    throw new ApiError(0, "Could not reach the JobPilot server. Check your connection and try again.");
+    throw new ApiError(0, "No pudimos conectar con JobPilot. Revisa tu conexión e intenta de nuevo.");
   } finally {
     clearTimeout(timeout);
   }
@@ -423,7 +437,7 @@ async function fetchText(path: string): Promise<string> {
     res = await rawFetch(path, "GET", undefined, undefined, newToken);
   }
 
-  if (!res.ok) throw new ApiError(res.status, `Request failed with status ${res.status}`);
+  if (!res.ok) throw new ApiError(res.status, `La descarga falló (${res.status}).`);
   return res.text();
 }
 
@@ -446,7 +460,7 @@ async function downloadFile(path: string, filename: string): Promise<DownloadOut
   }
 
   if (!res.ok) {
-    throw new ApiError(res.status, `Request failed with status ${res.status}`);
+    throw new ApiError(res.status, `La descarga falló (${res.status}).`);
   }
 
   const blob = await res.blob();
@@ -511,10 +525,10 @@ export const profileApi = {
   masterLatexSource: (language: ProfileLanguage) =>
     fetchText(`/profile/export/tex?language=${language}`),
   save: (payload: CareerProfile) =>
-    request<CareerProfile>("/profile", { method: "PUT", body: payload }),
+    request<CareerProfile>("/profile", { method: "PUT", body: payload, timeoutMs: SLOW_TIMEOUT_MS }),
   evaluation: () => request<CVEvaluation>("/profile/evaluation"),
   importCv: (file: File) => uploadFile<CVUploadResult>("/profile/import-cv", "file", file),
-  improve: () => request<ProfileImprovementResult>("/profile/improve", { method: "POST" }),
+  improve: () => request<ProfileImprovementResult>("/profile/improve", { method: "POST", timeoutMs: SLOW_TIMEOUT_MS }),
   languages: () => request<LanguageStatus[]>("/profile/languages"),
 };
 
@@ -522,7 +536,7 @@ export const profileApi = {
 
 export const jobsApi = {
   import: (payload: JobImportPayload) =>
-    request<Job>("/jobs/import", { method: "POST", body: payload }),
+    request<Job>("/jobs/import", { method: "POST", body: payload, timeoutMs: SLOW_TIMEOUT_MS }),
   create: (payload: JobCreatePayload) =>
     request<Job>("/jobs", { method: "POST", body: payload }),
   list: (params?: {
@@ -535,23 +549,23 @@ export const jobsApi = {
   get: (id: string) => request<Job>(`/jobs/${id}`),
   remove: (id: string) => request<void>(`/jobs/${id}`, { method: "DELETE" }),
   match: (id: string, refresh?: boolean) =>
-    request<MatchResult>(`/jobs/${id}/match`, { query: { refresh } }),
+    request<MatchResult>(`/jobs/${id}/match`, { query: { refresh }, timeoutMs: SLOW_TIMEOUT_MS }),
   matches: (params?: { min_score?: number; limit?: number; offset?: number }) =>
     request<{ items: Job[]; total: number }>("/matches", { query: params }),
   skillGaps: (limit?: number) =>
     request<SkillGapsResponse>("/match/skill-gaps", { query: { limit } }),
   interviewPrep: (id: string) =>
-    request<InterviewPrepResponse>(`/jobs/${id}/interview-prep`, { method: "POST" }),
+    request<InterviewPrepResponse>(`/jobs/${id}/interview-prep`, { method: "POST", timeoutMs: SLOW_TIMEOUT_MS }),
   decide: (id: string, payload: DecisionPayload) =>
     request<Application>(`/jobs/${id}/decision`, { method: "POST", body: payload }),
   generateResume: (id: string, payload?: ResumeGeneratePayload) =>
-    request<ResumeVersion>(`/jobs/${id}/resume`, { method: "POST", body: payload ?? {} }),
+    request<ResumeVersion>(`/jobs/${id}/resume`, { method: "POST", body: payload ?? {}, timeoutMs: SLOW_TIMEOUT_MS }),
   reusableResume: (id: string, language?: ProfileLanguage) =>
     request<ReusableResumeSuggestion>(`/jobs/${id}/resume/reusable`, {
       query: language ? { language } : undefined,
     }),
   generateCoverLetter: (id: string, payload?: CoverLetterGeneratePayload) =>
-    request<CoverLetter>(`/jobs/${id}/cover-letter`, { method: "POST", body: payload ?? {} }),
+    request<CoverLetter>(`/jobs/${id}/cover-letter`, { method: "POST", body: payload ?? {}, timeoutMs: SLOW_TIMEOUT_MS }),
   search: (params: {
     provider: ExternalProvider;
     q?: string;
@@ -572,12 +586,12 @@ export const jobsApi = {
     experience_level?: ExperienceLevel;
     remote_type?: RemoteType;
     category?: string;
-  }) => request<AggregateSearchResponse>("/jobs/search/aggregate", { query: params }),
+  }) => request<AggregateSearchResponse>("/jobs/search/aggregate", { query: params, timeoutMs: SLOW_TIMEOUT_MS }),
   /** Job titles pulled from the user's CV, most precise first. */
   searchSuggestions: () => request<string[]>("/jobs/search/suggestions"),
   importExternal: (payload: ExternalJobImportPayload) =>
     request<Job>("/jobs/search/import", { method: "POST", body: payload }),
-  autoImport: () => request<AutoImportResponse>("/jobs/search/auto-import", { method: "POST" }),
+  autoImport: () => request<AutoImportResponse>("/jobs/search/auto-import", { method: "POST", timeoutMs: SLOW_TIMEOUT_MS }),
 };
 
 // ---------- Applications ----------

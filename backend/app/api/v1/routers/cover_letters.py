@@ -43,14 +43,14 @@ async def generate_cover_letter_endpoint(
 
     job = (await db.execute(select(Job).where(Job.id == job_id))).scalar_one_or_none()
     if job is None:
-        raise HTTPException(status_code=404, detail="Job not found.")
+        raise HTTPException(status_code=404, detail="No encontramos esa vacante.")
 
     profile = (
         await db.execute(select(CareerProfile).where(CareerProfile.user_id == current_user.id))
     ).scalar_one_or_none()
     if profile is None:
         raise HTTPException(
-            status_code=400, detail="Create your career profile before generating a cover letter."
+            status_code=400, detail="Primero sube tu CV en Perfil y guárdalo: de ahí sale la carta."
         )
 
     if payload.resume_version_id is not None:
@@ -63,7 +63,7 @@ async def generate_cover_letter_endpoint(
             )
         ).scalar_one_or_none()
         if resume_version is None:
-            raise HTTPException(status_code=404, detail="Resume version not found.")
+            raise HTTPException(status_code=404, detail="No encontramos ese CV.")
 
     match_row = (
         await db.execute(
@@ -126,7 +126,7 @@ async def get_cover_letter(
         )
     ).scalar_one_or_none()
     if row is None:
-        raise HTTPException(status_code=404, detail="Cover letter not found.")
+        raise HTTPException(status_code=404, detail="No encontramos esa carta.")
     return CoverLetterSchema.model_validate(row)
 
 
@@ -144,7 +144,7 @@ async def export_cover_letter_pdf(
         )
     ).scalar_one_or_none()
     if row is None:
-        raise HTTPException(status_code=404, detail="Cover letter not found.")
+        raise HTTPException(status_code=404, detail="No encontramos esa carta.")
 
     profile = (
         await db.execute(select(CareerProfile).where(CareerProfile.user_id == current_user.id))

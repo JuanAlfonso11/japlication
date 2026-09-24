@@ -141,7 +141,7 @@ function isProfileLanguage(value: string): value is ProfileLanguage {
 
 /** What the PDF import has to say once it is done: how the file was read, and
  *  anything the parser was unsure about. */
-type CvImportNotice = { warnings: string[]; generatedBy: string };
+type CvImportNotice = { warnings: string[]; generatedBy: string; autoSaved: boolean };
 
 const TAB_STORAGE_KEY = "jobflow_profile_tab";
 const CV_LANGUAGE_STORAGE_KEY = "jobflow_profile_cv_language";
@@ -164,6 +164,10 @@ function ProfileContent() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+  // No profile on the server yet (GET answered 404). Said as "Al día" before,
+  // and the first CV upload was left unsaved until a button at the very
+  // bottom of a long form — so a new user uploaded, left, and had no profile.
+  const [neverSaved, setNeverSaved] = useState(false);
 
   const [languages, setLanguages] = useState<LanguageStatus[] | null>(null);
 
@@ -229,6 +233,7 @@ function ProfileContent() {
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) {
         setProfile(EMPTY_PROFILE);
+        setNeverSaved(true);
       } else {
         setLoadError(
           err instanceof ApiError ? err.message : "No se pudo cargar tu perfil profesional."
@@ -263,12 +268,17 @@ function ProfileContent() {
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     if (!profile) return;
+    await saveProfile(profile, cvImportedPendingSave);
+  }
+
+  async function saveProfile(toSave: CareerProfile, searchAfterSave: boolean): Promise<boolean> {
     setSaving(true);
     setSaveError(null);
     try {
-      const saved = await profileApi.save(profile);
+      const saved = await profileApi.save(toSave);
       setProfile({ ...saved, translations: saved.translations ?? {} });
       setDirty(false);
+      setNeverSaved(false);
       setLastSavedAt(new Date());
       // The "faltan N campos" badge is computed server-side, so it only
       // becomes true again after the save it is describing.
@@ -288,26 +298,33 @@ function ProfileContent() {
         loadEvaluation();
       }
 
-      if (cvImportedPendingSave) {
+      if (searchAfterSave) {
         setCvImportedPendingSave(false);
         autoSearchTask.start();
-        try {
-          const result = await jobsApi.autoImport();
-          autoSearchTask.succeed(
-            result.imported > 0
-              ? `Encontramos ${result.imported} vacante${result.imported === 1 ? "" : "s"} nueva${
-                  result.imported === 1 ? "" : "s"
-                } que hacen match — ya están en tu cola de Inicio.`
-              : "Buscamos vacantes que hagan match con tu perfil, pero no encontramos nada nuevo por ahora. Prueba en Buscar más tarde."
+        // Not awaited: the search takes ~20s and the save is already done.
+        void jobsApi
+          .autoImport()
+          .then((result) =>
+            autoSearchTask.succeed(
+              result.imported > 0
+                ? `Encontramos ${result.imported} vacante${result.imported === 1 ? "" : "s"} nueva${
+                    result.imported === 1 ? "" : "s"
+                  } que hacen match — ya están en tu cola de Inicio.`
+                : "Buscamos vacantes que hagan match con tu perfil, pero no encontramos nada nuevo por ahora. Prueba en Buscar más tarde."
+            )
+          )
+          .catch(() =>
+            // Non-fatal — the profile itself saved fine. Said, not swallowed:
+            // otherwise the user waits for jobs that the screen never mentions.
+            autoSearchTask.succeed(
+              "Tu perfil quedó guardado, pero la búsqueda de vacantes no terminó a tiempo. En Inicio, desliza hacia abajo para buscar otra vez."
+            )
           );
-        } catch {
-          // Non-fatal — the profile itself saved fine; the user can still
-          // find jobs manually via Discover.
-          autoSearchTask.succeed(null);
-        }
       }
+      return true;
     } catch (err) {
       setSaveError(err instanceof ApiError ? err.message : "No se pudo guardar tu perfil.");
+      return false;
     } finally {
       setSaving(false);
     }
@@ -320,10 +337,18 @@ function ProfileContent() {
     uploadTask.start();
     try {
       const result = await profileApi.importCv(file);
-      setProfile((prev) => (prev ? mergeCvDraft(prev, result.profile) : prev));
-      setDirty(true);
-      setCvImportedPendingSave(true);
-      uploadTask.succeed({ warnings: result.warnings, generatedBy: result.generated_by });
+      if (!profile) return;
+      const merged = mergeCvDraft(profile, result.profile);
+      setProfile(merged);
+      // First CV ever: save it right away. There is nothing of theirs to
+      // overwrite, and an unsaved first profile is how new users ended up
+      // with an empty Inicio and jobs that went nowhere.
+      const autoSaved = neverSaved && (await saveProfile(merged, true));
+      if (!autoSaved) {
+        setDirty(true);
+        setCvImportedPendingSave(true);
+      }
+      uploadTask.succeed({ warnings: result.warnings, generatedBy: result.generated_by, autoSaved });
     } catch (err) {
       uploadTask.fail(err instanceof ApiError ? err.message : "No se pudo leer ese PDF.");
     }
@@ -403,6 +428,8 @@ function ProfileContent() {
           >
             {dirty
               ? "Cambios sin guardar"
+              : neverSaved
+              ? "Sin perfil todavía"
               : lastSavedAt
               ? `Guardado ${lastSavedAt.toLocaleTimeString()}`
               : "Al día"}
@@ -452,12 +479,13 @@ function ProfileContent() {
           <div>
             <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">Importar desde un CV en PDF</p>
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              Rellenamos los campos de abajo con tu PDF — nada se agrega a tu perfil guardado
-              hasta que lo revises y le des a Guardar.
+              {neverSaved
+                ? "Empieza aquí: sube tu CV y armamos tu perfil con él. Luego puedes corregir cualquier campo."
+                : "Rellenamos los campos de abajo con tu PDF — nada se agrega a tu perfil guardado hasta que lo revises y le des a Guardar."}
             </p>
           </div>
           <label className="shrink-0 cursor-pointer rounded-lg bg-brand-600 dark:bg-brand-200 dark:text-gray-950 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 aria-disabled:cursor-not-allowed aria-disabled:opacity-60">
-            {uploadState.running ? "Leyendo…" : "Subir PDF"}
+            {uploadState.running ? "Leyendo… (hasta 1 min)" : "Subir PDF"}
             <input
               type="file"
               accept="application/pdf"
@@ -475,7 +503,9 @@ function ProfileContent() {
         {uploadNotice && (
           <div className="mt-3 rounded-lg bg-amber-50 p-3 text-xs text-amber-800 ring-1 ring-inset ring-amber-600/20 dark:bg-amber-900/20 dark:text-amber-300 dark:ring-amber-400/30">
             <p className="font-semibold">
-              {uploadNotice.generatedBy === "ai"
+              {uploadNotice.autoSaved
+                ? "Listo, tu perfil quedó guardado. Revisa los campos de abajo; si corriges algo, dale a Guardar perfil."
+                : uploadNotice.generatedBy === "ai"
                 ? "Analizado con IA. Revisa los campos rellenados abajo y dale a Guardar."
                 : "Analizado sin IA, con coincidencia básica de texto. Revisa con cuidado antes de guardar."}
             </p>
@@ -504,7 +534,8 @@ function ProfileContent() {
           <button
             type="button"
             onClick={handleImproveProfile}
-            disabled={improve.running}
+            disabled={improve.running || neverSaved}
+            title={neverSaved ? "Primero sube tu CV" : undefined}
             className="shrink-0 rounded-lg bg-brand-600 dark:bg-brand-200 dark:text-gray-950 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {improve.running ? "Mejorando…" : "Mejorar CV"}

@@ -343,3 +343,33 @@ def get_anthropic_client(bucket: str = BUCKET_INTERACTIVE) -> Optional[Any]:
     if claude is None:
         return ollama
     return _FallbackClient(claude, "claude", lambda: ollama if _ollama_available() else None)
+
+
+#: The model thinks before answering, and that thinking counts against
+#: max_tokens. Measured on the batch scorer: 685 of 750 tokens were thinking,
+#: so a reply that needed 60 was cut off. Every limit here used to be sized
+#: for the visible answer alone (16 for a single number, 1500 for interview
+#: prep), which is why those features kept falling back to their offline
+#: path. This is a ceiling, not a cost: billing is for tokens used.
+AI_MAX_TOKENS = 16000
+
+#: For calls that extract or score rather than write (reading a CV, match
+#: scores): less thinking, faster and cheaper, same answer. Sent through
+#: extra_body because the pinned SDK predates the `output_config` argument.
+LOW_EFFORT = {"output_config": {"effort": "low"}}
+
+
+class TruncatedResponse(RuntimeError):
+    """The model hit max_tokens: the reply is cut mid-way, and a cut JSON
+    object used to surface only as a puzzling JSONDecodeError in the log."""
+
+
+def response_text(response: Any) -> str:
+    """The reply's text, or TruncatedResponse if it ran out of tokens.
+
+    Every caller already catches exceptions into its offline path; this just
+    makes the log say *why* ("se quedó sin tokens") instead of "Unterminated
+    string", so raising the limit is the obvious fix."""
+    if getattr(response, "stop_reason", None) == "max_tokens":
+        raise TruncatedResponse("la respuesta de la IA se quedó sin tokens (max_tokens)")
+    return "".join(block.text for block in response.content if getattr(block, "type", None) == "text")

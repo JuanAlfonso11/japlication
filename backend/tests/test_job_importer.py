@@ -153,7 +153,7 @@ async def test_unparseable_page_is_a_422(async_client, user_and_headers, monkeyp
     _user, headers = user_and_headers
 
     async def fake_import(_url):
-        raise JobImportError("could not parse job posting")
+        raise JobImportError("No pudimos leer esa vacante. Prueba con «Pegar manualmente».")
 
     monkeypatch.setattr(jobs_router, "import_job_from_url", fake_import)
 
@@ -164,4 +164,4 @@ async def test_unparseable_page_is_a_422(async_client, user_and_headers, monkeyp
     )
 
     assert response.status_code == 422, response.text
-    assert "parse" in response.json()["detail"].lower()
+    assert "leer" in response.json()["detail"].lower()

@@ -118,7 +118,7 @@ async def swipe_decision(
 ) -> ApplicationSchema:
     job = (await db.execute(select(Job).where(Job.id == job_id))).scalar_one_or_none()
     if job is None:
-        raise HTTPException(status_code=404, detail="Job not found.")
+        raise HTTPException(status_code=404, detail="No encontramos esa vacante.")
 
     match_score = None
     match_row = (
@@ -150,7 +150,7 @@ async def swipe_decision(
             )
         ).scalar_one_or_none()
         if owned is None:
-            raise HTTPException(status_code=404, detail="Resume version not found.")
+            raise HTTPException(status_code=404, detail="No encontramos ese CV.")
 
     cover_letter_id = payload.cover_letter_id
     if cover_letter_id is not None:
@@ -162,7 +162,7 @@ async def swipe_decision(
             )
         ).scalar_one_or_none()
         if owned is None:
-            raise HTTPException(status_code=404, detail="Cover letter not found.")
+            raise HTTPException(status_code=404, detail="No encontramos esa carta.")
 
     # A right swipe IS the apply decision — for a job that requires a
     # cover letter, auto-attach one (reusing an existing one for this job
@@ -294,7 +294,7 @@ async def get_application(
         )
     ).scalar_one_or_none()
     if row is None:
-        raise HTTPException(status_code=404, detail="Application not found.")
+        raise HTTPException(status_code=404, detail="No encontramos esa postulación.")
     return _serialize(row)
 
 
@@ -311,7 +311,7 @@ async def update_application(
         )
     ).scalar_one_or_none()
     if row is None:
-        raise HTTPException(status_code=404, detail="Application not found.")
+        raise HTTPException(status_code=404, detail="No encontramos esa postulación.")
 
     data = payload.model_dump(exclude_unset=True)
     for field, value in data.items():
@@ -355,11 +355,11 @@ async def undo_application(
         )
     ).scalar_one_or_none()
     if row is None:
-        raise HTTPException(status_code=404, detail="Application not found.")
+        raise HTTPException(status_code=404, detail="No encontramos esa postulación.")
     if row.status != ApplicationStatus.passed:
         raise HTTPException(
             status_code=400,
-            detail="Only a passed job can be undone this way — update its status instead for an active application.",
+            detail="Solo se puede deshacer una vacante que pasaste; para las demás, cambia su estado.",
         )
     await db.delete(row)
     await db.commit()
@@ -379,7 +379,7 @@ async def _assemble_email_application(job_id: UUID, user: User, db: AsyncSession
     pueda enviar."""
     job = (await db.execute(select(Job).where(Job.id == job_id))).scalar_one_or_none()
     if job is None:
-        raise HTTPException(status_code=404, detail="Job not found.")
+        raise HTTPException(status_code=404, detail="No encontramos esa vacante.")
 
     blockers: list[str] = []
 

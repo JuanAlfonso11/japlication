@@ -2,11 +2,12 @@ from datetime import date, datetime
 from typing import Any, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.models.enums import JobSource
 from app.schemas.job_match import MatchResult
 from app.services import work_authorization
+from app.services.job_importer import strip_markup
 
 
 class WorkAuthInfo(BaseModel):
@@ -116,6 +117,9 @@ class Job(BaseModel):
     updated_at: datetime
     match: Optional[MatchResult] = None
     work_auth: Optional[WorkAuthInfo] = None
+
+    # Rows stored before strip_markup existed still hold literal tags.
+    _clean_description = field_validator("description")(lambda v: strip_markup(v))
 
     @model_validator(mode="after")
     def _fill_work_auth(self):

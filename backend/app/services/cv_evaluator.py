@@ -19,7 +19,14 @@ import threading
 from collections import OrderedDict
 from typing import Any, Optional
 
-from app.services.anthropic_client import BUCKET_SCORING, get_anthropic_client, log_ai_failure
+from app.services.anthropic_client import (
+    AI_MAX_TOKENS,
+    BUCKET_SCORING,
+    LOW_EFFORT,
+    get_anthropic_client,
+    log_ai_failure,
+    response_text,
+)
 from app.services.skills_taxonomy import canonical_skill_set, normalize_skill
 from app.core.config import settings
 
@@ -392,7 +399,7 @@ def _try_ai_summary(evaluation: dict[str, Any]) -> Optional[str]:
     try:
         response = client.messages.create(
             model=settings.ANTHROPIC_MODEL,
-            max_tokens=300,
+            max_tokens=AI_MAX_TOKENS,
             system=SYSTEM_PROMPT,
             messages=[
                 {
@@ -401,7 +408,7 @@ def _try_ai_summary(evaluation: dict[str, Any]) -> Optional[str]:
                 }
             ],
         )
-        text = "".join(block.text for block in response.content if getattr(block, "type", None) == "text").strip()
+        text = response_text(response).strip()
     except Exception as exc:
         log_ai_failure("cv_evaluator", exc)
         return None
