@@ -32,6 +32,10 @@ os.environ["DATABASE_URL"] = f"postgresql+asyncpg://jobflow:{_PG_PASSWORD}@db:54
 # free, and lets it assert on an exact response.
 os.environ["ANTHROPIC_API_KEY"] = ""
 os.environ["ANTHROPIC_WORKSPACE_ID"] = ""
+# Same for the local model: with OLLAMA_BASE_URL set in the backend container
+# the suite would call the real Ollama — slow, and the results would depend on
+# whether the PC's model happens to be running.
+os.environ["OLLAMA_BASE_URL"] = ""
 
 import sys
 from pathlib import Path

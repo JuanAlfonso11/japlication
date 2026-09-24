@@ -29,6 +29,7 @@ from pypdf.errors import PdfReadError
 
 from app.services.anthropic_client import (
     AI_MAX_TOKENS,
+    ai_budget_exhausted,
     LOW_EFFORT,
     get_anthropic_client,
     log_ai_failure,
@@ -98,8 +99,14 @@ def _heuristic_parse(text: str) -> dict[str, Any]:
 
     # Names what the user can act on, not the env var they never set: the
     # name of a backend setting tells them nothing about what to do next.
+    if ai_budget_exhausted():
+        # Says what actually happened: "no AI available" read as broken, and
+        # sent the user (and the operator) looking for a missing key.
+        reason = "Llegaste al límite diario de funciones con IA (se renueva mañana), así que"
+    else:
+        reason = "No pudimos leer tu CV completo automáticamente, así que"
     warnings = [
-        "No pudimos leer tu CV completo automáticamente, así que solo extrajimos habilidades y "
+        f"{reason} solo extrajimos habilidades y "
         "datos de contacto. Agrega tu experiencia y educación a mano abajo: no inventamos esa parte "
         "para no arriesgar datos incorrectos."
     ]
@@ -153,6 +160,21 @@ STRICT RULES:
 """
 
 
+def _extract_json_object(raw: str) -> dict[str, Any]:
+    """The JSON object in the model's reply, tolerating the wrappers models
+    add despite being told not to: ```json fences, or a sentence before or
+    after the object. Stripping only a leading fence (what this did before)
+    meant one stray "Here is the JSON:" sent the whole CV to the offline
+    path."""
+    start, end = raw.find("{"), raw.rfind("}")
+    if start == -1 or end <= start:
+        raise ValueError("no JSON object in the model's reply")
+    parsed = json.loads(raw[start : end + 1])
+    if not isinstance(parsed, dict):
+        raise ValueError("the model's reply is not a JSON object")
+    return parsed
+
+
 def _try_ai_parse(text: str) -> Optional[dict[str, Any]]:
     client = get_anthropic_client()
     if client is None:
@@ -166,12 +188,7 @@ def _try_ai_parse(text: str) -> Optional[dict[str, Any]]:
             system=SYSTEM_PROMPT,
             messages=[{"role": "user", "content": f"RESUME TEXT:\n{text[:20000]}"}],
         )
-        raw = response_text(response).strip()
-        if raw.startswith("```"):
-            raw = raw.strip("`")
-            if raw.startswith("json"):
-                raw = raw[4:]
-        profile = json.loads(raw)
+        profile = _extract_json_object(response_text(response).strip())
     except Exception as exc:
         log_ai_failure("cv_upload", exc)
         return None

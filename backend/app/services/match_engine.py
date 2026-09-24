@@ -27,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.anthropic_client import (
     AI_MAX_TOKENS,
+    BUCKET_SCORING,
     LOW_EFFORT,
     get_anthropic_client,
     log_ai_failure,
@@ -285,7 +286,7 @@ def _try_anthropic_semantic_score(profile_text: str, job_text: str) -> Optional[
     failure — missing key, missing package, network error, or a reply that
     doesn't parse as a plain number — so the caller always has the offline
     fallback to lean on."""
-    client = get_anthropic_client()
+    client = get_anthropic_client(bucket=BUCKET_SCORING)
     if client is None:
         return None
 
@@ -310,7 +311,13 @@ def _try_anthropic_semantic_score(profile_text: str, job_text: str) -> Optional[
             ],
         )
         raw = response_text(response)
-        score = float(raw.strip())
+        # Local models (Ollama) often wrap the number — "Score: 85", "85/100",
+        # "**85**" — even when told not to. Take the first number rather than
+        # discarding a perfectly usable answer.
+        found = re.search(r"-?\d+(?:\.\d+)?", raw)
+        if found is None:
+            raise ValueError(f"no number in the model's reply: {raw!r}")
+        score = float(found.group(0))
         return round(max(0.0, min(score, 100.0)), 2)
     except Exception as exc:
         # Any AI failure (network, quota, unparsable reply) falls back to
@@ -587,7 +594,7 @@ def batch_semantic_scores(profile_text: str, job_texts: list[str]) -> list[Optio
     for the batch costs what one job used to."""
     if not job_texts:
         return []
-    client = get_anthropic_client()
+    client = get_anthropic_client(bucket=BUCKET_SCORING)
     if client is None:
         return [None] * len(job_texts)
     postings = "\n\n".join(
@@ -613,11 +620,16 @@ def batch_semantic_scores(profile_text: str, job_texts: list[str]) -> list[Optio
             ],
         )
         # The first [...] in the reply: the model sometimes adds a line of
-        # explanation after the array, or wraps it in a code fence.
-        found = re.search(r"\[[^\[\]]*\]", response_text(response))
-        scores = json.loads(found.group(0)) if found else None
+        # explanation after the array, or wraps it in a code fence. Failing
+        # that, a bare list of exactly one number per job (it has also
+        # answered one per line, no brackets). Any other count is refused:
+        # guessing which score belongs to which job is worse than none.
+        raw = response_text(response)
+        found = re.search(r"\[[^\[\]]*\]", raw)
+        numbers = re.findall(r"-?\d+(?:\.\d+)?", raw)
+        scores = json.loads(found.group(0)) if found else numbers
         if not isinstance(scores, list) or len(scores) != len(job_texts):
-            raise ValueError(f"expected {len(job_texts)} scores, got {scores!r}")
+            raise ValueError(f"expected {len(job_texts)} scores, got {raw[:300]!r}")
         return [round(max(0.0, min(float(s), 100.0)), 2) for s in scores]
     except Exception as exc:
         log_ai_failure("match_engine_batch", exc)

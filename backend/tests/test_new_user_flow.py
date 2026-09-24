@@ -65,10 +65,14 @@ def test_batch_scores_come_from_one_call_and_fail_closed(monkeypatch):
         return Client()
 
     reply_text = "```json\n[55, 120, -3]\n```\nNota: el segundo encaja mejor."
-    monkeypatch.setattr(match_engine, "get_anthropic_client", lambda: reply(reply_text))
+    monkeypatch.setattr(match_engine, "get_anthropic_client", lambda **_: reply(reply_text))
     assert match_engine.batch_semantic_scores("perfil", ["a", "b", "c"]) == [55.0, 100.0, 0.0]
     assert len(calls) == 1
 
+    # One per line, no brackets: still one score per job.
+    monkeypatch.setattr(match_engine, "get_anthropic_client", lambda **_: reply("70\n5"))
+    assert match_engine.batch_semantic_scores("perfil", ["a", "b"]) == [70.0, 5.0]
+
     # Wrong count: no guessing which score belongs to which job.
-    monkeypatch.setattr(match_engine, "get_anthropic_client", lambda: reply("[55]"))
+    monkeypatch.setattr(match_engine, "get_anthropic_client", lambda **_: reply("[55]"))
     assert match_engine.batch_semantic_scores("perfil", ["a", "b"]) == [None, None]

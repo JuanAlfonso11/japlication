@@ -169,3 +169,27 @@ def test_overall_score_is_weighted_average_of_categories():
         1,
     )
     assert result["overall_score"] == expected
+
+
+def test_ai_summary_is_cached_while_the_evaluation_is_unchanged(monkeypatch):
+    """GET /profile/evaluation runs on every visit to Perfil. Each visit used
+    to be a paid AI call for the same paragraph."""
+    from types import SimpleNamespace
+
+    calls = []
+
+    def create(**kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace(content=[SimpleNamespace(type="text", text="Resumen IA.")])
+
+    fake_client = SimpleNamespace(messages=SimpleNamespace(create=create))
+    monkeypatch.setattr(cv_evaluator, "get_anthropic_client", lambda **_: fake_client)
+    monkeypatch.setattr(cv_evaluator, "_summary_cache", type(cv_evaluator._summary_cache)())
+
+    evaluation = {"overall_score": 70.0, "top_issues": []}
+    assert cv_evaluator._try_ai_summary(evaluation) == "Resumen IA."
+    assert cv_evaluator._try_ai_summary(dict(evaluation)) == "Resumen IA."
+    assert len(calls) == 1
+
+    assert cv_evaluator._try_ai_summary({"overall_score": 80.0, "top_issues": []}) == "Resumen IA."
+    assert len(calls) == 2

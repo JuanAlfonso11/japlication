@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.security import decode_access_token
 from app.db.session import get_db
 from app.models.user import User
+from app.services.anthropic_client import current_ai_user
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -37,6 +38,8 @@ async def get_current_user(
     user = result.scalar_one_or_none()
     if user is None:
         raise credentials_exception
+    # The AI budget is counted per user; see anthropic_client.current_ai_user.
+    current_ai_user.set(str(user.id))
     return user
 
 

@@ -207,6 +207,18 @@ letters) is scoped so a user only ever sees their own data.
   adaptation; the match engine's semantic score always uses the offline
   method by design (per the task spec) so matching works with zero external
   dependencies.
+- **AI load split and limits** (`app/services/anthropic_client.py`). Every AI
+  call is counted **per user** per UTC day, in two buckets:
+  `ANTHROPIC_DAILY_CALL_BUDGET` (default 100) for what the user asks for —
+  CV import/improvement, tailored resume, cover letter, interview prep — and
+  `ANTHROPIC_DAILY_SCORING_BUDGET` (default 300) for automatic calls — the
+  match score and the CV evaluation summary (cached while the evaluation is
+  unchanged). With `OLLAMA_BASE_URL` set (e.g.
+  `http://host.docker.internal:11434`, model `OLLAMA_MODEL`, default
+  `gemma4:26b`), automatic calls go to the local model first and Claude is
+  only their fallback, while interactive calls go to Claude first and fall
+  back to Ollama when there is no key, the user's budget is spent, or Claude
+  fails. `OLLAMA_ROUTE=all` puts Ollama first for everything.
 - **Resume export** (`GET /resume-versions/{id}/export`) returns an ATS-safe
   plain-text rendering (`text/plain`, `Content-Disposition: attachment`)
   rather than a PDF, to avoid pulling in a PDF-rendering dependency for an

@@ -12,12 +12,16 @@ configured, and a deterministic fallback sentence when it isn't.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
+import threading
+from collections import OrderedDict
 from typing import Any, Optional
 
 from app.services.anthropic_client import (
     AI_MAX_TOKENS,
+    BUCKET_SCORING,
     LOW_EFFORT,
     get_anthropic_client,
     log_ai_failure,
@@ -363,8 +367,32 @@ TWO highest-impact fixes first (prioritize "error" severity, then
 """
 
 
+#: Summaries already written, keyed by a hash of the evaluation they
+#: describe. GET /profile/evaluation runs on every visit to Perfil and after
+#: every save, and each run used to be one paid AI call — for a paragraph
+#: that is identical as long as the evaluation is. Bounded so it can't grow
+#: without limit; in-process, so a restart just means one call per profile.
+_SUMMARY_CACHE_MAX = 2000
+_summary_cache: "OrderedDict[str, str]" = OrderedDict()
+_summary_cache_lock = threading.Lock()
+
+
+def _evaluation_key(evaluation: dict[str, Any]) -> str:
+    payload = json.dumps(evaluation, default=str, ensure_ascii=False, sort_keys=True)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
 def _try_ai_summary(evaluation: dict[str, Any]) -> Optional[str]:
-    client = get_anthropic_client()
+    key = _evaluation_key(evaluation)
+    with _summary_cache_lock:
+        cached = _summary_cache.get(key)
+        if cached is not None:
+            _summary_cache.move_to_end(key)
+            return cached
+
+    # Automatic, not something the user asked for: it must never use up the
+    # budget that CV import and the other explicit features depend on.
+    client = get_anthropic_client(bucket=BUCKET_SCORING)
     if client is None:
         return None
 
@@ -381,10 +409,18 @@ def _try_ai_summary(evaluation: dict[str, Any]) -> Optional[str]:
             ],
         )
         text = response_text(response).strip()
-        return text or None
     except Exception as exc:
         log_ai_failure("cv_evaluator", exc)
         return None
+
+    if not text:
+        return None
+    with _summary_cache_lock:
+        _summary_cache[key] = text
+        _summary_cache.move_to_end(key)
+        while len(_summary_cache) > _SUMMARY_CACHE_MAX:
+            _summary_cache.popitem(last=False)
+    return text
 
 
 def _fallback_summary(overall: float, top_issues: list[dict[str, str]]) -> str:

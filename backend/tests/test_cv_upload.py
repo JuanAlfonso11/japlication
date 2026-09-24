@@ -98,3 +98,40 @@ def test_parse_cv_falls_back_to_heuristic_without_api_key(monkeypatch):
 def test_try_ai_parse_returns_none_without_api_key(monkeypatch):
     monkeypatch.setattr(settings, "ANTHROPIC_API_KEY", None)
     assert cv_upload._try_ai_parse(SAMPLE_RESUME_TEXT) is None
+
+
+def _fake_client_replying(text, stop_reason="end_turn"):
+    from types import SimpleNamespace
+
+    response = SimpleNamespace(content=[SimpleNamespace(type="text", text=text)], stop_reason=stop_reason)
+    return SimpleNamespace(messages=SimpleNamespace(create=lambda **kwargs: response))
+
+
+def test_try_ai_parse_accepts_json_wrapped_in_prose_and_fences(monkeypatch):
+    """A sentence before the object used to send the whole CV to the
+    offline parse, which leaves experience and education empty."""
+    reply = 'Here is the JSON:\n```json\n{"headline": "Backend Engineer", "experience": []}\n```\nDone.'
+    monkeypatch.setattr(cv_upload, "get_anthropic_client", lambda: _fake_client_replying(reply))
+
+    result = cv_upload._try_ai_parse(SAMPLE_RESUME_TEXT)
+    assert result is not None
+    assert result["generated_by"] == "ai"
+    assert result["profile"]["headline"] == "Backend Engineer"
+    assert result["profile"]["education"] == []
+
+
+def test_try_ai_parse_rejects_a_reply_cut_off_at_max_tokens(monkeypatch):
+    reply = '{"headline": "Backend Engineer", "experience": [{"company": "Nim'
+    monkeypatch.setattr(
+        cv_upload, "get_anthropic_client", lambda: _fake_client_replying(reply, stop_reason="max_tokens")
+    )
+    assert cv_upload._try_ai_parse(SAMPLE_RESUME_TEXT) is None
+
+
+
+def test_heuristic_warning_names_the_daily_limit_when_that_is_the_reason(monkeypatch):
+    """ "Sin IA disponible" read as broken when the user had simply hit
+    their own daily limit."""
+    monkeypatch.setattr(cv_upload, "ai_budget_exhausted", lambda: True)
+    warnings = cv_upload._heuristic_parse(SAMPLE_RESUME_TEXT)["warnings"]
+    assert "límite diario" in warnings[0]
