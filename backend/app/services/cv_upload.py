@@ -27,7 +27,13 @@ from fastapi import HTTPException
 from pypdf import PdfReader
 from pypdf.errors import PdfReadError
 
-from app.services.anthropic_client import get_anthropic_client, log_ai_failure
+from app.services.anthropic_client import (
+    AI_MAX_TOKENS,
+    LOW_EFFORT,
+    get_anthropic_client,
+    log_ai_failure,
+    response_text,
+)
 from app.services.skills_taxonomy import extract_skills_from_text
 from app.core.config import settings
 
@@ -48,13 +54,13 @@ def extract_text_from_pdf(file_bytes: bytes) -> str:
         reader = PdfReader(io.BytesIO(file_bytes))
         pages = [page.extract_text() or "" for page in reader.pages]
     except (PdfReadError, ValueError) as exc:
-        raise HTTPException(status_code=422, detail="Could not read this file as a PDF.") from exc
+        raise HTTPException(status_code=422, detail="No pudimos leer ese archivo como PDF.") from exc
 
     text = "\n".join(pages).strip()
     if not text:
         raise HTTPException(
             status_code=422,
-            detail="This PDF has no extractable text (it may be a scanned image) — try a text-based PDF.",
+            detail="Este PDF no tiene texto (parece una imagen escaneada). Sube un PDF exportado desde Word o Google Docs.",
         )
     return text
 
@@ -93,8 +99,8 @@ def _heuristic_parse(text: str) -> dict[str, Any]:
     # Names what the user can act on, not the env var they never set: the
     # name of a backend setting tells them nothing about what to do next.
     warnings = [
-        "Sin IA disponible, solo pudimos extraer habilidades y datos de contacto "
-        "automáticamente. Agrega tu experiencia y educación a mano abajo: no inventamos esa parte "
+        "No pudimos leer tu CV completo automáticamente, así que solo extrajimos habilidades y "
+        "datos de contacto. Agrega tu experiencia y educación a mano abajo: no inventamos esa parte "
         "para no arriesgar datos incorrectos."
     ]
     if not skills:
@@ -155,11 +161,12 @@ def _try_ai_parse(text: str) -> Optional[dict[str, Any]]:
     try:
         response = client.messages.create(
             model=settings.ANTHROPIC_MODEL,
-            max_tokens=4000,
+            max_tokens=AI_MAX_TOKENS,
+            extra_body=LOW_EFFORT,
             system=SYSTEM_PROMPT,
             messages=[{"role": "user", "content": f"RESUME TEXT:\n{text[:20000]}"}],
         )
-        raw = "".join(block.text for block in response.content if getattr(block, "type", None) == "text").strip()
+        raw = response_text(response).strip()
         if raw.startswith("```"):
             raw = raw.strip("`")
             if raw.startswith("json"):

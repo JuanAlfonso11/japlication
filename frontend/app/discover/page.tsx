@@ -11,9 +11,11 @@ import Button from "@/components/ui/Button";
 import PageHeader from "@/components/ui/PageHeader";
 import { ListSkeleton } from "@/components/ui/Skeleton";
 import { useAnnounce } from "@/components/LiveRegion";
-import { ApiError, jobsApi } from "@/lib/api";
+import Link from "next/link";
+import { buttonClass } from "@/components/ui/Button";
+import { ApiError, jobsApi, profileApi } from "@/lib/api";
 import { EXTERNAL_PLATFORM_GROUPS } from "@/lib/externalPlatforms";
-import { importAndMatch } from "@/lib/jobActions";
+import { importAndMatch, type AddedJob } from "@/lib/jobActions";
 import {
   EXPERIENCE_LEVEL_LABELS,
   JOB_TITLE_GROUPS,
@@ -24,7 +26,6 @@ import {
   type ExperienceLevel,
   type ExternalJobResult,
   type ExternalProvider,
-  type Job,
   type RemoteType,
 } from "@/lib/types";
 
@@ -56,18 +57,18 @@ function ExternalResultCard({
   onImport,
 }: {
   result: ExternalJobResult;
-  onImport: (result: ExternalJobResult) => Promise<void>;
+  onImport: (result: ExternalJobResult) => Promise<AddedJob>;
 }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [imported, setImported] = useState(false);
+  const [added, setAdded] = useState<AddedJob | null>(null);
+  const imported = added !== null;
 
   async function handleImport() {
     setLoading(true);
     setError(null);
     try {
-      await onImport(result);
-      setImported(true);
+      setAdded(await onImport(result));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "No se pudo agregar este trabajo.");
     } finally {
@@ -130,6 +131,7 @@ function ExternalResultCard({
         </div>
       )}
       {error && <p className="mt-2 text-xs font-medium text-rose-600 dark:text-rose-400">{error}</p>}
+      {added && <ImportedJobCard job={added} compact />}
     </div>
   );
 }
@@ -342,7 +344,7 @@ function ResultsList({
   onImport,
 }: {
   results: ExternalJobResult[];
-  onImport: (result: ExternalJobResult) => Promise<void>;
+  onImport: (result: ExternalJobResult) => Promise<AddedJob>;
 }) {
   const [visible, setVisible] = useState(RESULTS_PAGE);
   const shown = results.slice(0, visible);
@@ -408,8 +410,10 @@ function DiscoverContent() {
   const [sources, setSources] = useState<AggregateSourceStatus[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [lastAdded, setLastAdded] = useState<Job | null>(null);
   const [searched, setSearched] = useState(false);
+  // null until known. Without a profile, what gets added cannot be scored,
+  // so it goes to the Pipeline — said up front, not discovered afterwards.
+  const [hasProfile, setHasProfile] = useState<boolean | null>(null);
 
   // On mount, not while building the state: reading storage during the first
   // render makes the server's HTML and the client's disagree, and React
@@ -435,6 +439,11 @@ function DiscoverContent() {
     }
     if (stored.minSalary) setMinSalary(stored.minSalary);
 
+    profileApi
+      .get()
+      .then(() => setHasProfile(true))
+      .catch((err) => setHasProfile(!(err instanceof ApiError && err.status === 404)));
+
     jobsApi
       .searchSuggestions()
       .then((titles) => {
@@ -450,9 +459,14 @@ function DiscoverContent() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    // An empty title searched for "anything": 1034 random postings, the first
+    // a recruiter job, for a mechanical engineer with no CV uploaded yet.
+    if (!q.trim()) {
+      setError("Elige un puesto de la lista, o escribe el tuyo con «Otro… (escribir)».");
+      return;
+    }
     setLoading(true);
     setError(null);
-    setLastAdded(null);
     // Clear the previous run's results and source chips. Leaving them on
     // screen while the next search ran meant the page looked identical for
     // the ~40 seconds a 15-source fan-out takes (measured: 44s tap to
@@ -461,7 +475,7 @@ function DiscoverContent() {
     // and invited a second tap or a reload.
     setResults([]);
     setSources([]);
-    announce("Buscando en 15 fuentes. Esto puede tardar hasta un minuto.");
+    announce("Buscando en todas las fuentes. Esto puede tardar hasta un minuto.");
     try {
       window.sessionStorage.setItem(
         FILTERS_KEY,
@@ -510,17 +524,30 @@ function DiscoverContent() {
     });
   }, [results, minSalaryValue]);
 
-  async function handleImport(result: ExternalJobResult) {
+  async function handleImport(result: ExternalJobResult): Promise<AddedJob> {
     const job = await jobsApi.importExternal({ source: result.source, external_id: result.external_id });
-    setLastAdded(await importAndMatch(job));
+    return importAndMatch(job);
   }
 
   return (
     <div className="space-y-6 pb-4 animate-fade-in">
       <PageHeader
         title="Buscar trabajos"
-        subtitle="Busca en 15 fuentes a la vez, LinkedIn incluido, y combina todo en una sola lista, sin repetidos. Lo que agregues se compara contra tu perfil en Inicio."
+        subtitle="Busca en todas las fuentes a la vez, LinkedIn incluido, sin repetidos. Lo que agregues aparece en Inicio con su puntaje de match."
       />
+
+      {hasProfile === false && (
+        <div className="rounded-2xl bg-amber-50 p-4 ring-1 ring-inset ring-amber-200 dark:bg-amber-500/10 dark:ring-amber-500/30">
+          <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">Todavía no subiste tu CV</p>
+          <p className="mt-1 text-xs leading-relaxed text-amber-800 dark:text-amber-300">
+            Puedes buscar y agregar vacantes: se guardan en tu Pipeline. Pero sin tu CV no sabemos qué
+            tanto encajan ni qué buscarte. Súbelo primero y el resto se hace solo.
+          </p>
+          <Link href="/profile" className={buttonClass({ size: "sm", className: "mt-2.5" })}>
+            Subir mi CV
+          </Link>
+        </div>
+      )}
 
       <div className="rounded-2xl bg-white p-5 shadow-soft ring-1 ring-gray-100 dark:bg-gray-900 dark:ring-gray-800">
         <div className="space-y-4">
@@ -657,7 +684,7 @@ function DiscoverContent() {
           {loading && (
             <div className="space-y-3">
               <p className="text-center text-xs text-gray-400 dark:text-gray-500">
-                Preguntando a 15 fuentes a la vez. Las lentas pueden tardar hasta un minuto.
+                Preguntando a todas las fuentes a la vez. Las lentas pueden tardar hasta un minuto.
               </p>
               <ListSkeleton rows={3} />
             </div>
@@ -696,13 +723,11 @@ function DiscoverContent() {
 
           {!loading && !searched && (
             <p className="py-6 text-center text-sm text-gray-400 dark:text-gray-400">
-              Busca algo para ver resultados combinados de todas las fuentes sin login.
+              Elige un puesto y dale a Buscar. Luego toca «Agregar» en las que te interesen.
             </p>
           )}
         </div>
       </div>
-
-      {lastAdded && <ImportedJobCard job={lastAdded} />}
 
       <ExternalPlatformsSection />
     </div>

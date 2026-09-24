@@ -430,6 +430,8 @@ function HomeContent() {
         <p className="mt-0.5 text-[13px] text-gray-500 dark:text-gray-400">
           {current
             ? "Desliza a la derecha para guardar, a la izquierda para pasar."
+            : hasProfile === false
+            ? "Así funciona: subes tu CV, te buscamos vacantes y aquí decides cuáles guardar."
             : "Tu cola está al día."}
         </p>
       </div>

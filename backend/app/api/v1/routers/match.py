@@ -56,7 +56,7 @@ async def _get_profile_or_400(user_id: UUID, db: AsyncSession) -> CareerProfile:
     profile = result.scalar_one_or_none()
     if profile is None:
         raise HTTPException(
-            status_code=400, detail="Create your career profile before computing matches."
+            status_code=400, detail="Primero sube tu CV en Perfil y guárdalo: sin él no hay contra qué comparar."
         )
     return profile
 
@@ -70,7 +70,7 @@ async def get_job_match(
 ) -> MatchResult:
     job = (await db.execute(select(Job).where(Job.id == job_id))).scalar_one_or_none()
     if job is None:
-        raise HTTPException(status_code=404, detail="Job not found.")
+        raise HTTPException(status_code=404, detail="No encontramos esa vacante.")
 
     if not refresh:
         existing = (
@@ -211,7 +211,7 @@ async def get_interview_prep(
     """
     job = (await db.execute(select(Job).where(Job.id == job_id))).scalar_one_or_none()
     if job is None:
-        raise HTTPException(status_code=404, detail="Job not found.")
+        raise HTTPException(status_code=404, detail="No encontramos esa vacante.")
 
     profile = await _get_profile_or_400(current_user.id, db)
 

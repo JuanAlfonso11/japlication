@@ -184,7 +184,7 @@ async def fetch_html_with_url(url: str) -> tuple[str, str]:
                     if resp.is_redirect:
                         location = resp.headers.get("location")
                         if not location:
-                            raise JobImportError("could not parse job posting")
+                            raise JobImportError("No pudimos leer esa vacante. Prueba con «Pegar manualmente».")
                         # Relative Locations are normal; resolve against the
                         # URL we actually fetched before re-validating.
                         next_url = str(resp.url.join(location))
@@ -236,7 +236,7 @@ async def fetch_html_with_url(url: str) -> tuple[str, str]:
     except JobImportError:
         raise
     except (httpx.HTTPError, httpx.InvalidURL) as exc:
-        raise JobImportError("could not parse job posting") from exc
+        raise JobImportError("No pudimos leer esa vacante. Prueba con «Pegar manualmente».") from exc
 
 
 def _find_jsonld_jobposting(soup: BeautifulSoup) -> Optional[dict[str, Any]]:
@@ -283,6 +283,17 @@ def html_to_text(html_fragment: Optional[str]) -> str:
         return ""
     frag_soup = BeautifulSoup(html_fragment, "lxml")
     return frag_soup.get_text(separator="\n", strip=True)
+
+
+_MARKUP = re.compile(r"<(p|div|br|ul|li|span|strong|h\d)\b[^>]*>", re.IGNORECASE)
+
+
+def strip_markup(text: str) -> str:
+    """Plain text for a description that still carries HTML tags.
+
+    Some feeds send entity-escaped HTML (`&lt;p&gt;`), so one html_to_text
+    pass turns it into literal `<p>` text that the job page then printed."""
+    return html_to_text(text) if text and _MARKUP.search(text) else text
 
 
 def _extract_bullets(html_fragment: Optional[str]) -> list[str]:
@@ -581,7 +592,7 @@ def parse_job_text_heuristic(text: str, title_hint: Optional[str] = None, compan
     with no JSON-LD available (or for manually pasted descriptions)."""
     text = text.strip()
     if not text:
-        raise JobImportError("could not parse job posting")
+        raise JobImportError("No pudimos leer esa vacante. Prueba con «Pegar manualmente».")
 
     lines = [l for l in text.split("\n") if l.strip()]
     title = title_hint or (lines[0].strip() if lines else "Untitled position")
@@ -634,7 +645,21 @@ def _unparseable(stage: str, exc: BaseException, url: Optional[str] = None) -> J
         exc,
         exc_info=exc,
     )
-    return JobImportError("could not parse job posting")
+    return JobImportError("No pudimos leer esa vacante. Prueba con «Pegar manualmente».")
+
+
+#: Words any real posting carries somewhere. A page with none of them
+#: (google.com imported as a job titled "Google") is not a posting.
+_JOB_WORDS = re.compile(
+    r"\b(requisitos|requirements|responsabilidades|responsibilities|experiencia|experience|"
+    r"qualifications|salario|salary|vacante|empleo|puesto|position|role|apply|aplicar|"
+    r"postular|postúlate|candidat[oae]s?|job|jobs|hiring|contrataci[oó]n)\b",
+    re.IGNORECASE,
+)
+
+
+def _looks_like_job_posting(text: str) -> bool:
+    return len(set(m.lower() for m in _JOB_WORDS.findall(text))) >= 2
 
 
 def parse_job_html(html: str, url: Optional[str] = None) -> dict[str, Any]:
@@ -662,7 +687,12 @@ def parse_job_html(html: str, url: Optional[str] = None) -> dict[str, Any]:
         page_text = soup.get_text(separator="\n", strip=True)
         if not page_text or len(page_text) < 20:
             # Not a bug — the page really has no readable text. No log.
-            raise JobImportError("could not parse job posting")
+            raise JobImportError("No pudimos leer esa vacante. Prueba con «Pegar manualmente».")
+        if not _looks_like_job_posting(page_text):
+            raise JobImportError(
+                "Ese enlace no parece una vacante. Abre la oferta concreta y copia su enlace, "
+                "o usa «Pegar manualmente»."
+            )
         try:
             parsed = parse_job_text_heuristic(page_text, title_hint=title_hint)
         except JobImportError:

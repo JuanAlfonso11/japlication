@@ -9,6 +9,8 @@ import { useParams } from "next/navigation";
 import RouteGuard from "@/components/RouteGuard";
 import CollapsibleText from "@/components/CollapsibleText";
 import { ListSkeleton } from "@/components/ui/Skeleton";
+import Link from "next/link";
+import Button, { buttonClass } from "@/components/ui/Button";
 import ErrorNotice from "@/components/ErrorNotice";
 import MatchBreakdown from "@/components/MatchBreakdown";
 import ScoreBadge from "@/components/ScoreBadge";
@@ -115,6 +117,12 @@ function JobDetailContent() {
   const [applying, setApplying] = useState(false);
   const [applyError, setApplyError] = useState<string | null>(null);
   const [applied, setApplied] = useState(false);
+  const [applyNotice, setApplyNotice] = useState<string | null>(null);
+  // No saved profile: nothing to score against and nothing to build a CV
+  // from. "Aplicar" used to open the employer's page anyway, then fail to
+  // generate the CV and never record the application.
+  const [noProfile, setNoProfile] = useState(false);
+  const [savingToPipeline, setSavingToPipeline] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -128,8 +136,9 @@ function JobDetailContent() {
         try {
           const m = await jobsApi.match(jobId);
           setMatch(m);
-        } catch {
-          // Match may not be computable yet — non-fatal.
+        } catch (err) {
+          // 400 = no profile yet; anything else is non-fatal.
+          if (err instanceof ApiError && err.status === 400) setNoProfile(true);
         }
       }
       try {
@@ -231,22 +240,35 @@ function JobDetailContent() {
 
     setApplying(true);
     setApplyError(null);
+    setApplyNotice(null);
     try {
       let activeResume = resume;
       if (!activeResume) {
-        activeResume = await jobsApi.generateResume(jobId, resumeLanguage ? { language: resumeLanguage } : undefined);
-        setResume(activeResume);
+        try {
+          activeResume = await jobsApi.generateResume(jobId, resumeLanguage ? { language: resumeLanguage } : undefined);
+          setResume(activeResume);
+        } catch (err) {
+          // The employer's page is already open, so the user IS applying:
+          // record it anyway rather than losing the application.
+          setApplyNotice(
+            `No pudimos preparar tu CV (${
+              err instanceof ApiError ? err.message : "error de conexión"
+            }). Igual la registramos como aplicada.`
+          );
+        }
       }
-      try {
-        await resumeApi.downloadPdf(activeResume.id, `${job?.title ?? "resume"}.pdf`.replace(/[/\\?%*:|"<>]/g, "-"));
-      } catch {
-        // The PDF is a convenience, not a prerequisite — a failed download
-        // (e.g. a flaky connection) shouldn't block recording the
-        // application or opening the real posting, which already happened.
+      if (activeResume) {
+        try {
+          await resumeApi.downloadPdf(activeResume.id, `${job?.title ?? "resume"}.pdf`.replace(/[/\\?%*:|"<>]/g, "-"));
+        } catch {
+          // The PDF is a convenience, not a prerequisite — a failed download
+          // (e.g. a flaky connection) shouldn't block recording the
+          // application or opening the real posting, which already happened.
+        }
       }
       await jobsApi.decide(jobId, {
         decision: "right",
-        resume_version_id: activeResume.id,
+        resume_version_id: activeResume?.id,
         cover_letter_id: coverLetter?.id,
         // This button already opened the employer's posting, so this is a
         // real application — unlike a right swipe on Home, which only saves.
@@ -257,6 +279,19 @@ function JobDetailContent() {
       setApplyError(err instanceof ApiError ? err.message : "No se pudo enviar la aplicación.");
     } finally {
       setApplying(false);
+    }
+  }
+
+  async function handleSaveToPipeline() {
+    setSavingToPipeline(true);
+    setApplyError(null);
+    try {
+      await jobsApi.decide(jobId, { decision: "right" });
+      setApplyNotice("Guardada en tu Pipeline. Cuando subas tu CV verás qué tanto encaja.");
+    } catch (err) {
+      setApplyError(err instanceof ApiError ? err.message : "No se pudo guardar.");
+    } finally {
+      setSavingToPipeline(false);
     }
   }
 
@@ -374,7 +409,29 @@ function JobDetailContent() {
           </div>
         )}
 
-        <div className="mt-4 rounded-xl bg-brand-50 p-3 dark:bg-brand-900/20">
+        {noProfile && (
+          <div className="mt-4 rounded-xl bg-amber-50 p-3 ring-1 ring-inset ring-amber-200 dark:bg-amber-500/10 dark:ring-amber-500/30">
+            <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">Primero sube tu CV</p>
+            <p className="mt-1 text-xs leading-relaxed text-amber-800 dark:text-amber-300">
+              Sin tu CV no podemos decirte qué tanto encajas ni prepararte el CV y la carta para esta
+              vacante. Súbelo en PDF en Perfil (tarda un minuto) y vuelve aquí.
+            </p>
+            <div className="mt-2.5 flex flex-wrap gap-2">
+              <Link href="/profile" className={buttonClass({ size: "sm" })}>
+                Subir mi CV
+              </Link>
+              <Button variant="secondary" size="sm" onClick={handleSaveToPipeline} loading={savingToPipeline}>
+                Guardar en Pipeline
+              </Button>
+            </div>
+            {applyNotice && (
+              <p className="mt-2 text-xs font-semibold text-emerald-700 dark:text-emerald-400">{applyNotice}</p>
+            )}
+            {applyError && <p className="mt-2 text-xs text-rose-600 dark:text-rose-400">{applyError}</p>}
+          </div>
+        )}
+
+        <div className={`mt-4 rounded-xl bg-brand-50 p-3 dark:bg-brand-900/20 ${noProfile ? "hidden" : ""}`}>
           {/* Three steps instead of a six-line paragraph: this sits between
               the user and the button they came to press, and what it says is
               a sequence, not prose. */}
@@ -411,6 +468,9 @@ function JobDetailContent() {
           >
             {applied ? "Aplicado ✓" : applying ? "Preparando…" : job.source_url ? "Aplicar" : "Marcar como aplicado"}
           </button>
+          {applyNotice && !noProfile && (
+            <p className="mt-1.5 text-xs font-semibold text-amber-700 dark:text-amber-400">{applyNotice}</p>
+          )}
           {applied && (
             <p className="mt-1.5 text-xs text-brand-700 dark:text-brand-400">
               Registrado en tu pipeline con el CV descargado. Termina de completar el formulario en la
@@ -592,6 +652,12 @@ function JobDetailContent() {
                 )}
               </div>
             </div>
+            {resume.generated_by !== "ai" && !resume.edited_at && (
+              <p className="text-[11px] text-amber-700 dark:text-amber-400">
+                Hecho sin IA (no estaba disponible en este momento): revísalo antes de usarlo, o dale a
+                Regenerar más tarde.
+              </p>
+            )}
             <p className="text-xs text-gray-400 dark:text-gray-400">
               El PDF usa formato de una columna con encabezados estándar (sin tablas ni imágenes) para que
               el &quot;autocompletar desde CV&quot; de la mayoría de formularios de aplicación lo lea bien.
@@ -680,6 +746,12 @@ function JobDetailContent() {
             {coverSaveNotice && (
               <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">
                 {coverSaveNotice}
+              </p>
+            )}
+            {coverLetter.generated_by !== "ai" && (
+              <p className="text-[11px] text-amber-700 dark:text-amber-400">
+                Hecho sin IA (no estaba disponible en este momento): revísalo antes de usarlo, o dale a
+                Regenerar más tarde.
               </p>
             )}
             <p className="whitespace-pre-line text-sm leading-relaxed text-gray-700 dark:text-gray-300">
