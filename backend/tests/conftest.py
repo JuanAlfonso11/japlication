@@ -90,6 +90,16 @@ def _require_test_database():
         )
 
 
+@pytest.fixture(autouse=True)
+def _no_admin_reporting(monkeypatch):
+    """Tests never report token usage to a real JobPilot Admin, even when the
+    container's env has ADMIN_URL set. Tests that need it set it themselves."""
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "ADMIN_URL", None)
+    monkeypatch.setattr(settings, "ADMIN_INGEST_KEY", None)
+
+
 @pytest_asyncio.fixture(autouse=True)
 async def _clean_db():
     """Truncate after each test (not before) so a failed test's data stays

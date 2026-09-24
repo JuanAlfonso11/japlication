@@ -97,6 +97,12 @@ class Settings(BaseSettings):
     OLLAMA_NUM_CTX: int = 16384
     OLLAMA_KEEP_ALIVE: str = "30m"
 
+    #: JobPilot Admin (dashboard de tokens). Con ambos definidos, cada llamada
+    #: a la IA reporta sus tokens a ADMIN_URL/api/events; sin ellos no se
+    #: envía nada. Desde docker compose: http://host.docker.internal:3030
+    ADMIN_URL: Optional[str] = None
+    ADMIN_INGEST_KEY: Optional[str] = None
+
     # Email (account verification). Without these set, the backend logs the
     # verification link instead of sending a real email — the app stays
     # fully usable in local dev without an SMTP account.

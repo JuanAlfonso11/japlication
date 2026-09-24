@@ -329,3 +329,34 @@ def test_a_model_without_thinking_mode_is_retried_without_the_flag(ollama, monke
     reply = ollama.ac.get_anthropic_client().messages.create(messages=[{"role": "user", "content": "x"}])
     assert _text(reply) == "ok"
     assert len(payloads) == 2
+
+
+def test_reports_token_usage_to_admin_when_configured(monkeypatch, fake_sdk):
+    """Each call reports its tokens, labeled with the calling module, and
+    nothing is reported when JobPilot Admin is not configured."""
+    from app.services import anthropic_client as ac
+
+    sent = []
+    monkeypatch.setattr(ac, "_post_usage", sent.append)
+    monkeypatch.setattr(ac.threading, "Thread", lambda target, args, daemon: SimpleNamespace(start=lambda: target(*args)))
+    monkeypatch.setattr(settings, "ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.setattr(settings, "OLLAMA_BASE_URL", None)
+    response = SimpleNamespace(model="claude-sonnet-5", usage=SimpleNamespace(
+        input_tokens=100, output_tokens=20, cache_read_input_tokens=50, cache_creation_input_tokens=None))
+    fake_sdk.messages = SimpleNamespace(create=lambda **_: response)
+
+    monkeypatch.setattr(settings, "ADMIN_URL", None)
+    get_anthropic_client().messages.create()
+    assert sent == []
+
+    monkeypatch.setattr(settings, "ADMIN_URL", "http://admin")
+    monkeypatch.setattr(settings, "ADMIN_INGEST_KEY", "k")
+    ac.current_ai_user.set("11111111-1111-1111-1111-111111111111")
+    assert get_anthropic_client().messages.create() is response
+    assert sent == [{
+        "user_id": "11111111-1111-1111-1111-111111111111",
+        "feature": "test_anthropic_client",
+        "model": "claude-sonnet-5",
+        "input_tokens": 150,
+        "output_tokens": 20,
+    }]
