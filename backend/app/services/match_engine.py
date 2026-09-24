@@ -302,7 +302,13 @@ def _try_anthropic_semantic_score(profile_text: str, job_text: str) -> Optional[
             ],
         )
         raw = "".join(block.text for block in response.content if getattr(block, "type", None) == "text")
-        score = float(raw.strip())
+        # Local models (Ollama) often wrap the number — "Score: 85", "85/100",
+        # "**85**" — even when told not to. Take the first number rather than
+        # discarding a perfectly usable answer.
+        found = re.search(r"-?\d+(?:\.\d+)?", raw)
+        if found is None:
+            raise ValueError(f"no number in the model's reply: {raw!r}")
+        score = float(found.group(0))
         return round(max(0.0, min(score, 100.0)), 2)
     except Exception as exc:
         # Any AI failure (network, quota, unparsable reply) falls back to

@@ -82,6 +82,21 @@ class Settings(BaseSettings):
     #: separate so they can never use up the interactive budget above.
     ANTHROPIC_DAILY_SCORING_BUDGET: int = 300
 
+    #: Local model through Ollama, to split the AI load with Claude — see
+    #: services/anthropic_client.py. Unset = Claude only (previous behavior).
+    #: From docker compose, Ollama on the host is http://host.docker.internal:11434
+    OLLAMA_BASE_URL: Optional[str] = None
+    OLLAMA_MODEL: str = "gemma4:26b"
+    #: "scoring": Ollama handles the automatic calls (match score, evaluation
+    #: summary) and is the fallback for everything else. "all": Ollama goes
+    #: first for every feature, Claude is only the fallback.
+    OLLAMA_ROUTE: str = "scoring"
+    #: A 26B model reading a whole CV is not fast; the first call also loads
+    #: the model into memory.
+    OLLAMA_TIMEOUT_SECONDS: float = 300.0
+    OLLAMA_NUM_CTX: int = 16384
+    OLLAMA_KEEP_ALIVE: str = "30m"
+
     # Email (account verification). Without these set, the backend logs the
     # verification link instead of sending a real email — the app stays
     # fully usable in local dev without an SMTP account.

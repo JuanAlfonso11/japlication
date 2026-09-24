@@ -357,3 +357,14 @@ class TestAnthropicSemanticScore:
         fake_client = SimpleNamespace(messages=SimpleNamespace(create=_boom))
         monkeypatch.setattr(mod, "get_anthropic_client", lambda **_: fake_client)
         assert mod._try_anthropic_semantic_score("a", "b") is None
+
+
+def test_semantic_score_accepts_a_number_wrapped_in_text(monkeypatch):
+    """Local models answer "Score: 85" or "**85**/100" despite the prompt."""
+    import app.services.match_engine as mod
+
+    for reply in ("Score: 85", "**85**/100", "85."):
+        fake_response = SimpleNamespace(content=[SimpleNamespace(type="text", text=reply)])
+        fake_client = SimpleNamespace(messages=SimpleNamespace(create=lambda **kwargs: fake_response))
+        monkeypatch.setattr(mod, "get_anthropic_client", lambda **_: fake_client)
+        assert mod._try_anthropic_semantic_score("a", "b") == 85.0

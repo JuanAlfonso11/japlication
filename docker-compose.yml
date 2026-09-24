@@ -25,6 +25,11 @@ services:
   backend:
     build: ./backend
     restart: unless-stopped
+    # Para llegar al Ollama que corre en la PC anfitriona
+    # (OLLAMA_BASE_URL=http://host.docker.internal:11434). Docker Desktop ya
+    # lo resuelve solo; esto lo hace funcionar tambien en Docker sobre Linux.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       db:
         condition: service_healthy
@@ -47,6 +52,10 @@ services:
       ANTHROPIC_WORKSPACE_ID: ${ANTHROPIC_WORKSPACE_ID:-}
       ANTHROPIC_DAILY_CALL_BUDGET: ${ANTHROPIC_DAILY_CALL_BUDGET:-100}
       ANTHROPIC_DAILY_SCORING_BUDGET: ${ANTHROPIC_DAILY_SCORING_BUDGET:-300}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-gemma4:26b}
+      OLLAMA_ROUTE: ${OLLAMA_ROUTE:-scoring}
+      OLLAMA_TIMEOUT_SECONDS: ${OLLAMA_TIMEOUT_SECONDS:-300}
       FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:3000}
       BACKEND_PUBLIC_URL: ${BACKEND_PUBLIC_URL:-http://localhost:8000/api/v1}
       CORS_EXTRA_ORIGINS: ${CORS_EXTRA_ORIGINS:-}

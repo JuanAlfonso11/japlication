@@ -12,6 +12,8 @@ mysteriously mediocre". The header now has exactly one place to be wrong,
 and these tests watch it.
 """
 
+from types import SimpleNamespace
+
 import pytest
 
 from app.core.config import settings
@@ -166,3 +168,164 @@ def test_budget_exhausted_check_does_not_spend_a_call(fresh_budget):
     for _ in range(5):
         assert _as_user(ac, "ana", ac.ai_budget_exhausted) is False
     assert _as_user(ac, "ana", ac.get_anthropic_client) is not None
+
+
+# ---------------------------------------------------------------------------
+# Ollama: load split between the local model and Claude
+# ---------------------------------------------------------------------------
+
+
+class _FakeHttpxResponse:
+    def __init__(self, status_code=200, data=None, text=""):
+        self.status_code = status_code
+        self._data = data or {}
+        self.text = text
+
+    def json(self):
+        return self._data
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise RuntimeError(f"HTTP {self.status_code}")
+
+
+@pytest.fixture
+def ollama(monkeypatch, fresh_budget):
+    """Ollama configured and answering; records every request it gets."""
+    import httpx
+
+    ac = fresh_budget
+    monkeypatch.setattr(settings, "OLLAMA_BASE_URL", "http://ollama:11434")
+    monkeypatch.setattr(settings, "OLLAMA_MODEL", "gemma4:26b")
+    monkeypatch.setattr(settings, "OLLAMA_ROUTE", "scoring")
+    monkeypatch.setattr(ac, "_ollama_down_until", 0.0)
+    requests = []
+
+    def post(url, json, timeout):
+        requests.append((url, json))
+        return _FakeHttpxResponse(data={"message": {"content": "85"}, "done_reason": "stop"})
+
+    monkeypatch.setattr(httpx, "post", post)
+    return SimpleNamespace(ac=ac, requests=requests)
+
+
+class _FakeClaude:
+    def __init__(self, reply="claude", fail=False):
+        self.calls = 0
+        self._reply, self._fail = reply, fail
+        self.messages = self
+
+    def create(self, **kwargs):
+        self.calls += 1
+        if self._fail:
+            raise RuntimeError("claude down")
+        return SimpleNamespace(content=[SimpleNamespace(type="text", text=self._reply)])
+
+
+def _text(response):
+    return response.content[0].text
+
+
+def test_automatic_calls_go_to_ollama(ollama, monkeypatch):
+    claude = _FakeClaude()
+    monkeypatch.setattr(ollama.ac, "_claude_client", lambda bucket: claude)
+
+    client = ollama.ac.get_anthropic_client(bucket=ollama.ac.BUCKET_SCORING)
+    reply = client.messages.create(model="claude-x", max_tokens=16, system="sys",
+                                   messages=[{"role": "user", "content": "hola"}])
+
+    assert _text(reply) == "85"
+    assert claude.calls == 0
+    url, payload = ollama.requests[0]
+    assert url == "http://ollama:11434/api/chat"
+    assert payload["model"] == "gemma4:26b"
+    assert payload["messages"][0] == {"role": "system", "content": "sys"}
+    assert payload["options"]["num_predict"] == 16
+    # Ollama's small default context would silently cut a CV in half.
+    assert payload["options"]["num_ctx"] >= 8192
+
+
+def test_interactive_calls_go_to_claude_first(ollama, monkeypatch):
+    claude = _FakeClaude()
+    monkeypatch.setattr(ollama.ac, "_claude_client", lambda bucket: claude)
+
+    reply = ollama.ac.get_anthropic_client().messages.create(messages=[{"role": "user", "content": "x"}])
+    assert _text(reply) == "claude"
+    assert ollama.requests == []
+
+
+def test_interactive_falls_back_to_ollama_when_claude_fails(ollama, monkeypatch):
+    """With a local model available, a Claude error is no longer "Analizado
+    sin IA" for the user."""
+    monkeypatch.setattr(ollama.ac, "_claude_client", lambda bucket: _FakeClaude(fail=True))
+
+    reply = ollama.ac.get_anthropic_client().messages.create(messages=[{"role": "user", "content": "x"}])
+    assert _text(reply) == "85"
+
+
+def test_interactive_uses_ollama_when_claude_is_unavailable(ollama, monkeypatch):
+    """No key, or the user's daily Claude budget is spent."""
+    monkeypatch.setattr(ollama.ac, "_claude_client", lambda bucket: None)
+
+    reply = ollama.ac.get_anthropic_client().messages.create(messages=[{"role": "user", "content": "x"}])
+    assert _text(reply) == "85"
+    assert ollama.ac.ai_budget_exhausted() is False
+
+
+def test_automatic_calls_fall_back_to_claude_when_ollama_is_off(ollama, monkeypatch):
+    """PC off or Ollama not running: fall back, and stop trying Ollama for a
+    while instead of paying the connect timeout on every single job."""
+    import httpx
+
+    def refused(url, json, timeout):
+        raise httpx.ConnectError("connection refused")
+
+    monkeypatch.setattr(httpx, "post", refused)
+    claude = _FakeClaude()
+    monkeypatch.setattr(ollama.ac, "_claude_client", lambda bucket: claude)
+
+    client = ollama.ac.get_anthropic_client(bucket=ollama.ac.BUCKET_SCORING)
+    assert _text(client.messages.create(messages=[{"role": "user", "content": "x"}])) == "claude"
+
+    # Cooling down: the next client is plain Claude, Ollama is not even tried.
+    assert ollama.ac.get_anthropic_client(bucket=ollama.ac.BUCKET_SCORING) is claude
+
+
+def test_route_all_puts_ollama_first_for_interactive_too(ollama, monkeypatch):
+    monkeypatch.setattr(settings, "OLLAMA_ROUTE", "all")
+    claude = _FakeClaude()
+    monkeypatch.setattr(ollama.ac, "_claude_client", lambda bucket: claude)
+
+    reply = ollama.ac.get_anthropic_client().messages.create(messages=[{"role": "user", "content": "x"}])
+    assert _text(reply) == "85"
+    assert claude.calls == 0
+
+
+def test_a_reply_cut_at_the_token_limit_is_reported_as_such(ollama, monkeypatch):
+    import httpx
+
+    monkeypatch.setattr(httpx, "post", lambda url, json, timeout: _FakeHttpxResponse(
+        data={"message": {"content": '{"headline": "Ba'}, "done_reason": "length"}))
+    monkeypatch.setattr(ollama.ac, "_claude_client", lambda bucket: None)
+
+    reply = ollama.ac.get_anthropic_client().messages.create(messages=[{"role": "user", "content": "x"}])
+    assert reply.stop_reason == "max_tokens"
+
+
+def test_a_model_without_thinking_mode_is_retried_without_the_flag(ollama, monkeypatch):
+    import httpx
+
+    payloads = []
+
+    def post(url, json, timeout):
+        payloads.append(dict(json))
+        if "think" in json:
+            return _FakeHttpxResponse(400, text='{"error":"model does not support thinking"}')
+        return _FakeHttpxResponse(data={"message": {"content": "ok"}, "done_reason": "stop"})
+
+    monkeypatch.setattr(httpx, "post", post)
+    monkeypatch.setattr(ollama.ac, "_claude_client", lambda bucket: None)
+
+    reply = ollama.ac.get_anthropic_client().messages.create(messages=[{"role": "user", "content": "x"}])
+    assert _text(reply) == "ok"
+    assert len(payloads) == 2

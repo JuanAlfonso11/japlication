@@ -21,14 +21,32 @@ only some features.
 Returns None instead of raising when the key or the `anthropic` package is
 missing, because every caller already treats None as "use the offline
 path". Callers keep their own try/except around the actual API call.
+
+Local model (Ollama)
+--------------------
+When OLLAMA_BASE_URL is set, the "client" returned here may be a local
+Ollama model behind the same `client.messages.create(...)` surface, so none
+of the seven services had to change. Load is split by bucket:
+
+- BUCKET_SCORING (automatic: match score, evaluation summary) goes to Ollama
+  first — it is the high-volume part and costs nothing locally — and only
+  falls back to Claude if Ollama fails.
+- BUCKET_INTERACTIVE (what the user asked for: CV import, improvement,
+  tailored resume, letter, interview prep) goes to Claude first, and falls
+  back to Ollama when there is no key, the user's daily budget is spent, or
+  the Claude call fails. With OLLAMA_ROUTE=all, Ollama goes first here too.
+
+Either way a user only sees the offline path when *both* are unavailable.
 """
 
 from __future__ import annotations
 
 import logging
 import threading
+import time
 from contextvars import ContextVar
-from typing import Any, Optional
+from types import SimpleNamespace
+from typing import Any, Callable, Optional
 
 from app.core.config import settings
 
@@ -163,6 +181,9 @@ def ai_budget_exhausted(bucket: str = BUCKET_INTERACTIVE) -> bool:
     Read-only (does not count a call), so a fallback path can tell the user
     "you hit today's limit" instead of the misleading "no AI available".
     """
+    if ollama_configured():
+        # Out of Claude budget is not out of AI: the local model takes over.
+        return False
     key = (current_ai_user.get(), bucket)
     with _failure_lock:
         if _spend_day != _today():
@@ -170,8 +191,8 @@ def ai_budget_exhausted(bucket: str = BUCKET_INTERACTIVE) -> bool:
         return _spend_counts.get(key, 0) > _limit_for(bucket)
 
 
-def get_anthropic_client(bucket: str = BUCKET_INTERACTIVE) -> Optional[Any]:
-    """The configured client, or None if AI is not available at all.
+def _claude_client(bucket: str) -> Optional[Any]:
+    """The configured Claude client, or None if it is not available.
 
     None means "there is no point trying": no key, the SDK is not installed,
     or the current user's spend ceiling for `bucket` is already reached
@@ -199,3 +220,126 @@ def get_anthropic_client(bucket: str = BUCKET_INTERACTIVE) -> Optional[Any]:
         api_key=settings.ANTHROPIC_API_KEY,
         default_headers=headers or None,
     )
+
+
+# ---------------------------------------------------------------------------
+# Ollama (local model)
+# ---------------------------------------------------------------------------
+
+#: After Ollama refuses a connection, skip it for this long instead of making
+#: every call wait for the connect timeout first. A PC that is off or an
+#: Ollama that is not running then costs one slow call, not one per job.
+_OLLAMA_COOLDOWN_SECONDS = 60
+_ollama_down_until = 0.0
+
+
+def ollama_configured() -> bool:
+    return bool(settings.OLLAMA_BASE_URL)
+
+
+def _ollama_available() -> bool:
+    return ollama_configured() and time.monotonic() >= _ollama_down_until
+
+
+def _mark_ollama_down() -> None:
+    global _ollama_down_until
+    _ollama_down_until = time.monotonic() + _OLLAMA_COOLDOWN_SECONDS
+
+
+class _OllamaMessages:
+    """`messages.create` with the subset of the Anthropic signature the
+    services use (system, messages, max_tokens), answered by Ollama's
+    /api/chat. The `model` argument is ignored: the services pass the Claude
+    model name, and the local one is OLLAMA_MODEL."""
+
+    def create(self, *, messages: list[dict[str, Any]], max_tokens: int = 1024,
+               system: Optional[str] = None, **_: Any) -> Any:
+        import httpx
+
+        chat = [{"role": "system", "content": system}] if system else []
+        chat += [{"role": m["role"], "content": m["content"]} for m in messages]
+        payload: dict[str, Any] = {
+            "model": settings.OLLAMA_MODEL,
+            "messages": chat,
+            "stream": False,
+            "keep_alive": settings.OLLAMA_KEEP_ALIVE,
+            # Ollama's default context is a few thousand tokens and it
+            # truncates the prompt silently past that — a CV would lose its
+            # first half without any error.
+            "options": {"num_predict": max_tokens, "num_ctx": settings.OLLAMA_NUM_CTX},
+            # Reasoning models would otherwise spend max_tokens thinking and
+            # return an empty answer (the match score only allows 16).
+            "think": False,
+        }
+        timeout = httpx.Timeout(settings.OLLAMA_TIMEOUT_SECONDS, connect=5.0)
+        url = settings.OLLAMA_BASE_URL.rstrip("/") + "/api/chat"
+        try:
+            response = httpx.post(url, json=payload, timeout=timeout)
+            if response.status_code == 400 and "think" in response.text:
+                # A model without a thinking mode can reject the flag itself.
+                payload.pop("think")
+                response = httpx.post(url, json=payload, timeout=timeout)
+        except httpx.ConnectError:
+            _mark_ollama_down()
+            raise
+        response.raise_for_status()
+        data = response.json()
+
+        text = (data.get("message") or {}).get("content") or ""
+        stop_reason = "max_tokens" if data.get("done_reason") == "length" else "end_turn"
+        return SimpleNamespace(
+            content=[SimpleNamespace(type="text", text=text)],
+            stop_reason=stop_reason,
+            model=settings.OLLAMA_MODEL,
+        )
+
+
+class _OllamaClient:
+    def __init__(self) -> None:
+        self.messages = _OllamaMessages()
+
+
+class _FallbackMessages:
+    def __init__(self, primary: Any, primary_name: str, fallback: Callable[[], Optional[Any]]) -> None:
+        self._primary = primary
+        self._primary_name = primary_name
+        self._fallback = fallback
+
+    def create(self, **kwargs: Any) -> Any:
+        try:
+            return self._primary.messages.create(**kwargs)
+        except Exception as exc:
+            second = self._fallback()
+            if second is None:
+                raise
+            log_ai_failure(f"{self._primary_name}->fallback", exc)
+            return second.messages.create(**kwargs)
+
+
+class _FallbackClient:
+    """Tries `primary`; if its call raises, asks `fallback()` for a client
+    and retries there. `fallback` is only called when needed, so a Claude
+    fallback only spends budget on the calls that actually reach it."""
+
+    def __init__(self, primary: Any, primary_name: str, fallback: Callable[[], Optional[Any]]) -> None:
+        self.messages = _FallbackMessages(primary, primary_name, fallback)
+
+
+def get_anthropic_client(bucket: str = BUCKET_INTERACTIVE) -> Optional[Any]:
+    """A client for `bucket`, or None if no AI is available at all.
+
+    Without OLLAMA_BASE_URL this is just the Claude client. With it, load is
+    split as described in this module's docstring. Callers only ever see
+    `client.messages.create(...)` and keep their own try/except around it.
+    """
+    if not _ollama_available():
+        return _claude_client(bucket)
+
+    ollama = _OllamaClient()
+    if bucket == BUCKET_SCORING or settings.OLLAMA_ROUTE == "all":
+        return _FallbackClient(ollama, "ollama", lambda: _claude_client(bucket))
+
+    claude = _claude_client(bucket)
+    if claude is None:
+        return ollama
+    return _FallbackClient(claude, "claude", lambda: ollama if _ollama_available() else None)
