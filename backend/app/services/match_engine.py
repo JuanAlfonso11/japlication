@@ -24,7 +24,7 @@ from sqlalchemy import func
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.anthropic_client import get_anthropic_client, log_ai_failure
+from app.services.anthropic_client import BUCKET_SCORING, get_anthropic_client, log_ai_failure
 from app.models.job_match import JobMatch
 from app.services import work_authorization
 from app.services.skills_taxonomy import SOFT_SKILLS, canonical_skill_set, normalize_skill
@@ -278,7 +278,7 @@ def _try_anthropic_semantic_score(profile_text: str, job_text: str) -> Optional[
     failure — missing key, missing package, network error, or a reply that
     doesn't parse as a plain number — so the caller always has the offline
     fallback to lean on."""
-    client = get_anthropic_client()
+    client = get_anthropic_client(bucket=BUCKET_SCORING)
     if client is None:
         return None
 

@@ -75,6 +75,10 @@ class Settings(BaseSettings):
     #: catch a bug, not to throttle the feature. Also set a real spend limit
     #: in the Anthropic console: this counter resets on container restart.
     ANTHROPIC_DAILY_CALL_BUDGET: int = 250
+    #: Same ceiling, counted separately for match scoring (one call per
+    #: user x job). Kept apart so a heavy scoring day can't use up the budget
+    #: of interactive features like CV import — see anthropic_client.py.
+    ANTHROPIC_DAILY_SCORING_BUDGET: int = 1000
 
     # Email (account verification). Without these set, the backend logs the
     # verification link instead of sending a real email — the app stays

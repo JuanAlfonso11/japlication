@@ -98,3 +98,49 @@ def test_parse_cv_falls_back_to_heuristic_without_api_key(monkeypatch):
 def test_try_ai_parse_returns_none_without_api_key(monkeypatch):
     monkeypatch.setattr(settings, "ANTHROPIC_API_KEY", None)
     assert cv_upload._try_ai_parse(SAMPLE_RESUME_TEXT) is None
+
+
+def _fake_client_replying(text, stop_reason="end_turn"):
+    from types import SimpleNamespace
+
+    response = SimpleNamespace(content=[SimpleNamespace(type="text", text=text)], stop_reason=stop_reason)
+    return SimpleNamespace(messages=SimpleNamespace(create=lambda **kwargs: response))
+
+
+def test_try_ai_parse_accepts_json_wrapped_in_prose_and_fences(monkeypatch):
+    """A sentence before the object used to send the whole CV to the
+    offline parse, which leaves experience and education empty."""
+    reply = 'Here is the JSON:\n```json\n{"headline": "Backend Engineer", "experience": []}\n```\nDone.'
+    monkeypatch.setattr(cv_upload, "get_anthropic_client", lambda: _fake_client_replying(reply))
+
+    result = cv_upload._try_ai_parse(SAMPLE_RESUME_TEXT)
+    assert result is not None
+    assert result["generated_by"] == "ai"
+    assert result["profile"]["headline"] == "Backend Engineer"
+    assert result["profile"]["education"] == []
+
+
+def test_try_ai_parse_rejects_a_reply_cut_off_at_max_tokens(monkeypatch):
+    reply = '{"headline": "Backend Engineer", "experience": [{"company": "Nim'
+    monkeypatch.setattr(
+        cv_upload, "get_anthropic_client", lambda: _fake_client_replying(reply, stop_reason="max_tokens")
+    )
+    assert cv_upload._try_ai_parse(SAMPLE_RESUME_TEXT) is None
+
+
+def test_scoring_calls_cannot_use_up_the_interactive_budget(monkeypatch):
+    """Match scoring runs once per user x job and used to share one daily
+    counter with everything else: a busy scoring day left CV import with no
+    AI at all, and users saw "Analizado sin IA" with a valid key."""
+    from app.services import anthropic_client as ac
+
+    monkeypatch.setattr(settings, "ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.setattr(settings, "ANTHROPIC_DAILY_SCORING_BUDGET", 3)
+    monkeypatch.setattr(settings, "ANTHROPIC_DAILY_CALL_BUDGET", 3)
+    monkeypatch.setattr(ac, "_spend_day", None)
+    monkeypatch.setattr(ac, "_spend_counts", {})
+
+    for _ in range(3):
+        assert ac.get_anthropic_client(bucket=ac.BUCKET_SCORING) is not None
+    assert ac.get_anthropic_client(bucket=ac.BUCKET_SCORING) is None
+    assert ac.get_anthropic_client() is not None

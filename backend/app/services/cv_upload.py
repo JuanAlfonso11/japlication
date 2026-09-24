@@ -147,6 +147,21 @@ STRICT RULES:
 """
 
 
+def _extract_json_object(raw: str) -> dict[str, Any]:
+    """The JSON object in the model's reply, tolerating the wrappers models
+    add despite being told not to: ```json fences, or a sentence before or
+    after the object. Stripping only a leading fence (what this did before)
+    meant one stray "Here is the JSON:" sent the whole CV to the offline
+    path."""
+    start, end = raw.find("{"), raw.rfind("}")
+    if start == -1 or end <= start:
+        raise ValueError("no JSON object in the model's reply")
+    parsed = json.loads(raw[start : end + 1])
+    if not isinstance(parsed, dict):
+        raise ValueError("the model's reply is not a JSON object")
+    return parsed
+
+
 def _try_ai_parse(text: str) -> Optional[dict[str, Any]]:
     client = get_anthropic_client()
     if client is None:
@@ -155,16 +170,18 @@ def _try_ai_parse(text: str) -> Optional[dict[str, Any]]:
     try:
         response = client.messages.create(
             model=settings.ANTHROPIC_MODEL,
-            max_tokens=4000,
+            # A CV with ten roles and their bullets does not fit in 4000
+            # output tokens. The reply was cut mid-JSON, failed to parse, and
+            # exactly the users with the most experience got the offline
+            # parse that leaves experience empty.
+            max_tokens=16000,
             system=SYSTEM_PROMPT,
             messages=[{"role": "user", "content": f"RESUME TEXT:\n{text[:20000]}"}],
         )
+        if getattr(response, "stop_reason", None) == "max_tokens":
+            raise ValueError("the model's reply was cut off at max_tokens")
         raw = "".join(block.text for block in response.content if getattr(block, "type", None) == "text").strip()
-        if raw.startswith("```"):
-            raw = raw.strip("`")
-            if raw.startswith("json"):
-                raw = raw[4:]
-        profile = json.loads(raw)
+        profile = _extract_json_object(raw)
     except Exception as exc:
         log_ai_failure("cv_upload", exc)
         return None

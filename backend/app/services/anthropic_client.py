@@ -73,10 +73,20 @@ def ai_failure_counts() -> dict[str, int]:
 
 
 _spend_day: Optional[str] = None
-_spend_count = 0
+_spend_counts: dict[str, int] = {}
+
+#: Buckets with their own daily count. Match scoring is by far the highest
+#: volume caller — one call per (user, job) pair, for every user — and used
+#: to share a single counter with everything else. On a busy day it spent the
+#: whole budget by itself and every *interactive* feature (importing a CV,
+#: improving it, a cover letter) silently dropped to its offline path for the
+#: rest of the day: users saw "Analizado sin IA" with a perfectly valid key.
+#: Each bucket now gets its own ceiling, so scoring can only starve itself.
+BUCKET_INTERACTIVE = "interactive"
+BUCKET_SCORING = "scoring"
 
 
-def _within_daily_budget() -> bool:
+def _within_daily_budget(bucket: str = BUCKET_INTERACTIVE) -> bool:
     """Runaway-loop guard for the one API here that costs real money.
 
     Adzuna and SerpApi are budgeted in services/api_budget.py against their
@@ -93,40 +103,47 @@ def _within_daily_budget() -> bool:
     above normal use, not acceptable as a billing control. The real ceiling
     is the spend limit in the Anthropic console; set one there too.
     """
-    global _spend_day, _spend_count
+    global _spend_day
     from datetime import datetime, timezone
 
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     with _failure_lock:
         if _spend_day != today:
-            _spend_day, _spend_count = today, 0
-        _spend_count += 1
-        count = _spend_count
+            _spend_day = today
+            _spend_counts.clear()
+        count = _spend_counts.get(bucket, 0) + 1
+        _spend_counts[bucket] = count
 
-    limit = settings.ANTHROPIC_DAILY_CALL_BUDGET
+    limit = (
+        settings.ANTHROPIC_DAILY_SCORING_BUDGET
+        if bucket == BUCKET_SCORING
+        else settings.ANTHROPIC_DAILY_CALL_BUDGET
+    )
     if count > limit:
         if count == limit + 1:  # log the crossing once, not every call after
             logger.error(
-                "AI_BUDGET_EXCEEDED se alcanzo el tope diario de %d llamadas a Anthropic. "
-                "Las funciones de IA usaran la ruta offline hasta manana (UTC). "
-                "Si esto no fue un bucle inesperado, sube ANTHROPIC_DAILY_CALL_BUDGET.",
+                "AI_BUDGET_EXCEEDED bucket=%s se alcanzo el tope diario de %d llamadas a Anthropic. "
+                "Las funciones de IA de este grupo usaran la ruta offline hasta manana (UTC). "
+                "Si esto no fue un bucle inesperado, sube el tope en la configuracion.",
+                bucket,
                 limit,
             )
         return False
     return True
 
 
-def get_anthropic_client() -> Optional[Any]:
+def get_anthropic_client(bucket: str = BUCKET_INTERACTIVE) -> Optional[Any]:
     """The configured client, or None if AI is not available at all.
 
     None means "there is no point trying": no key, the SDK is not installed,
-    or today's spend ceiling is already reached. A key that exists but is
-    rejected still returns a client here — that failure belongs to the call,
-    not to the construction, and the caller's own except block handles it.
+    or today's spend ceiling for `bucket` is already reached. A key that
+    exists but is rejected still returns a client here — that failure belongs
+    to the call, not to the construction, and the caller's own except block
+    handles it.
     """
     if not settings.ANTHROPIC_API_KEY:
         return None
-    if not _within_daily_budget():
+    if not _within_daily_budget(bucket):
         return None
     try:
         import anthropic

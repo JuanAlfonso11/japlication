@@ -270,7 +270,7 @@ class TestComputeMatch:
     def test_use_llm_false_never_touches_anthropic(self, monkeypatch):
         import app.services.match_engine as mod
 
-        monkeypatch.setattr(mod, "get_anthropic_client", lambda: object())
+        monkeypatch.setattr(mod, "get_anthropic_client", lambda **_: object())
 
         def _boom(*args, **kwargs):
             raise AssertionError("compute_match(use_llm=False) must not call the LLM scorer")
@@ -303,7 +303,7 @@ class TestAnthropicSemanticScore:
     def test_returns_none_without_api_key(self, monkeypatch):
         import app.services.match_engine as mod
 
-        monkeypatch.setattr(mod, "get_anthropic_client", lambda: None)
+        monkeypatch.setattr(mod, "get_anthropic_client", lambda **_: None)
         assert mod._try_anthropic_semantic_score("profile text", "job text") is None
 
     def test_parses_a_well_formed_numeric_reply(self, monkeypatch):
@@ -317,7 +317,7 @@ class TestAnthropicSemanticScore:
                 return fake_response
 
         fake_client = SimpleNamespace(messages=FakeMessages())
-        monkeypatch.setattr(mod, "get_anthropic_client", lambda: fake_client)
+        monkeypatch.setattr(mod, "get_anthropic_client", lambda **_: fake_client)
         score = mod._try_anthropic_semantic_score("backend engineer", "backend role")
         assert score == 87.0
 
@@ -329,7 +329,7 @@ class TestAnthropicSemanticScore:
         fake_client = SimpleNamespace(
             messages=SimpleNamespace(create=lambda **kwargs: fake_response)
         )
-        monkeypatch.setattr(mod, "get_anthropic_client", lambda: fake_client)
+        monkeypatch.setattr(mod, "get_anthropic_client", lambda **_: fake_client)
         assert mod._try_anthropic_semantic_score("a", "b") == 100.0
 
     def test_returns_none_on_unparsable_reply(self, monkeypatch):
@@ -340,7 +340,7 @@ class TestAnthropicSemanticScore:
         fake_client = SimpleNamespace(
             messages=SimpleNamespace(create=lambda **kwargs: fake_response)
         )
-        monkeypatch.setattr(mod, "get_anthropic_client", lambda: fake_client)
+        monkeypatch.setattr(mod, "get_anthropic_client", lambda **_: fake_client)
         assert mod._try_anthropic_semantic_score("a", "b") is None
 
     def test_returns_none_when_the_call_raises(self, monkeypatch):
@@ -355,5 +355,5 @@ class TestAnthropicSemanticScore:
             raise RuntimeError("network unreachable")
 
         fake_client = SimpleNamespace(messages=SimpleNamespace(create=_boom))
-        monkeypatch.setattr(mod, "get_anthropic_client", lambda: fake_client)
+        monkeypatch.setattr(mod, "get_anthropic_client", lambda **_: fake_client)
         assert mod._try_anthropic_semantic_score("a", "b") is None
