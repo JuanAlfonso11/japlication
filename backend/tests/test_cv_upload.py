@@ -128,19 +128,10 @@ def test_try_ai_parse_rejects_a_reply_cut_off_at_max_tokens(monkeypatch):
     assert cv_upload._try_ai_parse(SAMPLE_RESUME_TEXT) is None
 
 
-def test_scoring_calls_cannot_use_up_the_interactive_budget(monkeypatch):
-    """Match scoring runs once per user x job and used to share one daily
-    counter with everything else: a busy scoring day left CV import with no
-    AI at all, and users saw "Analizado sin IA" with a valid key."""
-    from app.services import anthropic_client as ac
 
-    monkeypatch.setattr(settings, "ANTHROPIC_API_KEY", "test-key")
-    monkeypatch.setattr(settings, "ANTHROPIC_DAILY_SCORING_BUDGET", 3)
-    monkeypatch.setattr(settings, "ANTHROPIC_DAILY_CALL_BUDGET", 3)
-    monkeypatch.setattr(ac, "_spend_day", None)
-    monkeypatch.setattr(ac, "_spend_counts", {})
-
-    for _ in range(3):
-        assert ac.get_anthropic_client(bucket=ac.BUCKET_SCORING) is not None
-    assert ac.get_anthropic_client(bucket=ac.BUCKET_SCORING) is None
-    assert ac.get_anthropic_client() is not None
+def test_heuristic_warning_names_the_daily_limit_when_that_is_the_reason(monkeypatch):
+    """ "Sin IA disponible" read as broken when the user had simply hit
+    their own daily limit."""
+    monkeypatch.setattr(cv_upload, "ai_budget_exhausted", lambda: True)
+    warnings = cv_upload._heuristic_parse(SAMPLE_RESUME_TEXT)["warnings"]
+    assert "límite diario" in warnings[0]

@@ -110,3 +110,59 @@ def test_every_ai_service_builds_its_client_through_the_factory():
         assert "get_anthropic_client" in fuente, (
             f"{modulo.__name__} does not use the shared client factory."
         )
+
+
+@pytest.fixture
+def fresh_budget(monkeypatch):
+    from app.services import anthropic_client as ac
+
+    monkeypatch.setattr(settings, "ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.setattr(settings, "ANTHROPIC_DAILY_CALL_BUDGET", 2)
+    monkeypatch.setattr(settings, "ANTHROPIC_DAILY_SCORING_BUDGET", 2)
+    monkeypatch.setattr(ac, "_spend_day", None)
+    monkeypatch.setattr(ac, "_spend_counts", {})
+    return ac
+
+
+def _as_user(ac, user_id, fn):
+    import contextvars
+
+    def run():
+        ac.current_ai_user.set(user_id)
+        return fn()
+
+    return contextvars.copy_context().run(run)
+
+
+def test_one_user_using_up_their_budget_leaves_others_untouched(fresh_budget):
+    """The budget used to be one global counter: a few active users left
+    everyone else's CV import with "Analizado sin IA" for the rest of the day."""
+    ac = fresh_budget
+    for _ in range(2):
+        assert _as_user(ac, "ana", ac.get_anthropic_client) is not None
+    assert _as_user(ac, "ana", ac.get_anthropic_client) is None
+    assert _as_user(ac, "ana", ac.ai_budget_exhausted) is True
+
+    assert _as_user(ac, "beto", ac.get_anthropic_client) is not None
+    assert _as_user(ac, "beto", ac.ai_budget_exhausted) is False
+
+
+def test_automatic_calls_cannot_use_up_the_interactive_budget(fresh_budget):
+    """Match scoring and the evaluation summary run without the user asking;
+    they must never be why CV import falls back to the offline parse."""
+    ac = fresh_budget
+
+    def scoring():
+        return ac.get_anthropic_client(bucket=ac.BUCKET_SCORING)
+
+    for _ in range(2):
+        assert _as_user(ac, "ana", scoring) is not None
+    assert _as_user(ac, "ana", scoring) is None
+    assert _as_user(ac, "ana", ac.get_anthropic_client) is not None
+
+
+def test_budget_exhausted_check_does_not_spend_a_call(fresh_budget):
+    ac = fresh_budget
+    for _ in range(5):
+        assert _as_user(ac, "ana", ac.ai_budget_exhausted) is False
+    assert _as_user(ac, "ana", ac.get_anthropic_client) is not None

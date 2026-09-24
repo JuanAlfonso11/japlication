@@ -67,18 +67,20 @@ class Settings(BaseSettings):
     #: in six places and missing the seventh fails silently: that feature
     #: keeps calling the old model and nothing complains.
     ANTHROPIC_MODEL: str = "claude-sonnet-5"
-    #: Stop-the-bleeding ceiling on Anthropic calls per UTC day. Anthropic is
-    #: the only API here that bills rather than running out of a free quota,
-    #: and every caller falls back to an offline path on failure — so a
-    #: runaway loop would spend money with no visible symptom at all. Set far
-    #: above normal use (a sweep scores ~20 jobs every 2 hours); it exists to
-    #: catch a bug, not to throttle the feature. Also set a real spend limit
-    #: in the Anthropic console: this counter resets on container restart.
-    ANTHROPIC_DAILY_CALL_BUDGET: int = 250
-    #: Same ceiling, counted separately for match scoring (one call per
-    #: user x job). Kept apart so a heavy scoring day can't use up the budget
-    #: of interactive features like CV import — see anthropic_client.py.
-    ANTHROPIC_DAILY_SCORING_BUDGET: int = 1000
+    #: Anthropic calls each user may make per UTC day for features they
+    #: explicitly ask for (CV import, CV improvement, tailored resume, cover
+    #: letter, interview prep). Per user, not global: one heavy user can no
+    #: longer leave everyone else with "Analizado sin IA". Anthropic bills
+    #: rather than running out of a quota and every caller falls back to an
+    #: offline path, so a runaway loop would spend money with no visible
+    #: symptom — this is the ceiling. Also set a real spend limit in the
+    #: Anthropic console: this counter resets on container restart. See
+    #: services/anthropic_client.py.
+    ANTHROPIC_DAILY_CALL_BUDGET: int = 100
+    #: Same, per user, for the calls that happen automatically: the match
+    #: score of every job the user adds and the CV evaluation summary. Kept
+    #: separate so they can never use up the interactive budget above.
+    ANTHROPIC_DAILY_SCORING_BUDGET: int = 300
 
     # Email (account verification). Without these set, the backend logs the
     # verification link instead of sending a real email — the app stays

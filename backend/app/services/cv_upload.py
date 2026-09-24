@@ -27,7 +27,7 @@ from fastapi import HTTPException
 from pypdf import PdfReader
 from pypdf.errors import PdfReadError
 
-from app.services.anthropic_client import get_anthropic_client, log_ai_failure
+from app.services.anthropic_client import ai_budget_exhausted, get_anthropic_client, log_ai_failure
 from app.services.skills_taxonomy import extract_skills_from_text
 from app.core.config import settings
 
@@ -92,8 +92,14 @@ def _heuristic_parse(text: str) -> dict[str, Any]:
 
     # Names what the user can act on, not the env var they never set: the
     # name of a backend setting tells them nothing about what to do next.
+    if ai_budget_exhausted():
+        # Says what actually happened: "no AI available" read as broken, and
+        # sent the user (and the operator) looking for a missing key.
+        reason = "Llegaste al límite diario de funciones con IA (se renueva mañana), así que"
+    else:
+        reason = "Sin IA disponible,"
     warnings = [
-        "Sin IA disponible, solo pudimos extraer habilidades y datos de contacto "
+        f"{reason} solo pudimos extraer habilidades y datos de contacto "
         "automáticamente. Agrega tu experiencia y educación a mano abajo: no inventamos esa parte "
         "para no arriesgar datos incorrectos."
     ]

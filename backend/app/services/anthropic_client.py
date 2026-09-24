@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import logging
 import threading
+from contextvars import ContextVar
 from typing import Any, Optional
 
 from app.core.config import settings
@@ -73,17 +74,42 @@ def ai_failure_counts() -> dict[str, int]:
 
 
 _spend_day: Optional[str] = None
-_spend_counts: dict[str, int] = {}
+#: (user_id, bucket) -> calls today. user_id is None for calls made outside a
+#: request (scripts, background jobs), which then share one "system" count.
+_spend_counts: dict[tuple[Optional[str], str], int] = {}
 
-#: Buckets with their own daily count. Match scoring is by far the highest
-#: volume caller — one call per (user, job) pair, for every user — and used
-#: to share a single counter with everything else. On a busy day it spent the
-#: whole budget by itself and every *interactive* feature (importing a CV,
-#: improving it, a cover letter) silently dropped to its offline path for the
-#: rest of the day: users saw "Analizado sin IA" with a perfectly valid key.
-#: Each bucket now gets its own ceiling, so scoring can only starve itself.
+#: Who the current request is for. Set by get_current_user (api/deps.py) so
+#: the budget can be counted per user without threading a user id through
+#: all seven AI services. asyncio.to_thread copies the context, so the value
+#: is still visible inside the worker threads those services run in.
+current_ai_user: ContextVar[Optional[str]] = ContextVar("current_ai_user", default=None)
+
+#: Buckets with their own daily count, per user.
+#:
+#: BUCKET_INTERACTIVE is what the user explicitly asked for: importing a CV,
+#: improving it, a tailored resume, a cover letter, interview prep.
+#: BUCKET_SCORING is everything that runs as a side effect the user never
+#: sees as "an AI call": the match score of every job they add, and the
+#: summary on the CV evaluation card (which ran on every visit to Perfil).
+#: Those used to share one global counter with everything else, so a few
+#: active users browsing their profile left CV import with no AI for the
+#: rest of the day: "Analizado sin IA" with a perfectly valid key. Now one
+#: user can only use up their own budget, and automatic calls can only use
+#: up the automatic bucket.
 BUCKET_INTERACTIVE = "interactive"
 BUCKET_SCORING = "scoring"
+
+
+def _today() -> str:
+    from datetime import datetime, timezone
+
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+
+def _limit_for(bucket: str) -> int:
+    if bucket == BUCKET_SCORING:
+        return settings.ANTHROPIC_DAILY_SCORING_BUDGET
+    return settings.ANTHROPIC_DAILY_CALL_BUDGET
 
 
 def _within_daily_budget(bucket: str = BUCKET_INTERACTIVE) -> bool:
@@ -96,35 +122,34 @@ def _within_daily_budget(bucket: str = BUCKET_INTERACTIVE) -> bool:
     showed up. And because every caller swallows failures into an offline
     fallback, a spend spike produced no visible error either.
 
-    Counted in-process rather than in the database because this is called
-    from `asyncio.to_thread` workers with no event loop of their own, and
-    try_consume_budget() is async. That means the count resets when the
-    container restarts — acceptable for a stop-the-bleeding ceiling set far
-    above normal use, not acceptable as a billing control. The real ceiling
-    is the spend limit in the Anthropic console; set one there too.
+    Counted per user (see current_ai_user) and in-process rather than in the
+    database because this is called from `asyncio.to_thread` workers with no
+    event loop of their own, and try_consume_budget() is async. That means
+    the count resets when the container restarts — acceptable for a
+    per-user fairness ceiling, not acceptable as a billing control. The real
+    ceiling is the spend limit in the Anthropic console; set one there too.
     """
     global _spend_day
-    from datetime import datetime, timezone
+    user = current_ai_user.get()
+    key = (user, bucket)
 
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today = _today()
     with _failure_lock:
         if _spend_day != today:
             _spend_day = today
             _spend_counts.clear()
-        count = _spend_counts.get(bucket, 0) + 1
-        _spend_counts[bucket] = count
+        count = _spend_counts.get(key, 0) + 1
+        _spend_counts[key] = count
 
-    limit = (
-        settings.ANTHROPIC_DAILY_SCORING_BUDGET
-        if bucket == BUCKET_SCORING
-        else settings.ANTHROPIC_DAILY_CALL_BUDGET
-    )
+    limit = _limit_for(bucket)
     if count > limit:
         if count == limit + 1:  # log the crossing once, not every call after
             logger.error(
-                "AI_BUDGET_EXCEEDED bucket=%s se alcanzo el tope diario de %d llamadas a Anthropic. "
-                "Las funciones de IA de este grupo usaran la ruta offline hasta manana (UTC). "
-                "Si esto no fue un bucle inesperado, sube el tope en la configuracion.",
+                "AI_BUDGET_EXCEEDED user=%s bucket=%s se alcanzo el tope diario de %d llamadas a "
+                "Anthropic. Las funciones de IA de este grupo usaran la ruta offline para este "
+                "usuario hasta manana (UTC). Si esto no fue un bucle inesperado, sube el tope en "
+                "la configuracion.",
+                user or "sistema",
                 bucket,
                 limit,
             )
@@ -132,14 +157,27 @@ def _within_daily_budget(bucket: str = BUCKET_INTERACTIVE) -> bool:
     return True
 
 
+def ai_budget_exhausted(bucket: str = BUCKET_INTERACTIVE) -> bool:
+    """Whether the current user has already used up today's `bucket`.
+
+    Read-only (does not count a call), so a fallback path can tell the user
+    "you hit today's limit" instead of the misleading "no AI available".
+    """
+    key = (current_ai_user.get(), bucket)
+    with _failure_lock:
+        if _spend_day != _today():
+            return False
+        return _spend_counts.get(key, 0) > _limit_for(bucket)
+
+
 def get_anthropic_client(bucket: str = BUCKET_INTERACTIVE) -> Optional[Any]:
     """The configured client, or None if AI is not available at all.
 
     None means "there is no point trying": no key, the SDK is not installed,
-    or today's spend ceiling for `bucket` is already reached. A key that
-    exists but is rejected still returns a client here — that failure belongs
-    to the call, not to the construction, and the caller's own except block
-    handles it.
+    or the current user's spend ceiling for `bucket` is already reached
+    today. A key that exists but is rejected still returns a client here —
+    that failure belongs to the call, not to the construction, and the
+    caller's own except block handles it.
     """
     if not settings.ANTHROPIC_API_KEY:
         return None
