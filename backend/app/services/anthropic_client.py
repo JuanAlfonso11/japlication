@@ -42,6 +42,7 @@ Either way a user only sees the offline path when *both* are unavailable.
 from __future__ import annotations
 
 import logging
+import sys
 import threading
 import time
 from contextvars import ContextVar
@@ -291,6 +292,10 @@ class _OllamaMessages:
             content=[SimpleNamespace(type="text", text=text)],
             stop_reason=stop_reason,
             model=settings.OLLAMA_MODEL,
+            usage=SimpleNamespace(
+                input_tokens=data.get("prompt_eval_count") or 0,
+                output_tokens=data.get("eval_count") or 0,
+            ),
         )
 
 
@@ -325,13 +330,80 @@ class _FallbackClient:
         self.messages = _FallbackMessages(primary, primary_name, fallback)
 
 
+# ---------------------------------------------------------------------------
+# Token usage report to JobPilot Admin
+# ---------------------------------------------------------------------------
+
+
+def _usage_event(feature: str, response: Any) -> Optional[dict[str, Any]]:
+    """The event JobPilot Admin expects, or None if the response has no usage."""
+    usage = getattr(response, "usage", None)
+    if usage is None:
+        return None
+    tokens = lambda name: getattr(usage, name, None) or 0  # noqa: E731
+    return {
+        "user_id": current_ai_user.get() or "sistema",
+        "feature": feature,
+        "model": str(getattr(response, "model", "") or "")[:120],
+        # Cache reads/writes are billed input too; the dashboard has one input column.
+        "input_tokens": tokens("input_tokens") + tokens("cache_read_input_tokens")
+        + tokens("cache_creation_input_tokens"),
+        "output_tokens": tokens("output_tokens"),
+    }
+
+
+def _post_usage(event: dict[str, Any]) -> None:
+    try:
+        import httpx
+
+        httpx.post(
+            settings.ADMIN_URL.rstrip("/") + "/api/events",
+            json=event,
+            headers={"Authorization": f"Bearer {settings.ADMIN_INGEST_KEY}"},
+            timeout=3.0,
+        )
+    except Exception as exc:  # the dashboard being down must never affect the app
+        logger.debug("No se pudo reportar uso de tokens: %s", exc)
+
+
+class _TrackedMessages:
+    def __init__(self, inner: Any, feature: str) -> None:
+        self._inner = inner
+        self._feature = feature
+
+    def create(self, **kwargs: Any) -> Any:
+        response = self._inner.create(**kwargs)
+        event = _usage_event(self._feature, response)
+        if event:
+            # ponytail: un hilo por llamada; bien con el tope diario de llamadas, cola si crece.
+            threading.Thread(target=_post_usage, args=(event,), daemon=True).start()
+        return response
+
+
+class _TrackedClient:
+    def __init__(self, inner: Any, feature: str) -> None:
+        self.messages = _TrackedMessages(inner.messages, feature)
+
+
 def get_anthropic_client(bucket: str = BUCKET_INTERACTIVE) -> Optional[Any]:
     """A client for `bucket`, or None if no AI is available at all.
 
     Without OLLAMA_BASE_URL this is just the Claude client. With it, load is
     split as described in this module's docstring. Callers only ever see
     `client.messages.create(...)` and keep their own try/except around it.
+
+    With ADMIN_URL and ADMIN_INGEST_KEY set, every call also reports its
+    tokens to JobPilot Admin, labeled with the calling service's module
+    name (cv_upload, match_engine, ...) so none of the seven had to change.
     """
+    client = _build_client(bucket)
+    if client is None or not (settings.ADMIN_URL and settings.ADMIN_INGEST_KEY):
+        return client
+    feature = sys._getframe(1).f_globals.get("__name__", "unknown").rsplit(".", 1)[-1]
+    return _TrackedClient(client, feature)
+
+
+def _build_client(bucket: str) -> Optional[Any]:
     if not _ollama_available():
         return _claude_client(bucket)
 

@@ -56,6 +56,9 @@ services:
       OLLAMA_MODEL: ${OLLAMA_MODEL:-gemma4:26b}
       OLLAMA_ROUTE: ${OLLAMA_ROUTE:-scoring}
       OLLAMA_TIMEOUT_SECONDS: ${OLLAMA_TIMEOUT_SECONDS:-300}
+      # JobPilot Admin: reporta los tokens de cada llamada a la IA (vacío = desactivado)
+      ADMIN_URL: ${ADMIN_URL:-}
+      ADMIN_INGEST_KEY: ${ADMIN_INGEST_KEY:-}
       FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:3000}
       BACKEND_PUBLIC_URL: ${BACKEND_PUBLIC_URL:-http://localhost:8000/api/v1}
       CORS_EXTRA_ORIGINS: ${CORS_EXTRA_ORIGINS:-}
