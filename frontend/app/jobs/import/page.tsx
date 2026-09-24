@@ -9,16 +9,15 @@ import ErrorNotice from "@/components/ErrorNotice";
 import ImportedJobCard from "@/components/ImportedJobCard";
 import { inputClass, textareaClass } from "@/components/ui/Field";
 import { ApiError, jobsApi } from "@/lib/api";
-import { importAndMatch } from "@/lib/jobActions";
+import { importAndMatch, type AddedJob } from "@/lib/jobActions";
 import { extractSharedUrl } from "@/lib/sharedText";
-import type { Job } from "@/lib/types";
 
 function ImportByUrl({
   onImported,
   initialUrl = "",
   autoStart = false,
 }: {
-  onImported: (job: Job) => void;
+  onImported: (job: AddedJob) => void;
   /** Pre-filled when the page was opened from Android's share sheet. */
   initialUrl?: string;
   /** Fires the import immediately, so sharing a job is one tap end to end
@@ -121,7 +120,7 @@ function ManualJobForm({
   onImported,
   initialDescription = "",
 }: {
-  onImported: (job: Job) => void;
+  onImported: (job: AddedJob) => void;
   /** Carries over text shared from another app when it held no link, so the
    * user doesn't have to go back and copy it again. */
   initialDescription?: string;
@@ -277,7 +276,7 @@ function ImportContent() {
   const [mode, setMode] = useState<"url" | "manual">(
     wasShared && !sharedUrl ? "manual" : "url"
   );
-  const [lastImported, setLastImported] = useState<Job | null>(null);
+  const [lastImported, setLastImported] = useState<AddedJob | null>(null);
 
   return (
     <div className="space-y-6 pb-4 animate-fade-in">

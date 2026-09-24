@@ -13,6 +13,7 @@ postings nobody could read above every job the engine could.
 from __future__ import annotations
 
 import asyncio
+import json
 import math
 import re
 from collections import Counter
@@ -24,7 +25,13 @@ from sqlalchemy import func
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.anthropic_client import get_anthropic_client, log_ai_failure
+from app.services.anthropic_client import (
+    AI_MAX_TOKENS,
+    LOW_EFFORT,
+    get_anthropic_client,
+    log_ai_failure,
+    response_text,
+)
 from app.models.job_match import JobMatch
 from app.services import work_authorization
 from app.services.skills_taxonomy import SOFT_SKILLS, canonical_skill_set, normalize_skill
@@ -285,7 +292,8 @@ def _try_anthropic_semantic_score(profile_text: str, job_text: str) -> Optional[
     try:
         response = client.messages.create(
             model=settings.ANTHROPIC_MODEL,
-            max_tokens=16,
+            max_tokens=AI_MAX_TOKENS,
+            extra_body=LOW_EFFORT,
             messages=[
                 {
                     "role": "user",
@@ -301,7 +309,7 @@ def _try_anthropic_semantic_score(profile_text: str, job_text: str) -> Optional[
                 }
             ],
         )
-        raw = "".join(block.text for block in response.content if getattr(block, "type", None) == "text")
+        raw = response_text(response)
         score = float(raw.strip())
         return round(max(0.0, min(score, 100.0)), 2)
     except Exception as exc:
@@ -397,7 +405,9 @@ def build_concerns(
 # ---------------------------------------------------------------------------
 
 
-def compute_match(profile, job, use_llm: bool = True) -> dict[str, Any]:
+def compute_match(
+    profile, job, use_llm: bool = True, semantic_override: Optional[float] = None
+) -> dict[str, Any]:
     """profile: CareerProfile ORM instance, job: Job ORM instance.
     Returns a dict ready to persist into job_matches / return as MatchResult.
 
@@ -430,7 +440,9 @@ def compute_match(profile, job, use_llm: bool = True) -> dict[str, Any]:
 
     profile_text = build_profile_text(profile)
     job_text = build_job_text(job)
-    semantic_score = _try_anthropic_semantic_score(profile_text, job_text) if use_llm else None
+    semantic_score = semantic_override
+    if semantic_score is None and use_llm:
+        semantic_score = _try_anthropic_semantic_score(profile_text, job_text)
     if semantic_score is None:
         semantic_score = compute_semantic_score(profile_text, job_text)
 
@@ -480,7 +492,12 @@ def compute_match(profile, job, use_llm: bool = True) -> dict[str, Any]:
 
 
 async def compute_and_persist_match(
-    profile: "CareerProfile", job: "Job", user_id: UUID, db: AsyncSession, use_llm: bool = True
+    profile: "CareerProfile",
+    job: "Job",
+    user_id: UUID,
+    db: AsyncSession,
+    use_llm: bool = True,
+    semantic_override: Optional[float] = None,
 ) -> JobMatch:
     """Computes a match score and upserts it as a `job_matches` row —
     shared by the on-demand GET /jobs/{id}/match route and the CV-upload
@@ -492,7 +509,7 @@ async def compute_and_persist_match(
     call — without to_thread, that call would block this whole process's
     single event loop, stalling every other concurrent request for as long
     as the LLM call takes."""
-    result = await asyncio.to_thread(compute_match, profile, job, use_llm)
+    result = await asyncio.to_thread(compute_match, profile, job, use_llm, semantic_override)
     stmt = (
         pg_insert(JobMatch)
         .values(
@@ -525,3 +542,97 @@ async def compute_and_persist_match(
     await db.commit()
     await db.refresh(row)
     return row
+
+
+async def backfill_missing_matches(profile: "CareerProfile", user_id: UUID, db: AsyncSession) -> int:
+    """Scores every job this user added or saved before having a profile.
+
+    Adding a job with no profile yet stores the job but cannot score it, and
+    GET /matches only returns scored jobs — so those jobs stayed invisible
+    even after the user uploaded a CV. Called on every profile save; after
+    the first one it finds nothing and costs one query. One AI call for the
+    whole batch, like the sweep."""
+    from sqlalchemy import or_, select
+
+    from app.models.application import Application
+    from app.models.job import Job
+
+    already = select(JobMatch.job_id).where(JobMatch.user_id == user_id)
+    saved = select(Application.job_id).where(Application.user_id == user_id)
+    jobs = (
+        await db.execute(
+            select(Job)
+            .where(or_(Job.imported_by == user_id, Job.id.in_(saved)))
+            .where(Job.id.not_in(already))
+            .limit(200)  # ponytail: cap per save; the next save picks up the rest.
+        )
+    ).scalars().all()
+    await persist_matches_batch(profile, list(jobs), user_id, db)
+    return len(jobs)
+
+
+#: Per job, in the batch prompt. The first ~1500 characters of a posting carry
+#: the title, the summary and usually the requirements.
+_BATCH_JOB_CHARS = 1500
+
+
+def batch_semantic_scores(profile_text: str, job_texts: list[str]) -> list[Optional[float]]:
+    """Semantic fit for many jobs in ONE model call; None where it failed.
+
+    The sweep used the offline TF-IDF scorer for every job because one call
+    per job would be dozens of calls per sweep. TF-IDF between a Spanish CV
+    and English postings is close to zero whatever the fit: measured, a
+    maintenance engineer scored 2/100 on "Coordinador de Mantenimiento",
+    55 once the model judged it, and the whole queue averaged 6. One call
+    for the batch costs what one job used to."""
+    if not job_texts:
+        return []
+    client = get_anthropic_client()
+    if client is None:
+        return [None] * len(job_texts)
+    postings = "\n\n".join(
+        f"### JOB {i}\n{text[:_BATCH_JOB_CHARS]}" for i, text in enumerate(job_texts)
+    )
+    try:
+        response = client.messages.create(
+            model=settings.ANTHROPIC_MODEL,
+            max_tokens=AI_MAX_TOKENS,
+            extra_body=LOW_EFFORT,
+            messages=[
+                {
+                    "role": "user",
+                    "content": (
+                        "Rate 0-100 how well this candidate fits EACH job posting below. Judge "
+                        "the underlying fit of skills, field and responsibilities, not literal "
+                        "keyword overlap; the profile and the postings may be in different "
+                        "languages. Reply with ONLY a JSON array of "
+                        f"{len(job_texts)} numbers, in job order, nothing else.\n\n"
+                        f"CANDIDATE PROFILE:\n{profile_text[:3000]}\n\n{postings}"
+                    ),
+                }
+            ],
+        )
+        # The first [...] in the reply: the model sometimes adds a line of
+        # explanation after the array, or wraps it in a code fence.
+        found = re.search(r"\[[^\[\]]*\]", response_text(response))
+        scores = json.loads(found.group(0)) if found else None
+        if not isinstance(scores, list) or len(scores) != len(job_texts):
+            raise ValueError(f"expected {len(job_texts)} scores, got {scores!r}")
+        return [round(max(0.0, min(float(s), 100.0)), 2) for s in scores]
+    except Exception as exc:
+        log_ai_failure("match_engine_batch", exc)
+        return [None] * len(job_texts)
+
+
+async def persist_matches_batch(
+    profile: "CareerProfile", jobs: list["Job"], user_id: UUID, db: AsyncSession
+) -> None:
+    """Scores and stores many jobs with one AI call (offline for any it missed)."""
+    profile_text = build_profile_text(profile)
+    scores = await asyncio.to_thread(
+        batch_semantic_scores, profile_text, [build_job_text(job) for job in jobs]
+    )
+    for job, score in zip(jobs, scores):
+        await compute_and_persist_match(
+            profile, job, user_id, db, use_llm=False, semantic_override=score
+        )

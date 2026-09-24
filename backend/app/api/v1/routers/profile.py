@@ -29,6 +29,7 @@ from app.schemas.cv_evaluation import CVEvaluation
 from app.services import cv_upload
 from app.services.cv_evaluator import evaluate_cv
 from app.services.master_resume import master_resume_content
+from app.services.match_engine import backfill_missing_matches
 from app.services.profile_i18n import labels_for, normalize_language, translation_status
 from app.services.profile_improver import improve_profile
 from app.services.resume_latex import render_resume_latex
@@ -52,7 +53,7 @@ async def _master_cv(
     result = await db.execute(select(CareerProfile).where(CareerProfile.user_id == current_user.id))
     profile = result.scalar_one_or_none()
     if profile is None:
-        raise HTTPException(status_code=404, detail="Create your career profile before downloading it.")
+        raise HTTPException(status_code=404, detail="Primero sube tu CV en Perfil y guárdalo.")
     code = normalize_language(language)
     return profile, master_resume_content(profile, code), code
 
@@ -133,7 +134,7 @@ async def get_profile(
     result = await db.execute(select(CareerProfile).where(CareerProfile.user_id == current_user.id))
     profile = result.scalar_one_or_none()
     if profile is None:
-        raise HTTPException(status_code=404, detail="Career profile not created yet.")
+        raise HTTPException(status_code=404, detail="Todavía no tienes perfil: sube tu CV en Perfil.")
     return CareerProfileSchema.model_validate(profile)
 
 
@@ -164,6 +165,8 @@ async def upsert_profile(
 
     await db.commit()
     await db.refresh(profile)
+    await backfill_missing_matches(profile, current_user.id, db)
+    await db.refresh(profile)
     return CareerProfileSchema.model_validate(profile)
 
 
@@ -179,7 +182,7 @@ async def get_profile_languages(
     result = await db.execute(select(CareerProfile).where(CareerProfile.user_id == current_user.id))
     profile = result.scalar_one_or_none()
     if profile is None:
-        raise HTTPException(status_code=404, detail="Career profile not created yet.")
+        raise HTTPException(status_code=404, detail="Todavía no tienes perfil: sube tu CV en Perfil.")
 
     return [
         LanguageStatus(code=code, **status)
@@ -202,7 +205,7 @@ async def improve_profile_endpoint(
     result = await db.execute(select(CareerProfile).where(CareerProfile.user_id == current_user.id))
     profile = result.scalar_one_or_none()
     if profile is None:
-        raise HTTPException(status_code=404, detail="Create your career profile before improving it.")
+        raise HTTPException(status_code=404, detail="Primero sube tu CV en Perfil y guárdalo.")
 
     improved = await asyncio.to_thread(improve_profile, profile)
     return ProfileImprovementResult.model_validate(improved)
@@ -218,13 +221,13 @@ async def get_profile_evaluation(
     result = await db.execute(select(CareerProfile).where(CareerProfile.user_id == current_user.id))
     profile = result.scalar_one_or_none()
     if profile is None:
-        raise HTTPException(status_code=404, detail="Create your career profile before evaluating it.")
+        raise HTTPException(status_code=404, detail="Primero sube tu CV en Perfil y guárdalo.")
     evaluation = await asyncio.to_thread(evaluate_cv, profile)
     return CVEvaluation.model_validate(evaluation)
 
 
 @router.post("/import-cv", response_model=CVUploadResult)
-@limiter.limit("5/hour")
+@limiter.limit("10/hour")
 async def import_cv(
     request: Request,
     file: UploadFile = File(...),
@@ -238,7 +241,7 @@ async def import_cv(
     # stays as a cheap first filter; the real check is the %PDF- signature
     # below, once we actually have the bytes.
     if file.content_type not in ("application/pdf", "application/x-pdf"):
-        raise HTTPException(status_code=422, detail="Please upload a PDF file.")
+        raise HTTPException(status_code=422, detail="Sube tu CV en formato PDF.")
 
     max_bytes = settings.MAX_CV_UPLOAD_MB * 1024 * 1024
 
@@ -257,13 +260,13 @@ async def import_cv(
         if total > max_bytes:
             raise HTTPException(
                 status_code=413,
-                detail=f"PDF is too large (max {settings.MAX_CV_UPLOAD_MB} MB).",
+                detail=f"El PDF es demasiado grande (máximo {settings.MAX_CV_UPLOAD_MB} MB).",
             )
         chunks.append(chunk)
 
     contents = b"".join(chunks)
     if not contents:
-        raise HTTPException(status_code=422, detail="The uploaded file is empty.")
+        raise HTTPException(status_code=422, detail="El archivo está vacío.")
 
     # The actual format check. Every PDF starts with "%PDF-"; anything else
     # never reaches pypdf's parser, which is the one component here that

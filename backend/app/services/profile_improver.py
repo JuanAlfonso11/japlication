@@ -19,7 +19,13 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from app.services.anthropic_client import get_anthropic_client, log_ai_failure
+from app.services.anthropic_client import (
+    AI_MAX_TOKENS,
+    LOW_EFFORT,
+    get_anthropic_client,
+    log_ai_failure,
+    response_text,
+)
 from app.core.config import settings
 
 
@@ -136,7 +142,7 @@ def _try_anthropic_improve(profile: Any) -> dict[str, Any] | None:
     try:
         response = client.messages.create(
             model=settings.ANTHROPIC_MODEL,
-            max_tokens=2000,
+            max_tokens=AI_MAX_TOKENS,
             system=SYSTEM_PROMPT,
             messages=[
                 {
@@ -148,7 +154,7 @@ def _try_anthropic_improve(profile: Any) -> dict[str, Any] | None:
                 }
             ],
         )
-        text = "".join(block.text for block in response.content if getattr(block, "type", None) == "text")
+        text = response_text(response)
         text = text.strip()
         if text.startswith("```"):
             text = text.strip("`")

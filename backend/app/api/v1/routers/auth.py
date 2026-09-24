@@ -126,7 +126,7 @@ async def register(request: Request, payload: UserRegister, db: AsyncSession = D
 
     existing = await db.execute(select(User).where(User.email == payload.email.lower()))
     if existing.scalar_one_or_none() is not None:
-        raise HTTPException(status_code=409, detail="An account with this email already exists.")
+        raise HTTPException(status_code=409, detail="Ya existe una cuenta con ese correo.")
 
     user = User(
         email=payload.email.lower(),
@@ -166,12 +166,12 @@ async def login(request: Request, payload: UserLogin, db: AsyncSession = Depends
         # question. Costs one bcrypt round on a path that should be rare.
         await asyncio.to_thread(verify_password, payload.password, _DUMMY_PASSWORD_HASH)
         login_lockout.record_failure(address)
-        raise HTTPException(status_code=401, detail="Invalid email or password.")
+        raise HTTPException(status_code=401, detail="Correo o contraseña incorrectos.")
     # bcrypt is deliberately slow (~100ms+); off the event loop it goes, or
     # every concurrent request waits behind this one.
     if not await asyncio.to_thread(verify_password, payload.password, user.hashed_password):
         login_lockout.record_failure(address)
-        raise HTTPException(status_code=401, detail="Invalid email or password.")
+        raise HTTPException(status_code=401, detail="Correo o contraseña incorrectos.")
     login_lockout.reset(address)
 
     access_token, refresh_token = await _issue_token_pair(user, db)
@@ -188,7 +188,7 @@ async def refresh(request: Request, payload: RefreshRequest, db: AsyncSession = 
     if a stolen refresh token and the real one both later try to use the
     same now-revoked value, that's a signal it leaked, without needing any
     extra infrastructure to detect it."""
-    invalid = HTTPException(status_code=401, detail="Invalid or expired refresh token.")
+    invalid = HTTPException(status_code=401, detail="Tu sesión venció. Inicia sesión otra vez.")
 
     token_hash = hash_refresh_token(payload.refresh_token)
     result = await db.execute(select(RefreshToken).where(RefreshToken.token_hash == token_hash))
