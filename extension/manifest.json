@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "JobPilot Autofill",
+  "version": "0.1.0",
+  "description": "Rellena formularios de postulación con tu perfil y tu banco de respuestas de JobPilot. Nunca envía: el clic final es tuyo.",
+  "icons": { "128": "icon.png" },
+  "action": { "default_popup": "popup.html", "default_icon": "icon.png" },
+  "permissions": ["activeTab", "scripting", "storage"],
+  "host_permissions": [
+    "https://*.greenhouse.io/*",
+    "https://*.lever.co/*",
+    "https://*.ashbyhq.com/*",
+    "https://*.workable.com/*",
+    "https://*.smartrecruiters.com/*",
+    "https://*.myworkdayjobs.com/*",
+    "https://*.icims.com/*",
+    "https://*.breezy.hr/*",
+    "https://join.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["http://localhost/*", "https://jobpilot.tailb3d4c1.ts.net/*"],
+      "js": ["sync.js"]
+    }
+  ]
+}

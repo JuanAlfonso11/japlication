@@ -78,3 +78,25 @@ async def test_a_posting_that_says_nothing_is_kept(async_client, user_and_header
 
     assert response.status_code == 200, response.text
     assert [r["title"] for r in response.json()["results"]] == ["Backend Engineer"]
+
+
+@pytest.mark.asyncio
+async def test_postings_older_than_30_days_are_dropped(async_client, user_and_headers, monkeypatch):
+    """Undated postings stay; only ones that say they are stale go."""
+    from datetime import datetime, timedelta, timezone
+
+    _user, headers = user_and_headers
+    now = datetime.now(timezone.utc)
+
+    async def fake_search(**_kwargs):
+        fresh = {**_posting("1", "Fresh"), "posted_at": (now - timedelta(days=3)).isoformat()}
+        stale = {**_posting("2", "Stale"), "posted_at": (now - timedelta(days=45)).isoformat()}
+        return {"results": [fresh, stale, _posting("3", "Undated")], "has_more": False}
+
+    monkeypatch.setattr(jobs, "_SEARCH_PROVIDERS", {"himalayas"})
+    monkeypatch.setattr(himalayas, "search_himalayas_jobs", fake_search)
+
+    response = await async_client.get("/jobs/search/aggregate", params={"q": "x"}, headers=headers)
+
+    assert response.status_code == 200, response.text
+    assert sorted(r["title"] for r in response.json()["results"]) == ["Fresh", "Undated"]

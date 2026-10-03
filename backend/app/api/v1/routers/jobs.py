@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID
 
@@ -380,6 +380,9 @@ async def search_jobs(
     )
 
 
+MAX_POSTING_AGE_DAYS = 30
+
+
 async def _run_search_provider(
     provider: str,
     q: Optional[str],
@@ -431,6 +434,10 @@ async def _run_search_provider(
             if (_extract_remote_type(f"{r.title} {r.location or ''}") or remote_type_filter)
             == remote_type_filter
         ]
+    # Plan de auto-apply, regla sin LLM: una vacante de mas de 30 dias casi
+    # nunca sigue abierta. Sin fecha se deja pasar: no se adivina.
+    cutoff = datetime.now(timezone.utc) - timedelta(days=MAX_POSTING_AGE_DAYS)
+    results = [r for r in results if r.posted_at is None or _aggregate_sort_key(r) >= cutoff]
     # After the filter, not before: a result the user never sees is a result
     # they cannot import. Also covers the stragglers — a slow provider whose
     # task outlives its own request still leaves its results importable.

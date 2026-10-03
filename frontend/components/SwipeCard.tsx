@@ -202,22 +202,21 @@ export default function SwipeCard({
             {match && <ScoreBadge score={match.overall_score} size="lg" />}
           </div>
 
-          {(job.location || job.remote_type || job.work_auth) && (
-            <div className="mt-3 flex flex-wrap items-center gap-1.5">
-              {job.remote_type && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-2.5 py-1 text-[11px] font-semibold text-brand-700 dark:bg-brand-500/15 dark:text-brand-300">
-                  {REMOTE_TYPE_LABELS[job.remote_type as RemoteType] ?? job.remote_type}
-                </span>
-              )}
-              {job.location && (
-                <span className="inline-flex min-w-0 items-center gap-1 rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-300">
-                  <PinIcon />
-                  <span className="truncate">{job.location}</span>
-                </span>
-              )}
-              <WorkAuthBadge workAuth={job.work_auth} />
-            </div>
-          )}
+          <div className="mt-3 flex flex-wrap items-center gap-1.5">
+            {job.remote_type && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-2.5 py-1 text-[11px] font-semibold text-brand-700 dark:bg-brand-500/15 dark:text-brand-300">
+                {REMOTE_TYPE_LABELS[job.remote_type as RemoteType] ?? job.remote_type}
+              </span>
+            )}
+            {job.location && (
+              <span className="inline-flex min-w-0 items-center gap-1 rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-300">
+                <PinIcon />
+                <span className="truncate">{job.location}</span>
+              </span>
+            )}
+            <WorkAuthBadge workAuth={job.work_auth} />
+            <ApplyModeChip job={job} />
+          </div>
 
           {job.skills_required?.length > 0 && (
             <div className="mt-3 flex flex-wrap gap-1.5">
@@ -279,5 +278,23 @@ export default function SwipeCard({
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-white to-transparent dark:from-gray-900" />
       </div>
     </motion.div>
+  );
+}
+
+/** Cómo se postula tras el swipe (plan de auto-apply): por correo desde la app,
+ * asistido (formulario conocido + kit para copiar), o solo el enlace. */
+function ApplyModeChip({ job }: { job: Job }) {
+  const [label, title] = job.apply_email
+    ? ["✉ Correo", "Se puede enviar por correo desde JobPilot."]
+    : job.apply_url || job.apply_ats
+      ? ["Asistido", "Formulario localizado; el kit trae tus respuestas listas para copiar."]
+      : ["Link", "Solo el enlace a la vacante."];
+  return (
+    <span
+      title={title}
+      className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-semibold text-gray-600 dark:bg-gray-800 dark:text-gray-300"
+    >
+      {label}
+    </span>
   );
 }
