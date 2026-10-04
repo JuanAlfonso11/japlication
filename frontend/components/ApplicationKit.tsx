@@ -2,8 +2,35 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useAuth } from "@/context/AuthContext";
 import { profileApi } from "@/lib/api";
-import type { CareerProfile, Job } from "@/lib/types";
+import type { CareerProfile, Job, ScreeningAnswer, User } from "@/lib/types";
+
+/** Leaves what the JobPilot Chrome extension (extension/) needs to fill a form
+ * where it can pick it up: localStorage for its next visit, postMessage for a
+ * tab where it is already listening. Contact data and the answer bank only,
+ * never the token. */
+function shareWithExtension(profile: CareerProfile, user: User | null) {
+  const c = profile.contact_info;
+  const data = {
+    full_name: user?.full_name ?? "",
+    email: user?.email ?? "",
+    phone: c?.phone ?? "",
+    city: c?.city ?? "",
+    country: c?.country ?? "",
+    linkedin: c?.linkedin ?? "",
+    github: c?.github ?? "",
+    portfolio: c?.portfolio ?? "",
+    answers: (profile.screening_answers ?? []).filter((a) => a.answer.trim()),
+    synced_at: new Date().toISOString(),
+  };
+  try {
+    window.localStorage.setItem("jobpilot_autofill", JSON.stringify(data));
+  } catch {
+    // Storage blocked: the postMessage below still reaches a loaded extension.
+  }
+  window.postMessage({ type: "jobpilot-autofill", data }, window.location.origin);
+}
 
 /** Everything you have to retype into someone else's application form,
  * gathered in one place with a copy button on each field.
@@ -58,8 +85,25 @@ function CopyField({ label, value }: { label: string; value: string }) {
   );
 }
 
-function AnswerCard({ question, answer }: { question: string; answer: string }) {
+const SMALL_BTN =
+  "shrink-0 rounded-lg px-2.5 py-1 text-[11px] font-bold transition-colors bg-white text-gray-600 ring-1 ring-inset ring-gray-200 hover:text-brand-600 dark:bg-gray-900 dark:text-gray-300 dark:ring-gray-700 dark:hover:text-brand-400";
+
+function AnswerCard({
+  question,
+  answer,
+  onSave,
+}: {
+  question: string;
+  answer: string;
+  onSave: (question: string, answer: string) => Promise<void>;
+}) {
   const [copied, setCopied] = useState(false);
+  // An empty card is the "add a question" form, so it opens in edit mode.
+  const [editing, setEditing] = useState(!answer);
+  const [q, setQ] = useState(question);
+  const [draft, setDraft] = useState(answer);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
   async function copy() {
     try {
@@ -71,24 +115,91 @@ function AnswerCard({ question, answer }: { question: string; answer: string }) 
     }
   }
 
+  async function save() {
+    setSaving(true);
+    setError("");
+    try {
+      await onSave(q.trim(), draft.trim());
+      setEditing(false);
+    } catch {
+      setError("No se pudo guardar. Inténtalo de nuevo.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (editing) {
+    return (
+      <div className="space-y-2 rounded-xl bg-gray-50 p-3 dark:bg-gray-800/60">
+        {question ? (
+          <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">{question}</p>
+        ) : (
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="La pregunta, tal como la hace el formulario"
+            aria-label="Pregunta"
+            className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+          />
+        )}
+        <textarea
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          rows={3}
+          placeholder="Tu respuesta"
+          aria-label="Respuesta"
+          className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+        />
+        {error && <p className="text-xs text-rose-600 dark:text-rose-400">{error}</p>}
+        <div className="flex justify-end gap-2">
+          {answer && (
+            <button
+              type="button"
+              onClick={() => {
+                setDraft(answer);
+                setEditing(false);
+              }}
+              className={SMALL_BTN}
+            >
+              Cancelar
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={save}
+            disabled={saving || !q.trim() || !draft.trim()}
+            className="rounded-lg bg-brand-600 px-2.5 py-1 text-[11px] font-bold text-white disabled:opacity-50 dark:bg-brand-200 dark:text-gray-950"
+          >
+            {saving ? "Guardando…" : "Guardar en mi banco"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-xl bg-gray-50 p-3 dark:bg-gray-800/60">
-      {/* The button rides with the question, not with the answer. Beside the
-          text it squeezed every answer to about 60% of the width, so each
+      {/* The buttons ride with the question, not with the answer. Beside the
+          text they squeezed every answer to about 60% of the width, so each
           one took half a screen to read. */}
       <div className="flex items-start justify-between gap-3">
         <p className="min-w-0 text-xs font-semibold text-gray-500 dark:text-gray-400">{question}</p>
-        <button
-          type="button"
-          onClick={copy}
-          className={`shrink-0 rounded-lg px-2.5 py-1 text-[11px] font-bold transition-colors ${
-            copied
-              ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300"
-              : "bg-white text-gray-600 ring-1 ring-inset ring-gray-200 hover:text-brand-600 dark:bg-gray-900 dark:text-gray-300 dark:ring-gray-700 dark:hover:text-brand-400"
-          }`}
-        >
-          {copied ? "✓" : "Copiar"}
-        </button>
+        <div className="flex shrink-0 gap-1.5">
+          <button type="button" onClick={() => setEditing(true)} className={SMALL_BTN}>
+            Editar
+          </button>
+          <button
+            type="button"
+            onClick={copy}
+            className={`shrink-0 rounded-lg px-2.5 py-1 text-[11px] font-bold transition-colors ${
+              copied
+                ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300"
+                : "bg-white text-gray-600 ring-1 ring-inset ring-gray-200 hover:text-brand-600 dark:bg-gray-900 dark:text-gray-300 dark:ring-gray-700 dark:hover:text-brand-400"
+            }`}
+          >
+            {copied ? "✓" : "Copiar"}
+          </button>
+        </div>
       </div>
       <p className="mt-1.5 whitespace-pre-line text-sm leading-relaxed text-gray-800 dark:text-gray-200">
         {answer}
@@ -100,6 +211,8 @@ function AnswerCard({ question, answer }: { question: string; answer: string }) 
 export default function ApplicationKit({ job }: { job: Job }) {
   const [profile, setProfile] = useState<CareerProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [adding, setAdding] = useState(false);
+  const { user } = useAuth();
 
   useEffect(() => {
     let cancelled = false;
@@ -120,6 +233,20 @@ export default function ApplicationKit({ job }: { job: Job }) {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (profile) shareWithExtension(profile, user);
+  }, [profile, user]);
+
+  /** An edit goes straight into the profile's answer bank, so the next form
+   * that asks the same thing -- here or through the extension -- has it. */
+  async function saveAnswer(original: string, question: string, answer: string) {
+    if (!profile) return;
+    const rest = profile.screening_answers.filter((a) => a.question !== original && a.question !== question);
+    const updated: ScreeningAnswer[] = [...rest, { question, answer }];
+    setProfile(await profileApi.save({ ...profile, screening_answers: updated }));
+    setAdding(false);
+  }
 
   if (loading) return null;
 
@@ -147,9 +274,9 @@ export default function ApplicationKit({ job }: { job: Job }) {
         <h2 className="font-display font-bold text-gray-900 dark:text-gray-100">
           Kit de aplicación
         </h2>
-        {job.source_url && (
+        {(job.apply_url || job.source_url) && (
           <a
-            href={job.source_url}
+            href={job.apply_url || job.source_url || undefined}
             target="_blank"
             rel="noreferrer"
             className="shrink-0 text-xs font-bold text-brand-600 hover:underline dark:text-brand-400"
@@ -195,12 +322,30 @@ export default function ApplicationKit({ job }: { job: Job }) {
                 Respuestas frecuentes
               </p>
               <div className="space-y-2">
-                {answers.map((a, i) => (
-                  <AnswerCard key={i} question={a.question} answer={a.answer} />
+                {answers.map((a) => (
+                  <AnswerCard
+                    key={`${a.question}\n${a.answer}`}
+                    question={a.question}
+                    answer={a.answer}
+                    onSave={(q, ans) => saveAnswer(a.question, q, ans)}
+                  />
                 ))}
               </div>
             </div>
           )}
+
+          {profile &&
+            (adding ? (
+              <AnswerCard question="" answer="" onSave={(q, ans) => saveAnswer(q, q, ans)} />
+            ) : (
+              <button
+                type="button"
+                onClick={() => setAdding(true)}
+                className="block text-xs font-bold text-brand-600 hover:underline dark:text-brand-400"
+              >
+                + Añadir una pregunta de este formulario
+              </button>
+            ))}
 
           <Link
             href="/profile"

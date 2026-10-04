@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<style>
+  body { font: 13px system-ui, sans-serif; width: 300px; margin: 0; padding: 14px; color: #111827; }
+  h1 { font-size: 14px; margin: 0 0 6px; }
+  p { margin: 6px 0; color: #4b5563; }
+  button { width: 100%; padding: 9px; border: 0; border-radius: 8px; background: #4f46e5; color: #fff; font-weight: 700; cursor: pointer; }
+  button:disabled { opacity: .5; cursor: default; }
+  ul { margin: 6px 0 0; padding-left: 18px; color: #92400e; }
+  @media (prefers-color-scheme: dark) { body { background: #111827; color: #f3f4f6; } p { color: #9ca3af; } ul { color: #fbbf24; } }
+</style>
+</head>
+<body>
+  <h1>JobPilot Autofill</h1>
+  <p id="status">Cargando…</p>
+  <button id="fill" disabled>Rellenar esta página</button>
+  <p id="result" role="status"></p>
+  <ul id="missing"></ul>
+  <script src="popup.js"></script>
+</body>
+</html>
