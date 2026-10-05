@@ -52,6 +52,25 @@ function LevelBadge({ level }: { level: string }) {
   );
 }
 
+/** The last search, kept for as long as the app stays open.
+ *
+ * Opening a job and coming back remounted this page empty, so exploring a
+ * list meant searching again after every job looked at. Module memory, not
+ * storage: it survives in-app navigation (which is what going back is) at no
+ * size cost, and a reload still starts fresh -- a job list goes stale, the
+ * filters below are what gets remembered across reloads. */
+type LastSearch = {
+  results: ExternalJobResult[];
+  sources: AggregateSourceStatus[];
+  sourceFilter: ExternalProvider[];
+  visible: number;
+  scrollY: number;
+};
+let lastSearch: LastSearch | null = null;
+/** "Agregado ✓" survives going back too, keyed like the result cards. */
+const addedJobs = new Map<string, AddedJob>();
+const resultKey = (r: ExternalJobResult) => `${r.source}:${r.external_id}`;
+
 function ExternalResultCard({
   result,
   onImport,
@@ -61,14 +80,16 @@ function ExternalResultCard({
 }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [added, setAdded] = useState<AddedJob | null>(null);
+  const [added, setAdded] = useState<AddedJob | null>(() => addedJobs.get(resultKey(result)) ?? null);
   const imported = added !== null;
 
   async function handleImport() {
     setLoading(true);
     setError(null);
     try {
-      setAdded(await onImport(result));
+      const job = await onImport(result);
+      addedJobs.set(resultKey(result), job);
+      setAdded(job);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "No se pudo agregar este trabajo.");
     } finally {
@@ -170,12 +191,21 @@ function isPending(error: string): boolean {
 function SourcesSummary({
   sources,
   shownCount,
+  selected,
+  onToggle,
+  onClear,
 }: {
   sources: AggregateSourceStatus[];
   /** Resultados realmente devueltos, ya deduplicados. */
   shownCount: number;
+  /** Fuentes por las que se está filtrando; vacío = todas. */
+  selected: ExternalProvider[];
+  onToggle: (provider: ExternalProvider) => void;
+  onClear: () => void;
 }) {
-  const [open, setOpen] = useState(false);
+  // Abierto si ya hay un filtro (p. ej. al volver de una vacante): un filtro
+  // activo escondido detrás de "Ver por fuente" parece una lista recortada.
+  const [open, setOpen] = useState(selected.length > 0);
 
   const failed = sources.filter((s) => s.error && !isNotConfigured(s.error) && !isPending(s.error));
   const unconfigured = sources.filter((s) => s.error && isNotConfigured(s.error));
@@ -233,8 +263,17 @@ function SourcesSummary({
           aria-expanded={open}
           className="rounded-full px-2 py-1 font-bold text-brand-600 transition-colors hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
         >
-          {open ? "Ocultar detalle" : "Ver por fuente"}
+          {open ? "Ocultar detalle" : "Filtrar por fuente"}
         </button>
+        {selected.length > 0 && (
+          <button
+            type="button"
+            onClick={onClear}
+            className="rounded-full bg-brand-600 px-2.5 py-1 font-bold text-white hover:bg-brand-700 dark:bg-brand-200 dark:text-gray-950"
+          >
+            Solo {selected.map((p) => PROVIDER_LABELS[p] ?? p).join(", ")} ✕
+          </button>
+        )}
       </div>
 
       {open && (
@@ -242,20 +281,41 @@ function SourcesSummary({
           {ordered.map((s) => {
             const notConfigured = s.error ? isNotConfigured(s.error) : false;
             const searching = s.error ? isPending(s.error) : false;
+            const label = `${PROVIDER_LABELS[s.provider] ?? s.provider}: ${
+              notConfigured ? "sin clave" : searching ? "buscando…" : s.error ? "error" : s.count
+            }`;
+            // Only a source that brought something can filter: tapping a
+            // "0" or an "error" would just empty the list.
+            if (!s.error && s.count > 0) {
+              const on = selected.includes(s.provider);
+              return (
+                <button
+                  key={s.provider}
+                  type="button"
+                  onClick={() => onToggle(s.provider)}
+                  aria-pressed={on}
+                  title={on ? "Quitar este filtro" : "Ver solo las de esta fuente"}
+                  className={`tabular rounded-full px-2 py-0.5 font-semibold transition-colors ${
+                    on
+                      ? "bg-brand-600 text-white dark:bg-brand-200 dark:text-gray-950"
+                      : "bg-gray-100 text-gray-600 ring-1 ring-inset ring-gray-200 hover:bg-brand-50 hover:text-brand-700 dark:bg-gray-800 dark:text-gray-300 dark:ring-gray-700 dark:hover:bg-brand-500/15 dark:hover:text-brand-300"
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            }
             return (
               <span
                 key={s.provider}
                 className={`tabular rounded-full px-2 py-0.5 ${
                   s.error && !notConfigured && !searching
                     ? "bg-rose-50 text-rose-600 dark:bg-rose-500/15 dark:text-rose-400"
-                    : s.count > 0
-                    ? "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300"
                     : "bg-gray-50 text-gray-400 dark:bg-gray-800/60 dark:text-gray-400"
                 }`}
                 title={s.error ?? undefined}
               >
-                {PROVIDER_LABELS[s.provider] ?? s.provider}:{" "}
-                {notConfigured ? "sin clave" : searching ? "buscando…" : s.error ? "error" : s.count}
+                {label}
               </span>
             );
           })}
@@ -337,22 +397,25 @@ const RESULTS_PAGE = 20;
  * A search returned 741 cards and painted all of them at once: the 44 seconds
  * measured from tapping "Buscar" to seeing results are mostly this, not the
  * network — the client gives up on a request at 20s and never retried.
- * The visible count lives in here so a new search remounts it (the parent
- * keys it by the search) and the list starts from the top again. */
+ * The visible count lives in the parent, so coming back from a job keeps
+ * the pages you had opened; a new search or filter resets it. */
 function ResultsList({
   results,
   onImport,
+  visible,
+  setVisible,
 }: {
   results: ExternalJobResult[];
   onImport: (result: ExternalJobResult) => Promise<AddedJob>;
+  visible: number;
+  setVisible: (update: (v: number) => number) => void;
 }) {
-  const [visible, setVisible] = useState(RESULTS_PAGE);
   const shown = results.slice(0, visible);
 
   return (
     <div className="space-y-3">
       {shown.map((r) => (
-        <ExternalResultCard key={`${r.source}:${r.external_id}`} result={r} onImport={onImport} />
+        <ExternalResultCard key={resultKey(r)} result={r} onImport={onImport} />
       ))}
       {visible < results.length && (
         <button
@@ -370,8 +433,8 @@ function ResultsList({
 /** What you searched for last time, not what it found.
  *
  * This screen opened blank every time, so coming back meant setting the same
- * four filters again. The results themselves deliberately aren't stored:
- * hundreds of postings is a lot to keep around, and a job list goes stale
+ * four filters again. The results only live in memory (lastSearch, above):
+ * hundreds of postings is a lot to keep in storage, and a job list goes stale
  * while a set of filters doesn't. */
 const FILTERS_KEY = "jobpilot.discover.filters";
 
@@ -406,11 +469,15 @@ function DiscoverContent() {
   const [remoteType, setRemoteType] = useState<RemoteType | "">("remote");
   const [experienceLevelFilter, setExperienceLevelFilter] = useState<ExperienceLevel | "">("");
   const [minSalary, setMinSalary] = useState("");
-  const [results, setResults] = useState<ExternalJobResult[]>([]);
-  const [sources, setSources] = useState<AggregateSourceStatus[]>([]);
+  // Seeded from the last search (see lastSearch): only ever non-null after an
+  // in-app navigation, which renders on the client, so no hydration mismatch.
+  const [results, setResults] = useState<ExternalJobResult[]>(() => lastSearch?.results ?? []);
+  const [sources, setSources] = useState<AggregateSourceStatus[]>(() => lastSearch?.sources ?? []);
+  const [sourceFilter, setSourceFilter] = useState<ExternalProvider[]>(() => lastSearch?.sourceFilter ?? []);
+  const [visible, setVisible] = useState(() => lastSearch?.visible ?? RESULTS_PAGE);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [searched, setSearched] = useState(false);
+  const [searched, setSearched] = useState(() => lastSearch !== null);
   // null until known. Without a profile, what gets added cannot be scored,
   // so it goes to the Pipeline — said up front, not discovered afterwards.
   const [hasProfile, setHasProfile] = useState<boolean | null>(null);
@@ -457,6 +524,26 @@ function DiscoverContent() {
       });
   }, []);
 
+  // Keep the last search current, and put the scroll back where it was when
+  // coming back from a job.
+  useEffect(() => {
+    if (!searched) return;
+    lastSearch = { results, sources, sourceFilter, visible, scrollY: lastSearch?.scrollY ?? 0 };
+  }, [searched, results, sources, sourceFilter, visible]);
+
+  useEffect(() => {
+    const y = lastSearch?.scrollY ?? 0;
+    if (y) requestAnimationFrame(() => window.scrollTo(0, y));
+    return () => {
+      if (lastSearch) lastSearch.scrollY = window.scrollY;
+    };
+  }, []);
+
+  function toggleSource(provider: ExternalProvider) {
+    setSourceFilter((cur) => (cur.includes(provider) ? cur.filter((p) => p !== provider) : [...cur, provider]));
+    setVisible(RESULTS_PAGE);
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     // An empty title searched for "anything": 1034 random postings, the first
@@ -475,6 +562,8 @@ function DiscoverContent() {
     // and invited a second tap or a reload.
     setResults([]);
     setSources([]);
+    setSourceFilter([]);
+    setVisible(RESULTS_PAGE);
     announce("Buscando en todas las fuentes. Esto puede tardar hasta un minuto.");
     try {
       window.sessionStorage.setItem(
@@ -516,13 +605,17 @@ function DiscoverContent() {
   }
 
   const minSalaryValue = minSalary ? Number(minSalary) : null;
-  const filteredResults = useMemo(() => {
+  const salaryResults = useMemo(() => {
     if (!minSalaryValue) return results;
     return results.filter((r) => {
       const best = r.salary_max ?? r.salary_min;
       return best != null && best >= minSalaryValue;
     });
   }, [results, minSalaryValue]);
+  const filteredResults = useMemo(
+    () => (sourceFilter.length ? salaryResults.filter((r) => sourceFilter.includes(r.source)) : salaryResults),
+    [salaryResults, sourceFilter]
+  );
 
   async function handleImport(result: ExternalJobResult): Promise<AddedJob> {
     const job = await jobsApi.importExternal({ source: result.source, external_id: result.external_id });
@@ -690,28 +783,42 @@ function DiscoverContent() {
             </div>
           )}
 
-          {sources.length > 0 && <SourcesSummary sources={sources} shownCount={results.length} />}
+          {sources.length > 0 && (
+            <SourcesSummary
+              sources={sources}
+              shownCount={results.length}
+              selected={sourceFilter}
+              onToggle={toggleSource}
+              onClear={() => {
+                setSourceFilter([]);
+                setVisible(RESULTS_PAGE);
+              }}
+            />
+          )}
 
           {minSalaryValue && results.length > 0 && (
             <p className="text-xs text-gray-400 dark:text-gray-400">
-              {filteredResults.length} de {results.length} muestran ${minSalaryValue.toLocaleString()}+ de
+              {salaryResults.length} de {results.length} muestran ${minSalaryValue.toLocaleString()}+ de
               salario (se ocultan los que no publican salario).
             </p>
           )}
 
-          {/* Keyed by what came back, so a new search remounts the list and
-              it starts at the first page again. Repeating the exact same
-              search keeps your place, which is the behaviour you want when
-              you tapped Buscar twice. */}
-          <ResultsList
-            key={`${filteredResults.length}:${filteredResults[0]?.external_id ?? ""}`}
-            results={filteredResults}
-            onImport={handleImport}
-          />
+          {/* The chip counts are before removing duplicates; a job found in
+              two sources shows once, under one of them. */}
+          {sourceFilter.length > 0 && (
+            <p className="text-xs text-gray-400 dark:text-gray-400">
+              Mostrando {filteredResults.length} de {salaryResults.length}. Las repetidas en varias fuentes
+              aparecen solo bajo una.
+            </p>
+          )}
+
+          <ResultsList results={filteredResults} onImport={handleImport} visible={visible} setVisible={setVisible} />
 
           {!loading && searched && results.length > 0 && filteredResults.length === 0 && !error && (
             <p className="py-6 text-center text-sm text-gray-400 dark:text-gray-400">
-              Nada cumple ese salario mínimo: prueba bajarlo.
+              {sourceFilter.length && salaryResults.length
+                ? "Ninguna de esas fuentes quedó tras quitar duplicadas: prueba otra fuente."
+                : "Nada cumple ese salario mínimo: prueba bajarlo."}
             </p>
           )}
 
