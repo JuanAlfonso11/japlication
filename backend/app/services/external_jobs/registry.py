@@ -31,6 +31,8 @@ from typing import Any, Awaitable, Callable, Optional
 
 from app.services import (
     adzuna,
+    aidevboard,
+    aijobs,
     arbeitnow,
     ats_boards,
     experience_level,
@@ -279,6 +281,20 @@ async def _search_serpapi(p: SearchParams) -> dict[str, Any]:
     return await serpapi_jobs.search_serpapi_jobs(**_common(p))
 
 
+async def _search_aidevboard(p: SearchParams) -> dict[str, Any]:
+    kwargs = _common(p)
+    if p.paginating:
+        kwargs["page"] = p.page_or_1
+    return await aidevboard.search_aidevboard_jobs(**kwargs)
+
+
+async def _search_aijobs(p: SearchParams) -> dict[str, Any]:
+    kwargs = _common(p)
+    if p.paginating:
+        kwargs["page"] = p.page_or_1
+    return await aijobs.search_aijobs_jobs(**kwargs)
+
+
 def _ats_search(ats: str):
     """Greenhouse, Lever y Ashby comparten conector: solo cambia el ATS.
     No paginan -- recorren todos los tableros de app/data/ats_companies.json
@@ -322,6 +338,11 @@ _SPECS: tuple[ProviderSpec, ...] = (
                  remoteok.get_cached_result, _search_remoteok),
     ProviderSpec("linkedin", "linkedin_job_id", linkedin_jobs.LinkedInError,
                  linkedin_jobs.get_cached_result, _search_linkedin),
+    # Especializadas en AI/ML; las dos traen el enlace directo al ATS.
+    ProviderSpec("aidevboard", "aidevboard_job_id", aidevboard.AIDevBoardError,
+                 aidevboard.get_cached_result, _search_aidevboard),
+    ProviderSpec("aijobs", "aijobs_job_id", aijobs.AIJobsError,
+                 aijobs.get_cached_result, _search_aijobs),
     # Directo del ATS de cada empresa: cada oferta trae su formulario real.
     ProviderSpec("greenhouse", "ats_job_id", ats_boards.AtsBoardError,
                  ats_boards.get_cached_result, _ats_search("greenhouse")),

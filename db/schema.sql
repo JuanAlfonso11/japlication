@@ -103,7 +103,8 @@ CREATE TYPE job_source AS ENUM (
     'linkedin',  -- migration 0007
     'greenhouse', 'lever', 'ashby',  -- migration 0013
     'tecnoempleo',  -- migration 0015 (fuente quitada; valor sin uso)
-    'web3career'  -- migration 0016
+    'web3career',  -- migration 0016
+    'aidevboard', 'aijobs'  -- migration 0017
 );
 
 CREATE TABLE jobs (

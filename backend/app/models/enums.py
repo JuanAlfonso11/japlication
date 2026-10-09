@@ -28,6 +28,9 @@ class JobSource(str, enum.Enum):
     lever = "lever"
     ashby = "ashby"
     web3career = "web3career"  # migration 0016
+    # Especializadas en AI/ML (migration 0017)
+    aidevboard = "aidevboard"
+    aijobs = "aijobs"
     manual = "manual"
 
 

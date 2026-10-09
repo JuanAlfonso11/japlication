@@ -83,6 +83,7 @@ _BOARD_HOSTS = {
     "remoteok.com", "remoteok.io", "getonbrd.com", "themuse.com",
     "linkedin.com", "indeed.com", "glassdoor.com", "ziprecruiter.com",
     "news.ycombinator.com", "usajobs.gov", "adzuna.com", "web3.career",
+    "aidevboard.com", "artificialintelligencejobs.co",
 }
 
 #: El texto de un boton de postular, en los dos idiomas.

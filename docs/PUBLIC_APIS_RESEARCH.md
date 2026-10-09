@@ -28,6 +28,8 @@ francés); el resto quedó documentado como descartado, con el motivo.
 | 14 | Remote OK | Ninguna | Sí (2026-09) — **reevaluada**, ver nota |
 | — | Tecnoempleo (España) | Ninguna (RSS público) | **No** — se integró y se quitó el mismo día, ver nota |
 | 15 | Web3.career | Token gratis (registro en su web) | Sí (2026-09-23) |
+| 16 | AI Dev Jobs (aidevboard.com) | Ninguna | Sí (2026-10-08) |
+| 17 | Artificial Intelligence Jobs | Ninguna | Sí (2026-10-08) |
 | — | France Travail (ex-Pôle Emploi) | OAuth2 client credentials (registro instantáneo) | **No** — se integró y probó, pero se quitó (ver nota) |
 | — | RemoteOK | Ninguna en teoría | **No** — ver nota |
 | — | Reed.co.uk | API key gratis | **No** — ver nota |
@@ -411,6 +413,36 @@ Portado de la skill `linkedin-search` de [MadsLorentzen/ai-job-search](https://g
 - **Límites**: devuelve 429 si se excede (sin cifra publicada); se cachea 1 h por combinación de
   parámetros. Como fuente con clave, la búsqueda automática solo la usa con el primer término
 - **Implementación**: `backend/app/services/web3career.py`
+
+## 15. AI Dev Jobs y Artificial Intelligence Jobs *(integradas 2026-10-08)*
+
+Salieron de la categoría Jobs de [public-apis](https://github.com/public-apis/public-apis#jobs). Son las
+únicas de esa lista centradas en AI/ML, sin clave, y las dos traen el enlace **directo al ATS** de la
+empresa, así que llegan con `apply_url`/`apply_ats` ya resueltos (como Greenhouse/Lever/Ashby).
+
+**AI Dev Jobs** — `GET https://aidevboard.com/api/v1/jobs` ([OpenAPI](https://aidevboard.com/openapi.yaml))
+- **Parámetros**: `q` (texto libre), `workplace` (`remote|hybrid|onsite`), `level`
+  (`junior|mid|senior|lead|principal`), `location` (subcadena), `limit` (máx. 50), `page`; respuesta con
+  `has_next`. También `tags`, `salary_min`, `global_remote`, `posted_within_days`
+- **Nivel**: mapa fijo en los dos sentidos; `principal` → `lead`. Sin nivel de prácticas
+- **Remoto + ubicación**: en remoto `location` es la sede; si se pide remoto no se manda la ubicación.
+  `global_remote=true` no se usa: devolvía 0–1 resultados por búsqueda
+- **Límite**: 200 peticiones/hora por IP (`x-ratelimit-*`)
+- **Implementación**: `backend/app/services/aidevboard.py`
+
+**Artificial Intelligence Jobs** — `GET https://artificialintelligencejobs.co/api/jobs`
+([docs](https://artificialintelligencejobs.co/developers))
+- **Parámetros**: `q`, `remote=true`, `level` (`Entry|Mid|Senior|Lead+`), `category`, `city`, `region`,
+  `salary_min` (en miles), `limit` (máx. 200), `offset`; respuesta con `total_live` y `matched`
+- **Sin descripción ni id**: la descripción se arma con título, empresa, ubicación, categoría, nivel y
+  salario, y el id es el slug final de su URL. El salario llega como texto (`"$162K - $180K"`) y solo se
+  interpreta si el formato es inequívoco
+- **Ubicación**: se filtra localmente porque sus `city`/`region` usan otro vocabulario
+- **Atribución**: la piden; `source_url` es siempre su ficha
+- **Implementación**: `backend/app/services/aijobs.py`
+
+Revisadas y no integradas en la misma ronda: freehire (se solapa con el conector de ATS) y GraphQL Jobs
+(dominio caído). Findwork y Jooble ya estaban descartadas (ver sus notas arriba).
 
 ## Investigación adicional: ¿cómo se consigue acceso a las APIs de Indeed y LinkedIn?
 
