@@ -1,5 +1,6 @@
 package ai.jobflow.app;
 
+import ai.jobflow.app.widgets.WidgetBridgePlugin;
 import android.app.DownloadManager;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -50,6 +51,9 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        // Los plugins propios se registran ANTES de super.onCreate: es ahí
+        // donde Capacitor arma el bridge y los expone a la web.
+        registerPlugin(WidgetBridgePlugin.class);
         super.onCreate(savedInstanceState);
         handleViewIntent(getIntent());
         handleShareIntent(getIntent());

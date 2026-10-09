@@ -13,6 +13,7 @@ import Button from "@/components/ui/Button";
 import { ListSkeleton } from "@/components/ui/Skeleton";
 import PageHeader from "@/components/ui/PageHeader";
 import { ApiError, applicationsApi } from "@/lib/api";
+import { refreshWidgets } from "@/lib/widgets";
 import type { Application, ApplicationStatus } from "@/lib/types";
 
 /** "Activas" is everything still in play and is what this screen opens on:
@@ -87,6 +88,8 @@ function ApplicationRow({
       const updated = await applicationsApi.update(application.id, { status });
       onUpdated(updated);
       setPreviousStatus(isUndo ? null : before);
+      // Una entrevista o una oferta nueva cambia el widget "Tu pipeline".
+      void refreshWidgets(0);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "No se pudo actualizar el estado.");
     } finally {

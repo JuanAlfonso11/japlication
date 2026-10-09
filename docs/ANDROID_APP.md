@@ -161,6 +161,32 @@ then install. You'll see a **JobFlow AI** icon like any other app.
   `docker run --rm -v "${PWD}/frontend:/app" -w /app node:22 npx cap sync android` from the repo
   root, same as this setup used), then `.\gradlew.bat assembleDebug` again and reinstall.
 
+## Widgets de la pantalla de inicio
+
+Dos widgets nativos (desde la versión que los trae; mantén pulsada la pantalla de inicio →
+Widgets → JobPilot):
+
+- **Próxima vacante** (4x2): la primera tarjeta de la cola, con su match, y botones ✕ Pasar /
+  ✓ Guardar. Tocar la tarjeta abre el detalle.
+- **Tu pipeline** (4x1): en cola, aplicadas, entrevistas y ofertas. Cada cifra abre su lista.
+
+Cómo funcionan, en corto:
+
+- **El widget no habla con el backend ni tiene la sesión.** La app web le pasa una "foto" (la
+  primera vacante y cuatro totales) por el plugin nativo `JobPilotWidgets`
+  (`android/app/src/main/java/ai/jobflow/app/widgets/WidgetBridgePlugin.java`), que la guarda en
+  SharedPreferences privadas y redibuja. El lado web está en `frontend/lib/widgets.ts`.
+- **Cuándo se actualiza:** al cargar Home, después de cada swipe o deshacer, al cambiar el estado de
+  una postulación, y al entrar y salir de la app (`components/WidgetSync.tsx`). Si la foto tiene más
+  de una hora, el widget lo dice ("JobPilot · hace 3 h"). Al cerrar sesión se borra.
+- **✕ y ✓ no deciden desde fuera.** Abren la app en `/?swipe=left|right&job=<id>`; Home trae esa
+  tarjeta arriba y lanza el mismo vuelo que sus botones, con su "Deshacer". El swipe sigue siendo
+  el único camino para decidir.
+- Diseño: RemoteViews en Java (sin Compose), colores de `tailwind.config.ts` en
+  `res/values/widget_colors.xml` y `res/values-night/`. En Android 12+ usan el radio de esquinas
+  del sistema y tienen vista previa en el selector.
+- Un APK sin el plugin (anterior a los widgets) simplemente ignora las llamadas de la web.
+
 ## Onboarding beta testers (people outside your own devices)
 
 The setup above assumes every device is logged into **the same Tailscale account** (yours). For an

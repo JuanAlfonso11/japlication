@@ -21,6 +21,13 @@ import {
   type UserLocation,
 } from "@/lib/geoScope";
 import type { Application, Job } from "@/lib/types";
+import {
+  buildWidgetPayload,
+  countPipeline,
+  markWidgetsFresh,
+  parseSwipeIntent,
+  pushWidgets,
+} from "@/lib/widgets";
 
 const PIPELINE_STATUSES = ["applied", "interviewing", "offer"];
 const DEFAULT_SCOPE_INDEX = SCOPE_LEVELS.length - 1; // "Cualquier lugar" — never hides jobs by default
@@ -171,6 +178,9 @@ function HomeContent() {
   const router = useRouter();
   const announce = useAnnounce();
   const [queue, setQueue] = useState<Job[] | null>(null);
+  // /matches devuelve como mucho 50 tarjetas pero dice cuántas hay en total;
+  // el widget enseña el total real, no solo lo que cabe en esta página.
+  const [queueBeyondPage, setQueueBeyondPage] = useState(0);
   const [applications, setApplications] = useState<Application[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -230,6 +240,7 @@ function HomeContent() {
         applicationsApi.list(undefined, 200, 0),
       ]);
       setQueue(matches.items);
+      setQueueBeyondPage(Math.max(0, matches.total - matches.items.length));
       setApplications(apps.items);
     } catch (err) {
       setLoadError(err instanceof ApiError ? err.message : "No se pudieron cargar tus recomendaciones.");
@@ -365,6 +376,69 @@ function HomeContent() {
     },
     [current, pending, pendingDecision]
   );
+
+  // Widgets de Android (lib/widgets.ts): cada vez que cambia la cola o el
+  // pipeline aquí, el widget se entera sin pedirle nada más al servidor.
+  // Usa la cola completa, no la filtrada por alcance: el widget no tiene
+  // alcance y enseña lo mismo que verías con "Cualquier lugar".
+  useEffect(() => {
+    if (!queue || !applications) return;
+    markWidgetsFresh();
+    void pushWidgets(
+      buildWidgetPayload({
+        queueCount: queue.length + queueBeyondPage,
+        next: queue[0] ?? null,
+        pipeline: countPipeline(applications),
+      })
+    );
+  }, [queue, applications, queueBeyondPage]);
+
+  // ✕ / ✓ en el widget abren la app en `/?swipe=left|right&job=<id>`. No se
+  // decide nada a ciegas desde fuera: se trae ESA tarjeta arriba del mazo y
+  // se lanza el mismo vuelo que los botones de abajo, así que la decisión
+  // pasa por el swipe de siempre y se puede deshacer igual.
+  const [widgetIntent, setWidgetIntent] = useState<{ decision: "left" | "right"; jobId: string } | null>(null);
+
+  useEffect(() => {
+    const intent = parseSwipeIntent(window.location.search);
+    if (!intent) return;
+    setWidgetIntent(intent);
+    // Fuera de la URL, para que recargar o volver atrás no repita el swipe.
+    window.history.replaceState(window.history.state, "", window.location.pathname);
+  }, []);
+
+  useEffect(() => {
+    if (!widgetIntent || !queue || loading) return;
+    const { jobId, decision } = widgetIntent;
+
+    if (!queue.some((j) => j.id === jobId)) {
+      setWidgetIntent(null);
+      setPullNotice("Esa vacante ya no está en tu cola: la decidiste o se cerró.");
+      return;
+    }
+    // Si el alcance elegido la esconde, se vuelve a "Cualquier lugar".
+    if (!filteredQueue?.some((j) => j.id === jobId)) {
+      setScopeIndex(DEFAULT_SCOPE_INDEX);
+      return;
+    }
+    if (current?.id !== jobId) {
+      setQueue((prev) => {
+        if (!prev) return prev;
+        const job = prev.find((j) => j.id === jobId);
+        return job ? [job, ...prev.filter((j) => j.id !== jobId)] : prev;
+      });
+      return;
+    }
+    if (pending || pendingDecision) return;
+
+    // Un instante con la tarjeta quieta antes del vuelo: se ve qué se está
+    // decidiendo, en vez de una tarjeta que desaparece al abrir.
+    const timer = setTimeout(() => {
+      setPendingDecision(decision);
+      setWidgetIntent(null);
+    }, 450);
+    return () => clearTimeout(timer);
+  }, [widgetIntent, queue, loading, filteredQueue, current, pending, pendingDecision]);
 
   // Keyboard is the primary input on a desktop, where there is no thumb to
   // swipe with. The swipe stays exactly as it is — this is the same decision
