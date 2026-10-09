@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- En Android 12+ se usa el radio del sistema (values-v31), para que el
+         widget tenga las mismas esquinas que el resto de la pantalla de inicio. -->
+    <dimen name="widget_radius">22dp</dimen>
+    <dimen name="widget_padding">14dp</dimen>
+</resources>

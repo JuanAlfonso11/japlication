@@ -49,6 +49,34 @@
             </intent-filter>
         </activity>
 
+        <!-- Widgets de la pantalla de inicio (ver widgets/ y frontend/lib/widgets.ts).
+             exported="false": Android entrega las actualizaciones de widget
+             aunque el receptor no esté exportado, y así ninguna otra app
+             puede mandarle broadcasts. -->
+        <receiver
+            android:name=".widgets.NextJobWidget"
+            android:exported="false"
+            android:label="@string/widget_next_job_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_next_job_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widgets.PipelineWidget"
+            android:exported="false"
+            android:label="@string/widget_pipeline_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_pipeline_info" />
+        </receiver>
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

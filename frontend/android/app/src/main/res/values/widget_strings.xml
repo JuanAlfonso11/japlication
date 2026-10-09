@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_next_job_name">Próxima vacante</string>
+    <string name="widget_next_job_description">La primera tarjeta de tu cola, con su match. Pasa o guarda desde la pantalla de inicio.</string>
+    <string name="widget_pipeline_name">Tu pipeline</string>
+    <string name="widget_pipeline_description">Cuántas vacantes tienes en cola, aplicadas, en entrevista y con oferta.</string>
+
+    <string name="widget_brand">JobPilot</string>
+    <string name="widget_pass">Pasar</string>
+    <string name="widget_save">Guardar</string>
+    <string name="widget_pass_description">Pasar esta vacante</string>
+    <string name="widget_save_description">Guardar esta vacante</string>
+    <string name="widget_queue_chip">%1$d en cola</string>
+    <string name="widget_match">%1$d%% match</string>
+
+    <string name="widget_empty_signed_out_title">Abre JobPilot</string>
+    <string name="widget_empty_signed_out_body">Entra en la app y tu próxima vacante aparecerá aquí.</string>
+    <string name="widget_empty_done_title">Ya estás al día</string>
+    <string name="widget_empty_done_body">Revisaste toda tu cola. Tócalo para buscar vacantes nuevas.</string>
+
+    <string name="widget_label_queue">en cola</string>
+    <string name="widget_label_applied">aplicadas</string>
+    <string name="widget_label_interviewing">entrevistas</string>
+    <string name="widget_label_offer">ofertas</string>
+    <string name="widget_no_value">–</string>
+
+    <string name="widget_age_hours">hace %1$d h</string>
+    <string name="widget_age_days">hace %1$d d</string>
+
+    <!-- Solo para la vista previa del selector de widgets (Android 12+). -->
+    <string name="widget_preview_title">Backend Engineer · Python</string>
+    <string name="widget_preview_meta">Enveritas · Remoto</string>
+    <string name="widget_preview_match">82% match</string>
+    <string name="widget_preview_queue">12 en cola</string>
+</resources>

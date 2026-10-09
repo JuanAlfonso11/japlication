@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Colores de los widgets, sacados de tailwind.config.ts para que el widget
+     se vea como la tarjeta de Home: superficie blanca, tinta gris fría,
+     ámbar (`accent`) solo para el match, verde para Guardar y rosa para
+     Pasar, igual que los botones de decisión. values-night tiene el modo
+     oscuro. -->
+<resources>
+    <color name="widget_surface">#FFFFFF</color>
+    <color name="widget_surface_stroke">#DCDFEB</color>      <!-- gray-200 -->
+    <color name="widget_text">#1B2030</color>                <!-- gray-900 -->
+    <color name="widget_text_muted">#6E7691</color>          <!-- gray-500 -->
+    <color name="widget_chip_bg">#ECEEF5</color>             <!-- gray-100 -->
+    <color name="widget_chip_text">#545C75</color>           <!-- gray-600 -->
+    <color name="widget_accent">#DD6D02</color>              <!-- accent-600, legible sobre blanco -->
+    <color name="widget_track">#E6E8EC</color>               <!-- brand-100 -->
+    <color name="widget_save">#10B981</color>                <!-- emerald-500 -->
+    <color name="widget_on_save">#FFFFFF</color>
+    <color name="widget_pass_bg">#FFFFFF</color>
+    <color name="widget_pass_stroke">#DCDFEB</color>
+    <color name="widget_pass_icon">#F43F5E</color>           <!-- rose-500 -->
+    <color name="widget_pass_text">#545C75</color>
+</resources>

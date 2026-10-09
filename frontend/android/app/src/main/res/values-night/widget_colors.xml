@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Modo oscuro: la tarjeta de Home en oscuro (gray-900 sobre gray-950). -->
+<resources>
+    <color name="widget_surface">#1B2030</color>             <!-- gray-900 -->
+    <color name="widget_surface_stroke">#2A3042</color>      <!-- gray-800 -->
+    <color name="widget_text">#ECEEF5</color>                <!-- gray-100 -->
+    <color name="widget_text_muted">#969DB6</color>          <!-- gray-400 -->
+    <color name="widget_chip_bg">#2A3042</color>
+    <color name="widget_chip_text">#C3C8DB</color>           <!-- gray-300 -->
+    <color name="widget_accent">#FFB02E</color>              <!-- accent-400 -->
+    <color name="widget_track">#2A3042</color>
+    <color name="widget_save">#10B981</color>
+    <color name="widget_on_save">#FFFFFF</color>
+    <color name="widget_pass_bg">#1B2030</color>
+    <color name="widget_pass_stroke">#3F465C</color>         <!-- gray-700 -->
+    <color name="widget_pass_icon">#FB7185</color>           <!-- rose-400 -->
+    <color name="widget_pass_text">#C3C8DB</color>
+</resources>
