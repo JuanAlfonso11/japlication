@@ -40,8 +40,7 @@ public class NextJobWidget extends AppWidgetProvider {
                 context,
                 intent.getStringExtra(WidgetActions.EXTRA_JOB_ID),
                 intent.getStringExtra(WidgetActions.EXTRA_DECISION),
-                intent.getStringExtra(WidgetActions.EXTRA_TITLE),
-                goAsync()
+                intent.getStringExtra(WidgetActions.EXTRA_TITLE)
             );
             return;
         }
@@ -49,8 +48,7 @@ public class NextJobWidget extends AppWidgetProvider {
             WidgetActions.undo(
                 context,
                 intent.getStringExtra(WidgetActions.EXTRA_APPLICATION_ID),
-                intent.getStringExtra(WidgetActions.EXTRA_TITLE),
-                goAsync()
+                intent.getStringExtra(WidgetActions.EXTRA_TITLE)
             );
             return;
         }
@@ -63,7 +61,7 @@ public class NextJobWidget extends AppWidgetProvider {
             render(context, manager, id);
         }
         // Cada 30 min (updatePeriodMillis) y al ponerlo: trae la cola real.
-        WidgetActions.refresh(context, goAsync());
+        WidgetActions.refresh(context);
     }
 
     @Override

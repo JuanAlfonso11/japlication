@@ -9,19 +9,15 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 /**
  * Las llamadas del widget a /widget/* (backend app/api/v1/routers/widget.py),
  * con su propia credencial en `X-Widget-Token`. Nunca usa la sesión de la app.
  *
- * Un solo hilo para todas: los toques se mandan en el mismo orden en que se
- * hicieron, así que dos ✕ seguidos no pueden llegar al revés.
+ * Se llama solo desde WidgetWorker (WorkManager), que garantiza red y el
+ * orden de los toques.
  */
 final class WidgetApi {
-
-    static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor();
 
     private static final int CONNECT_TIMEOUT_MS = 6_000;
     private static final int READ_TIMEOUT_MS = 8_000;
