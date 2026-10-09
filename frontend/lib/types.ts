@@ -286,7 +286,9 @@ export type ExternalProvider =
   | "greenhouse"
   | "lever"
   | "ashby"
-  | "web3career";
+  | "web3career"
+  | "aidevboard"
+  | "aijobs";
 
 export const PROVIDER_LABELS: Record<ExternalProvider, string> = {
   himalayas: "Himalayas",
@@ -308,6 +310,8 @@ export const PROVIDER_LABELS: Record<ExternalProvider, string> = {
   lever: "Lever (directo)",
   ashby: "Ashby (directo)",
   web3career: "Web3.career",
+  aidevboard: "AI Dev Jobs",
+  aijobs: "Artificial Intelligence Jobs",
 };
 
 export type ExperienceLevel = "internship" | "entry" | "mid" | "senior" | "lead";

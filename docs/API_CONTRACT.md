@@ -125,11 +125,12 @@ sent — the backend logs the verification link instead, so local dev needs no m
 ## Live job search
 Search results are **not persisted** — pick one and call the import endpoint to add it to `jobs`.
 
-**15 providers.** Twelve need **zero credentials** (no API key, no OAuth, no signup):
+**21 providers.** Seventeen need **zero credentials** (no API key, no OAuth, no signup):
 `himalayas`, `arbeitnow`, `remotive`, `jobicy`, `remotejobs_org`, `themuse`, `weworkremotely`,
-`hackernews`, `getonbrd`, `workingnomads`, `remoteok`, `linkedin`.
+`hackernews`, `getonbrd`, `workingnomads`, `remoteok`, `linkedin`, `aidevboard`, `aijobs`,
+`greenhouse`, `lever`, `ashby`.
 
-Three need their own key in `.env` and are skipped — reported in `sources`, never a hard failure —
+Four need their own key in `.env` and are skipped — reported in `sources`, never a hard failure —
 when it is missing: `adzuna`, `usajobs`, `serpapi`, `web3career`.
 
 LinkedIn is reached through its public job pages, not a credentialed API. See
