@@ -2,21 +2,23 @@
  *
  * Un widget de pantalla de inicio no puede ejecutar la app: Android dibuja
  * RemoteViews desde un proceso aparte, sin WebView y sin la sesión (que vive
- * en localStorage). Así que es la propia app quien le pasa lo que tiene que
- * mostrar, por el plugin nativo `JobPilotWidgets` (WidgetBridgePlugin.java),
- * que lo guarda y redibuja los widgets. El widget nunca recibe el token ni
- * habla con el backend: solo enseña la última foto que la app le dejó.
+ * en localStorage). Dos cosas lo resuelven, ambas por el plugin nativo
+ * `JobPilotWidgets` (WidgetBridgePlugin.java):
  *
- * Cuándo se le pasa: al cargar Home, después de cada swipe o deshacer, al
- * cambiar el estado de una postulación, y al entrar o salir de la app
- * (WidgetSync.tsx). Al cerrar sesión se borra.
+ * 1. La "foto" de lo que se ve: la app se la pasa al cargar Home, después de
+ *    cada swipe o deshacer, al cambiar el estado de una postulación, y al
+ *    entrar o salir de la app (WidgetSync.tsx).
+ * 2. Una credencial propia del widget (`linkWidget`), que solo abre
+ *    /widget/* en el backend: con ella ✕ / ✓ / Deshacer deciden desde la
+ *    pantalla de inicio sin abrir la app, y el widget se refresca solo.
+ *    Nunca se le pasa la sesión de la app. Al cerrar sesión se revoca.
  *
  * Fuera de la app nativa (pestaña de navegador) todo esto no hace nada, y en
- * un APK viejo sin el plugin la llamada falla en silencio.
+ * un APK viejo sin el plugin (o sin `link`) la llamada falla en silencio.
  */
 
 import { registerPlugin } from "@capacitor/core";
-import { applicationsApi, jobsApi } from "@/lib/api";
+import { API_BASE_URL, applicationsApi, jobsApi, widgetApi } from "@/lib/api";
 import { isNativeApp } from "@/lib/platform";
 import type { Application, Job } from "@/lib/types";
 
@@ -43,12 +45,20 @@ export interface WidgetPayload {
   updatedAt: number;
   queueCount: number;
   next: WidgetNextJob | null;
+  /** Las que van detrás de `next`. El widget avanza a la siguiente al
+   * instante al pasar o guardar, sin esperar a la red. */
+  upcoming: WidgetNextJob[];
   pipeline: { applied: number; interviewing: number; offer: number };
 }
+
+/** Cuántas tarjetas de reserva lleva la foto (igual que UPCOMING en el router). */
+export const WIDGET_UPCOMING = 5;
 
 interface WidgetsPlugin {
   update(options: { data: string }): Promise<void>;
   clear(): Promise<void>;
+  status(): Promise<{ linked: boolean; userId: string | null; deviceId: string }>;
+  link(options: { token: string; apiBase: string; userId: string }): Promise<void>;
 }
 
 const Widgets = registerPlugin<WidgetsPlugin>("JobPilotWidgets");
@@ -96,6 +106,7 @@ export function countPipeline(applications: Pick<Application, "status">[]): Widg
 export function buildWidgetPayload(input: {
   queueCount: number;
   next: Job | null;
+  upcoming?: Job[];
   pipeline: WidgetPayload["pipeline"];
   now?: number;
 }): WidgetPayload {
@@ -104,6 +115,7 @@ export function buildWidgetPayload(input: {
     updatedAt: input.now ?? Date.now(),
     queueCount: Math.max(0, Math.floor(input.queueCount)),
     next: input.next ? toWidgetJob(input.next) : null,
+    upcoming: input.next ? (input.upcoming ?? []).slice(0, WIDGET_UPCOMING).map(toWidgetJob) : [],
     pipeline: input.pipeline,
   };
 }
@@ -119,6 +131,8 @@ export async function pushWidgets(payload: WidgetPayload): Promise<void> {
   }
 }
 
+/** Al cerrar sesión: el lado nativo revoca la credencial del widget en el
+ * servidor (con la propia credencial, la sesión ya no existe) y borra todo. */
 export async function clearWidgets(): Promise<void> {
   if (!isNativeApp()) return;
   try {
@@ -133,15 +147,32 @@ export async function clearWidgets(): Promise<void> {
  * pequeñas en vez de bajar las 200 postulaciones como hace Home. */
 export async function fetchWidgetPayload(): Promise<WidgetPayload> {
   const [matches, ...byStatus] = await Promise.all([
-    jobsApi.matches({ limit: 1 }),
+    jobsApi.matches({ limit: WIDGET_UPCOMING + 1 }),
     ...PIPELINE_WIDGET_STATUSES.map((status) => applicationsApi.list(status, 1, 0)),
   ]);
   const total = (i: number) => byStatus[i]?.total ?? 0;
   return buildWidgetPayload({
     queueCount: matches.total,
     next: matches.items[0] ?? null,
+    upcoming: matches.items.slice(1),
     pipeline: { applied: total(0), interviewing: total(1), offer: total(2) },
   });
+}
+
+/** Le da al widget su propia credencial (si aún no la tiene, o si la tiene
+ * de otra cuenta que usó este teléfono), para que pase y guarde sin abrir
+ * la app. Nunca lanza: sin credencial, ✕ / ✓ siguen abriendo la app. */
+export async function linkWidget(userId: string): Promise<void> {
+  if (!isNativeApp() || !userId) return;
+  try {
+    const status = await Widgets.status();
+    if (status.linked && status.userId === userId) return;
+    const { token } = await widgetApi.issueToken(status.deviceId);
+    await Widgets.link({ token, apiBase: API_BASE_URL, userId });
+  } catch {
+    // APK anterior a esta función, o sin red: se vuelve a intentar al
+    // próximo arranque.
+  }
 }
 
 let lastRefresh = 0;

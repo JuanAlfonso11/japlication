@@ -388,15 +388,17 @@ function HomeContent() {
       buildWidgetPayload({
         queueCount: queue.length + queueBeyondPage,
         next: queue[0] ?? null,
+        upcoming: queue.slice(1),
         pipeline: countPipeline(applications),
       })
     );
   }, [queue, applications, queueBeyondPage]);
 
-  // ✕ / ✓ en el widget abren la app en `/?swipe=left|right&job=<id>`. No se
-  // decide nada a ciegas desde fuera: se trae ESA tarjeta arriba del mazo y
-  // se lanza el mismo vuelo que los botones de abajo, así que la decisión
-  // pasa por el swipe de siempre y se puede deshacer igual.
+  // Con su credencial (lib/widgets.ts → linkWidget), ✕ / ✓ del widget
+  // deciden en segundo plano sin abrir la app. Esto es el plan B, para un
+  // widget aún sin conectar: abren la app en `/?swipe=left|right&job=<id>`,
+  // se trae ESA tarjeta arriba del mazo y se lanza el mismo vuelo que los
+  // botones de abajo, así que se puede deshacer igual.
   const [widgetIntent, setWidgetIntent] = useState<{ decision: "left" | "right"; jobId: string } | null>(null);
 
   useEffect(() => {

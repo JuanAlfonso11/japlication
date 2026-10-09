@@ -76,10 +76,27 @@ describe("buildWidgetPayload", () => {
     });
     expect(payload).toMatchObject({ v: 1, updatedAt: 1_700_000_000_000, queueCount: 12 });
     expect(payload.next?.id).toBe(JOB.id);
+    expect(payload.upcoming).toEqual([]);
   });
-  it("cola vacía: sin próxima vacante", () => {
-    const payload = buildWidgetPayload({ queueCount: 0, next: null, pipeline: { applied: 0, interviewing: 0, offer: 0 } });
+  it("lleva hasta cinco tarjetas de reserva para avanzar sin red", () => {
+    const more = Array.from({ length: 8 }, (_, i) => ({ ...JOB, id: `job-${i}`, title: `Job ${i}` }));
+    const payload = buildWidgetPayload({
+      queueCount: 9,
+      next: JOB,
+      upcoming: more,
+      pipeline: { applied: 0, interviewing: 0, offer: 0 },
+    });
+    expect(payload.upcoming.map((j) => j.id)).toEqual(["job-0", "job-1", "job-2", "job-3", "job-4"]);
+  });
+  it("cola vacía: sin próxima vacante ni reserva", () => {
+    const payload = buildWidgetPayload({
+      queueCount: 0,
+      next: null,
+      upcoming: [JOB],
+      pipeline: { applied: 0, interviewing: 0, offer: 0 },
+    });
     expect(payload.next).toBeNull();
+    expect(payload.upcoming).toEqual([]);
   });
 });
 

@@ -15,6 +15,7 @@ from app.api.v1.routers import (
     profile,
     resumes,
     system,
+    widget,
 )
 from app.core.config import settings
 from app.core.error_middleware import ErrorLoggingMiddleware
@@ -116,3 +117,4 @@ app.include_router(cover_letters.router, prefix=api_router_prefix)
 app.include_router(notifications.router, prefix=api_router_prefix)
 app.include_router(app_update.router, prefix=api_router_prefix)
 app.include_router(system.router, prefix=api_router_prefix)
+app.include_router(widget.router, prefix=api_router_prefix)

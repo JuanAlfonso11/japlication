@@ -11,8 +11,10 @@ from app.models.system_heartbeat import SystemHeartbeat
 from app.models.api_call_budget import ApiCallBudget
 from app.models.error_log import ErrorLog
 from app.models.external_job_cache import ExternalJobCache
+from app.models.widget_token import WidgetToken
 
 __all__ = [
+    "WidgetToken",
     "User",
     "DeviceToken",
     "RefreshToken",

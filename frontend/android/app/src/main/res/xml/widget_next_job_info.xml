@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 4x2 por defecto, redimensionable. updatePeriodMillis es solo para que
-     el "hace X h" no se quede congelado: redibuja con lo guardado, no pide
-     nada a la red. Los datos los trae la app (ver WidgetBridgePlugin). -->
+<!-- 4x2 por defecto, redimensionable. Cada 30 min (updatePeriodMillis) el
+     widget pide la cola al servidor con su propia credencial (WidgetActions
+     .refresh); la app también se la pasa cada vez que se usa. -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:description="@string/widget_next_job_description"
     android:initialLayout="@layout/widget_next_job"

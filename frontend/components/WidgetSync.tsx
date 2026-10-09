@@ -5,7 +5,7 @@ import { App } from "@capacitor/app";
 import type { PluginListenerHandle } from "@capacitor/core";
 import { useAuth } from "@/context/AuthContext";
 import { isNativeApp } from "@/lib/platform";
-import { clearWidgets, refreshWidgets } from "@/lib/widgets";
+import { clearWidgets, linkWidget, refreshWidgets } from "@/lib/widgets";
 
 /** Mantiene al día los widgets de la pantalla de inicio (ver lib/widgets.ts).
  *
@@ -17,8 +17,14 @@ import { clearWidgets, refreshWidgets } from "@/lib/widgets";
  * Al cerrar sesión borra los datos, para que el widget no siga enseñando la
  * cola de alguien que ya salió. No renderiza nada. */
 export default function WidgetSync() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const hadSession = useRef(false);
+  const userId = user?.id;
+
+  // La credencial propia del widget, para que ✕ / ✓ decidan sin abrir la app.
+  useEffect(() => {
+    if (token && userId) void linkWidget(userId);
+  }, [token, userId]);
 
   useEffect(() => {
     if (!isNativeApp()) return;
