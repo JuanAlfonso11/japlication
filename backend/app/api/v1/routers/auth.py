@@ -29,6 +29,7 @@ from app.core.security import (
 )
 from app.db.session import get_db
 from app.models.refresh_token import RefreshToken
+from app.models.widget_token import WidgetToken
 from app.models.user import User
 from app.schemas.common import ErrorResponse
 from app.schemas.user import (
@@ -364,6 +365,12 @@ async def reset_password(
     await db.execute(
         update(RefreshToken)
         .where(RefreshToken.user_id == user.id, RefreshToken.revoked_at.is_(None))
+        .values(revoked_at=datetime.now(timezone.utc))
+    )
+    # ...y el widget de la pantalla de inicio, que decide en su nombre.
+    await db.execute(
+        update(WidgetToken)
+        .where(WidgetToken.user_id == user.id, WidgetToken.revoked_at.is_(None))
         .values(revoked_at=datetime.now(timezone.utc))
     )
     await db.commit()

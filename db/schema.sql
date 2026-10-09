@@ -52,6 +52,21 @@ CREATE TABLE refresh_tokens (
 CREATE INDEX idx_refresh_tokens_user ON refresh_tokens (user_id);
 CREATE INDEX idx_refresh_tokens_hash ON refresh_tokens (token_hash);
 
+-- Credencial del widget de Android (migration 0018, app/models/widget_token.py):
+-- solo abre /widget/*, una por instalación.
+CREATE TABLE widget_tokens (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    device_id     TEXT NOT NULL,
+    token_hash    TEXT UNIQUE NOT NULL,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    last_used_at  TIMESTAMPTZ,
+    revoked_at    TIMESTAMPTZ
+);
+
+CREATE INDEX idx_widget_tokens_user ON widget_tokens (user_id);
+CREATE INDEX idx_widget_tokens_device ON widget_tokens (device_id);
+
 -- =========================================================
 -- career_profiles  (the "CV Maestro" - factual, user-owned truth)
 -- =========================================================

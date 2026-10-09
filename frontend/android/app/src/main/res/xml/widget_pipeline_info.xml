@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- 4x1 por defecto: una fila de cuatro cifras. Se puede estrechar a 3
-     celdas o hacer más alto; el contenido se centra. -->
+     celdas o hacer más alto; el contenido se centra. Se refresca solo cada
+     30 min, como "Próxima vacante". -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:description="@string/widget_pipeline_description"
     android:initialLayout="@layout/widget_pipeline"
@@ -12,5 +13,5 @@
     android:resizeMode="horizontal|vertical"
     android:targetCellWidth="4"
     android:targetCellHeight="1"
-    android:updatePeriodMillis="0"
+    android:updatePeriodMillis="1800000"
     android:widgetCategory="home_screen" />

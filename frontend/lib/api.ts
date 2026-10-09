@@ -653,6 +653,15 @@ export const notificationsApi = {
     request<void>("/notifications/register-device", { method: "DELETE", body: { token, platform } }),
 };
 
+// ---------- Widget de Android (lib/widgets.ts) ----------
+
+export const widgetApi = {
+  // Emite la credencial con la que el widget pasa y guarda sin abrir la app.
+  // Solo abre /widget/* en el backend (app/api/v1/routers/widget.py).
+  issueToken: (deviceId: string) =>
+    request<{ token: string }>("/widget/token", { method: "POST", body: { device_id: deviceId } }),
+};
+
 // ---------- Android in-app update check ----------
 
 export const appUpdateApi = {

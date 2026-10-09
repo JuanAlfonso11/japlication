@@ -172,16 +172,21 @@ Widgets → JobPilot):
 
 Cómo funcionan, en corto:
 
-- **El widget no habla con el backend ni tiene la sesión.** La app web le pasa una "foto" (la
-  primera vacante y cuatro totales) por el plugin nativo `JobPilotWidgets`
-  (`android/app/src/main/java/ai/jobflow/app/widgets/WidgetBridgePlugin.java`), que la guarda en
-  SharedPreferences privadas y redibuja. El lado web está en `frontend/lib/widgets.ts`.
-- **Cuándo se actualiza:** al cargar Home, después de cada swipe o deshacer, al cambiar el estado de
-  una postulación, y al entrar y salir de la app (`components/WidgetSync.tsx`). Si la foto tiene más
-  de una hora, el widget lo dice ("JobPilot · hace 3 h"). Al cerrar sesión se borra.
-- **✕ y ✓ no deciden desde fuera.** Abren la app en `/?swipe=left|right&job=<id>`; Home trae esa
-  tarjeta arriba y lanza el mismo vuelo que sus botones, con su "Deshacer". El swipe sigue siendo
-  el único camino para decidir.
+- **✕ / ✓ deciden sin abrir la app** (desde la 1.17). La tarjeta avanza al instante con las que
+  trae de reserva, y en segundo plano se manda el mismo swipe que hace Home
+  (`POST /widget/decision` → `swipe_decision`). Tras pasar una aparece **Deshacer**, como en la app.
+  Si falla, la tarjeta vuelve a su sitio y el widget dice por qué ("Sin conexión…").
+- **Credencial propia, no la sesión.** Al iniciar sesión la app pide `POST /widget/token` y se la
+  pasa al plugin `JobPilotWidgets`
+  (`android/app/src/main/java/ai/jobflow/app/widgets/WidgetBridgePlugin.java`). Solo abre
+  `/widget/*` (ver `backend/app/api/v1/routers/widget.py`): ni perfil, ni CV, ni nada más. El
+  servidor guarda su hash; una por teléfono. Se revoca al cerrar sesión, al restablecer la
+  contraseña, o al pedir otra desde el mismo teléfono.
+- **Datos:** la app le pasa una "foto" (primera vacante, cinco de reserva y cuatro totales) al
+  cargar Home, tras cada swipe, al cambiar un estado y al entrar/salir (`components/WidgetSync.tsx`);
+  además el widget la pide solo cada 30 min. Si tiene más de una hora, lo dice ("JobPilot · hace 3 h").
+- **Sin credencial todavía** (recién actualizado, antes de abrir la app), ✕ / ✓ abren la app en
+  `/?swipe=left|right&job=<id>` y Home hace el swipe con su animación.
 - Diseño: RemoteViews en Java (sin Compose), colores de `tailwind.config.ts` en
   `res/values/widget_colors.xml` y `res/values-night/`. En Android 12+ usan el radio de esquinas
   del sistema y tienen vista previa en el selector.

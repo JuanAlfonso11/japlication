@@ -24,6 +24,16 @@
     <string name="widget_label_offer">ofertas</string>
     <string name="widget_no_value">–</string>
 
+    <string name="widget_undo">Deshacer</string>
+    <string name="widget_notice_passed">Pasaste: %1$s</string>
+    <string name="widget_notice_passed_tap">Pasaste: %1$s. Toca para deshacer.</string>
+    <string name="widget_notice_saved">Guardada: %1$s</string>
+    <string name="widget_notice_undone">De vuelta: %1$s</string>
+    <string name="widget_error_offline">Sin conexión. Inténtalo otra vez.</string>
+    <string name="widget_error_generic">No se pudo. Inténtalo otra vez.</string>
+    <string name="widget_error_relink">Abre JobPilot para reconectar el widget.</string>
+    <string name="widget_error_gone">Esa vacante ya no estaba en tu cola.</string>
+
     <string name="widget_age_hours">hace %1$d h</string>
     <string name="widget_age_days">hace %1$d d</string>
 
