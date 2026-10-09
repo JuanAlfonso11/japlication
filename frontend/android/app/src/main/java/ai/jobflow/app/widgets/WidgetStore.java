@@ -30,6 +30,7 @@ final class WidgetStore {
     private static final String KEY_DEVICE_ID = "device_id";
     private static final String KEY_SEQ = "seq";
     private static final String KEY_NOTICE = "notice";
+    private static final String KEY_ROLLBACK_PREFIX = "rollback_";
 
     /** Cuánto se queda visible un aviso. Después el widget vuelve a decir
      * "JobPilot" y "N en cola". */
@@ -116,13 +117,17 @@ final class WidgetStore {
 
     /** Cerrar sesión: fuera todo menos el id de instalación. */
     static void clear(Context context) {
-        prefs(context).edit()
+        SharedPreferences p = prefs(context);
+        SharedPreferences.Editor e = p.edit()
             .remove(KEY_PAYLOAD)
             .remove(KEY_TOKEN)
             .remove(KEY_API_BASE)
             .remove(KEY_USER_ID)
-            .remove(KEY_NOTICE)
-            .commit();
+            .remove(KEY_NOTICE);
+        for (String key : p.getAll().keySet()) {
+            if (key.startsWith(KEY_ROLLBACK_PREFIX)) e.remove(key);
+        }
+        e.commit();
     }
 
     static synchronized String deviceId(Context context) {
@@ -148,6 +153,21 @@ final class WidgetStore {
 
     static int currentSeq(Context context) {
         return prefs(context).getInt(KEY_SEQ, 0);
+    }
+
+    /** La foto de antes de un toque, para devolver la tarjeta si el servidor
+     * no lo acepta. Va aquí y no en los datos del WorkManager porque estos
+     * tienen un límite de 10 KB. */
+    static void saveRollback(Context context, int seq, String json) {
+        prefs(context).edit().putString(KEY_ROLLBACK_PREFIX + seq, json).commit();
+    }
+
+    /** La saca y la borra (se usa una sola vez). */
+    static synchronized String takeRollback(Context context, int seq) {
+        SharedPreferences p = prefs(context);
+        String json = p.getString(KEY_ROLLBACK_PREFIX + seq, null);
+        if (json != null) p.edit().remove(KEY_ROLLBACK_PREFIX + seq).commit();
+        return json;
     }
 
     // ----------------------------------------------------------- aviso

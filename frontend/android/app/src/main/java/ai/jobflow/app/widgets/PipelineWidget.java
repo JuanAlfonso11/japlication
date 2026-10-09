@@ -27,7 +27,7 @@ public class PipelineWidget extends AppWidgetProvider {
         }
         // Cada 30 min y al ponerlo, igual que "Próxima vacante": por si solo
         // tienes puesto este.
-        WidgetActions.refresh(context, goAsync());
+        WidgetActions.refresh(context);
     }
 
     static void render(Context context, AppWidgetManager manager, int appWidgetId) {

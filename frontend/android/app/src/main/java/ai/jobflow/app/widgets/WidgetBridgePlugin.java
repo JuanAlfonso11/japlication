@@ -67,7 +67,7 @@ public class WidgetBridgePlugin extends Plugin {
         // Los botones pasan de "abrir la app" a decidir en segundo plano, y
         // se trae la cola real ya con la credencial nueva.
         WidgetUpdater.updateAll(getContext());
-        WidgetActions.refresh(getContext(), null);
+        WidgetActions.refresh(getContext());
         call.resolve();
     }
 
@@ -75,9 +75,11 @@ public class WidgetBridgePlugin extends Plugin {
     public void clear(PluginCall call) {
         String token = WidgetStore.token(getContext());
         String apiBase = WidgetStore.apiBase(getContext());
+        // Los toques que quedaran pendientes eran de esta sesión: fuera.
+        WidgetWorker.cancelPending(getContext());
         WidgetStore.clear(getContext());
         WidgetUpdater.updateAll(getContext());
-        WidgetActions.revoke(token, apiBase);
+        WidgetActions.revoke(getContext(), token, apiBase);
         call.resolve();
     }
 }
