@@ -71,7 +71,39 @@ teclea aunque no se envíe).
 - El LLM no recibe el correo ni el teléfono, y una opción que no existe en el
   formulario se descarta (en selección múltiple: todas válidas o ninguna).
 
+### Autorización de trabajo según dónde se trabaja
+
+Investigado el 2026-10-12. La autorización de trabajo de EE. UU. sigue un
+enfoque territorial: depende de dónde se trabaja **físicamente**, no de dónde
+está la empresa ni de dónde se cobra
+([Mondaq](https://webiis10.mondaq.com/unitedstates/work-visas/1792564/working-in-the-united-states-may-trigger-work-authorization-requirements-regardless-of-employer-location),
+[Deel](https://www.deel.com/blog/can-non-us-citizens-work-for-us-companies-and-live-abroad-as-digital-nomads)).
+
+| Puesto | ¿Autorización? | ¿Patrocinio? |
+|---|---|---|
+| Remoto mundial, LATAM o Américas, trabajando desde RD | Sí (la de RD) | No |
+| Empresa de EE. UU. que contrata para trabajar desde RD (contratista con W-8BEN o vía EOR) | Sí (la de RD) | No |
+| "Remote - US", ciudad de EE. UU. u otro país concreto | No | Sí |
+
+Los puestos "Remote - US" se limitan a residentes por nómina, impuestos y
+registro estatal del empleador
+([Lilach Bullock](https://www.lilachbullock.com/remote-jobs-restricted-to-us-applicants/)),
+así que exigen trabajar desde EE. UU.
+
+El agente lo resuelve **sin IA** (`job_scope`, `_question_scope` y
+`_scoped_answers` en `draft.py`). Toma el alcance de la pregunta ("authorized
+to work in the U.S.?") o, si la pregunta no nombra país, de la ubicación del
+puesto, y aplica la mitad que corresponde de la respuesta guardada ("Sí, si el
+puesto es remoto... No, si exige trabajar en Estados Unidos..."). Si la
+ubicación no lo deja claro ("Remote" a secas), o la pregunta es de texto
+libre, la responde el usuario. En el banco, el LLM local se contradecía justo
+aquí: "No" a autorización y "No" a patrocinio para el mismo puesto en EE. UU.
+
 ### Errores que el banco ya cazó (con test de regresión)
+
+- Un "Si" condicional ("Si el trabajo es remoto, entonces...") se leía como
+  "Sí" al quitar las tildes, y el agente contestaba "Yes" a la autorización
+  hasta en puestos de EE. UU.
 
 - La pregunta de viajes de Canonical menciona "visas" y se contestaba con la
   respuesta guardada sobre patrocinio. El tema ahora sale de la pregunta en sí
@@ -137,9 +169,8 @@ La calificación campo por campo (la puerta del 90 %) la hace el usuario en
 
 ## Pendiente
 
-- [ ] Completar en Perfil las respuestas guardadas vacías: autorización de
-      trabajo, patrocinio de visa, salario, disponibilidad y "¿por qué esta
-      empresa?" (`GET /apply-agent/readiness` las lista).
+- [x] Completar en Perfil las respuestas guardadas vacías (2026-10-12; las de
+      autorización y patrocinio reescritas con los dos casos).
 - [ ] Calificar `bench.md` (puerta de la fase 2: 90 %).
 - [x] Llenado real con navegador, sin enviar, y captura de pantalla
       (`Dockerfile.agent` + `filler.py`).

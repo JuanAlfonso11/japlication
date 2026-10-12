@@ -26,6 +26,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 from dataclasses import asdict, dataclass, field
 from typing import Any, Optional
 
@@ -46,6 +47,7 @@ from app.services.apply_agent.classify import (
     is_location_question,
     mentions_ai_policy,
     norm,
+    question_core,
     topic_of,
 )
 from app.services.apply_agent.facts import screening_for
@@ -117,6 +119,7 @@ class Draft:
     review_reasons: list[str] = field(default_factory=list)
     auto_eligible: bool = False
     used_ai: bool = False
+    location: str = ""
 
     def stats(self) -> dict[str, int]:
         obligatorios = [f for f in self.fields if f.required]
@@ -167,9 +170,20 @@ def _option_by_label(options: list[dict[str, str]], label: str) -> Optional[dict
     return None
 
 
+#: Una respuesta condicional no es un si/no. Al quitar tildes, "Si el trabajo
+#: es remoto, entonces..." (condicional) y "Sí" (afirmativo) quedan iguales, y
+#: la respuesta guardada de autorizacion de un usuario real se leia como "Yes"
+#: hasta para puestos en EE. UU. Esas van al LLM con la ubicacion del puesto.
+_CONDITIONAL = re.compile(
+    r"\b(si (el|la|los|las|es|se|me|exige|trabajo|puesto|empresa)|depend\w*|if|unless)\b"
+)
+
+
 def _yes_no(answer: str) -> Optional[str]:
     """"Sí, tengo autorización" -> "yes". Solo la primera palabra cuenta: una
     respuesta que no empieza por si/no no es un si/no, y adivinar seria peor."""
+    if _CONDITIONAL.search(norm(answer)):
+        return None
     primera = norm(answer).replace(",", " ").replace(".", " ").split()
     if not primera:
         return None
@@ -188,6 +202,82 @@ def _yes_no_option(options: list[dict[str, str]], answer: str) -> Optional[dict[
     # Solo si no hay ambiguedad: "Yes, I am authorized" y "Yes, but I need a
     # visa" son dos "si" distintos, y elegir uno es interpretar.
     return candidatas[0] if len(candidatas) == 1 else None
+
+
+# ---------------------------------------------------------------- donde se trabaja
+#
+# La autorizacion de trabajo depende de donde se trabaja fisicamente, no de
+# donde esta la empresa (enfoque territorial; ver tasks/agente-aplicacion.md):
+# un puesto remoto abierto a todo el mundo o a Latinoamerica se trabaja desde
+# el pais del usuario; "Remote - US" exige trabajar en EE. UU. En el banco de
+# prueba el LLM se contradecia justo aqui (autorizado: No, patrocinio: No para
+# "Remote - United States"), asi que estas preguntas se resuelven sin IA.
+
+SCOPE_HOME = "home"      # se trabaja desde el pais del usuario
+SCOPE_ABROAD = "abroad"  # exige trabajar en otro pais
+
+_HOME_SCOPE = re.compile(
+    r"\b(worldwide|anywhere|global|globally|latam|latin america|americas|caribbean|"
+    r"dominican republic|republica dominicana)\b"
+)
+#: EE. UU. nombrado en la pregunta. "US" se busca en MAYUSCULAS sobre el texto
+#: original: en minusculas "us" es el pronombre de "work with us".
+_US_UPPER = re.compile(r"(?<![A-Za-z])(U\.S\.(A\.?)?|USA|US)(?![A-Za-z])")
+_GENERIC_LOCATION = re.compile(
+    r"\b(remote|remoto|home|based|distributed|flexible|friendly|work|from|wfh|first|only|hybrid|"
+    r"onsite|on site|office|in)\b"
+)
+
+
+def job_scope(location: Optional[str], home_country: Optional[str] = None) -> Optional[str]:
+    """SCOPE_HOME, SCOPE_ABROAD o None si la ubicacion no lo deja claro.
+
+    "Home based - Worldwide" y "Remote, EMEA/LATAM" -> home. "Remote - US",
+    "Remote, Canada; Remote, United States" y "Home based - EMEA" -> abroad.
+    "Remote" a secas -> None: no dice desde donde."""
+    texto = norm(location)
+    if not texto:
+        return None
+    casa = norm(home_country)
+    casa_en = _COUNTRY_ALIASES.get(casa, casa)
+    if _HOME_SCOPE.search(texto) or (casa and (casa in texto or casa_en in texto)):
+        return SCOPE_HOME
+    resto = _GENERIC_LOCATION.sub(" ", re.sub(r"[^a-z ]", " ", texto)).strip()
+    return SCOPE_ABROAD if resto else None
+
+
+def _question_scope(label: str, location: str, home_country: str) -> Optional[str]:
+    """La pregunta manda sobre la ubicacion del puesto: "Are you currently
+    authorized to work in the U.S.?" es sobre EE. UU. aunque el puesto diga
+    Worldwide."""
+    nucleo = question_core(label)
+    casa = norm(home_country)
+    nombra_eeuu = bool(_US_UPPER.search(nucleo)) or "united states" in norm(nucleo)
+    if nombra_eeuu and _COUNTRY_ALIASES.get(casa, casa) != "united states":
+        return SCOPE_ABROAD
+    return job_scope(location, home_country)
+
+
+def _scoped_answers(answer: str) -> dict[str, str]:
+    """Las dos mitades de una respuesta guardada condicional.
+
+    "Sí, si el puesto es remoto y puedo trabajar desde República Dominicana.
+    No, si el puesto exige vivir o trabajar físicamente en Estados Unidos u
+    otro país." -> {"home": "yes", "abroad": "no"}. Cada frase empieza por su
+    si/no; la que habla de remoto es la de casa, la que habla de exigir vivir
+    o trabajar en otro sitio es la de fuera."""
+    salida: dict[str, str] = {}
+    for frase in re.split(r"(?<=[.;])\s+", (answer or "").strip()):
+        texto = norm(frase)
+        palabras = texto.replace(",", " ").split()
+        if not palabras or palabras[0] not in _YES | _NO:
+            continue
+        sentido = "yes" if palabras[0] in _YES else "no"
+        if re.search(r"\b(exige|fisicamente|vivir|reubic\w*|relocat\w*|otro pais|estados unidos)\b", texto):
+            salida[SCOPE_ABROAD] = sentido
+        elif re.search(r"\bremot\w*", texto):
+            salida[SCOPE_HOME] = sentido
+    return salida
 
 
 def _country_option(options: list[dict[str, str]], country: str) -> Optional[dict[str, str]]:
@@ -210,10 +300,14 @@ def _to_user(fd: FieldDraft, reason: str) -> None:
 # ---------------------------------------------------------------- pasada 1
 
 #: Temas cuya respuesta guardada contesta la pregunta sin interpretarla.
-_COPY_TOPICS = {"work_auth", "sponsorship", "salary", "start_date"}
+_COPY_TOPICS = {"salary", "start_date"}
+#: Temas legales: nunca los decide el LLM (ver "donde se trabaja").
+_LEGAL_TOPICS = {"work_auth", "sponsorship"}
 
 
-def _deterministic(fd: FieldDraft, field: FormField, facts: dict[str, Any], ai_policy: bool) -> None:
+def _deterministic(
+    fd: FieldDraft, field: FormField, facts: dict[str, Any], ai_policy: bool, location: str = ""
+) -> None:
     if fd.kind == KIND_DOCUMENT:
         if field.key == "resume" or "resume" in norm(field.label) or norm(field.label).startswith("cv"):
             _set(fd, "master_cv", "Tu CV maestro (PDF)", SOURCE_PROFILE)
@@ -265,10 +359,22 @@ def _deterministic(fd: FieldDraft, field: FormField, facts: dict[str, Any], ai_p
     guardada = screening_for(facts, fd.topic)
     if not guardada:
         return  # pendiente para el LLM
+    legal = fd.topic in _LEGAL_TOPICS
     if field.type == "select":
         opcion = _yes_no_option(field.options, guardada)
+        if opcion is None and legal:
+            alcance = _question_scope(field.label, location, facts.get("country") or "")
+            sentido = _scoped_answers(guardada).get(alcance) if alcance else None
+            if sentido:
+                opcion = _yes_no_option(field.options, "si" if sentido == "yes" else "no")
         if opcion:
             _set(fd, opcion["value"], opcion["label"], SOURCE_SCREENING)
+        elif legal:
+            _to_user(fd, "Tu respuesta guardada depende de dónde se trabaje: elige la que aplica a esta oferta.")
+    elif legal:
+        # Autorizacion y patrocinio en texto libre ("What is the source of
+        # your right to work?"): es una declaracion legal, la escribe el usuario.
+        _to_user(fd, "Pregunta legal sobre tu autorización de trabajo: respóndela tú.")
     elif field.type in _TEXT_LIMIT and ai_policy and fd.topic in _COPY_TOPICS:
         # Sin IA permitida, la respuesta guardada va tal cual: son palabras del
         # propio usuario. Sin politica de IA, el LLM la recibe como pista y la
@@ -303,6 +409,14 @@ Reglas, sin excepciones:
   formulario, con hechos concretos del perfil. Sin frases de relleno.
 - Si una pregunta trae "hint", es la respuesta que el propio candidato guardo
   para ese tema: usala como fuente principal.
+- Si el "hint" depende de donde se trabaja (p. ej. "Si, si el puesto es remoto
+  desde mi pais. No, si exige trabajar en Estados Unidos"), decide con
+  "job.location". La autorizacion de trabajo depende de donde se trabaja
+  fisicamente, no de donde esta la empresa: un puesto remoto abierto a todo el
+  mundo ("Worldwide", "Anywhere", "Global"), a America o a Latinoamerica se
+  trabaja desde el pais del candidato; "Remote - US", "US Remote" o una ciudad
+  de Estados Unidos exige trabajar en Estados Unidos. Si "job.location" no
+  permite decidir, responde "unknown".
 - Responde SOLO un objeto JSON: {"answers": [{"key": "...", "status":
   "answered" | "unknown", "value": ...}]}
 """
@@ -348,7 +462,7 @@ def _ask_llm(draft: Draft, facts: dict[str, Any], pendientes: list[FieldDraft]) 
     if client is None:
         return {}
     contenido = {
-        "job": {"title": draft.title, "company": draft.company},
+        "job": {"title": draft.title, "company": draft.company, "location": draft.location},
         "form_language": draft.language,
         "candidate_facts": _facts_for_prompt(facts),
         "questions": [_question_for_prompt(fd, facts) for fd in pendientes],
@@ -466,7 +580,7 @@ def _start(form: ApplicationForm, facts: dict[str, Any]) -> Draft:
             topic=topic_of(field.label),
             alternatives=list(field.alternatives),
         )
-        _deterministic(fd, field, facts, ai_policy)
+        _deterministic(fd, field, facts, ai_policy, form.location)
         campos.append(fd)
     return Draft(
         ats=form.ats,
@@ -481,6 +595,7 @@ def _start(form: ApplicationForm, facts: dict[str, Any]) -> Draft:
         fields=campos,
         notices=list(form.notices),
         education_required=form.education_required,
+        location=form.location,
     )
 
 
@@ -492,12 +607,16 @@ def _llm_may_answer(fd: FieldDraft, facts: dict[str, Any]) -> bool:
     modelo contestaba "No" a "¿necesitas patrocinio?" -- una declaracion
     migratoria inventada. Pais, zona horaria y ubicacion si se deducen del
     perfil."""
-    if fd.status != _PENDING:
+    if fd.status != _PENDING or fd.topic in _LEGAL_TOPICS:
         return False
     if fd.kind in (KIND_CHOICE, KIND_TEXT, KIND_OPEN):
         return True
-    if fd.kind in (KIND_SALARY, KIND_WORK_AUTH):
-        return bool(screening_for(facts, fd.topic)) or (fd.kind == KIND_WORK_AUTH and is_location_question(fd.label))
+    if fd.kind == KIND_SALARY:
+        return bool(screening_for(facts, fd.topic))
+    if fd.kind == KIND_WORK_AUTH:
+        # Autorizacion y patrocinio ya se resolvieron sin IA (o quedaron para
+        # el usuario); aqui solo llegan pais, zona horaria o ubicacion.
+        return is_location_question(fd.label) and fd.topic not in _LEGAL_TOPICS
     return False
 
 

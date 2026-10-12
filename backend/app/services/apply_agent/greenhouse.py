@@ -83,6 +83,10 @@ class ApplicationForm:
     #: Greenhouse pide la educacion en un bloque aparte, con buscador de
     #: universidades. Si es obligatorio, el usuario lo completa en la revision.
     education_required: bool = False
+    #: Donde se trabaja el puesto, tal como lo publica la empresa ("Remote -
+    #: US", "Home based - Worldwide"). Decide respuestas que dependen de eso,
+    #: como la autorizacion de trabajo.
+    location: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -231,6 +235,7 @@ def parse_form(data: dict[str, Any], board: str, job_id: str) -> ApplicationForm
         fields=fields,
         notices=[n for n in notices if n],
         education_required=data.get("education") == "education_required",
+        location=str((data.get("location") or {}).get("name") or "").strip(),
     )
 
 
