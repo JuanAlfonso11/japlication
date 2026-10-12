@@ -12,8 +12,10 @@ from app.models.api_call_budget import ApiCallBudget
 from app.models.error_log import ErrorLog
 from app.models.external_job_cache import ExternalJobCache
 from app.models.widget_token import WidgetToken
+from app.models.application_draft import ApplicationDraft
 
 __all__ = [
+    "ApplicationDraft",
     "WidgetToken",
     "User",
     "DeviceToken",

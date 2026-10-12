@@ -234,6 +234,29 @@ CREATE INDEX idx_applications_user_status ON applications (user_id, status);
 -- every DELETE FROM jobs.
 CREATE INDEX idx_applications_job ON applications (job_id);
 
+-- Borrador del agente de aplicacion (migration 0019, app/models/application_draft.py,
+-- app/services/apply_agent/). Uno por candidatura: rehacerlo lo reemplaza.
+-- `content` es el borrador entero (campos, respuestas, motivos de revision).
+-- Los estados de envio (approved..cancelled) los usan las fases siguientes;
+-- estan ya en el CHECK para no tener que migrar la restriccion por cada fase.
+CREATE TABLE application_drafts (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    application_id  UUID NOT NULL UNIQUE REFERENCES applications(id) ON DELETE CASCADE,
+    ats             TEXT NOT NULL,
+    form_url        TEXT NOT NULL,
+    status          TEXT NOT NULL DEFAULT 'ready' CHECK (status IN (
+        'ready', 'needs_user', 'failed', 'approved', 'scheduled', 'submitted', 'cancelled'
+    )),
+    auto_eligible   BOOLEAN NOT NULL DEFAULT false,
+    content         JSONB NOT NULL DEFAULT '{}'::jsonb,
+    error           TEXT,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_application_drafts_user ON application_drafts (user_id);
+
 -- =========================================================
 -- resume_versions (ATS-safe, job-tailored resume snapshots)
 -- =========================================================

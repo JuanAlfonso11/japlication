@@ -1,0 +1,24 @@
+# Contenedor del agente de aplicacion: el navegador que llena formularios.
+#
+# Va aparte del backend a proposito: Chromium y sus dependencias pesan mas de
+# 1 GB, y el backend (que corre en produccion y se reconstruye en cada
+# pre-commit) no tiene por que cargarlos. Este contenedor solo necesita el
+# llenador, que no importa nada de app/.
+#
+#   docker build -f backend/Dockerfile.agent -t jobpilot-agent backend
+#   docker run --rm --ipc=host -v <carpeta>:/work jobpilot-agent \
+#       --draft /work/draft.json --resume /work/cv.pdf --out /work/captura.png
+#
+# Nunca pulsa "Enviar": ver app/services/apply_agent/filler.py.
+FROM mcr.microsoft.com/playwright/python:v1.49.1-noble
+
+# La imagen oficial trae los navegadores pero no el paquete de Python. Misma
+# version que la imagen, o Playwright no encuentra su Chromium.
+RUN pip install --no-cache-dir --break-system-packages playwright==1.49.1
+
+WORKDIR /agent
+COPY app/services/apply_agent/filler.py /agent/filler.py
+
+# pwuser viene con la imagen: sin root, como el backend.
+USER pwuser
+ENTRYPOINT ["python", "/agent/filler.py"]

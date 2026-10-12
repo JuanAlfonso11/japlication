@@ -7,6 +7,7 @@ from slowapi.errors import RateLimitExceeded
 from app.api.v1.routers import (
     app_update,
     applications,
+    apply_agent,
     auth,
     cover_letters,
     jobs,
@@ -112,6 +113,7 @@ app.include_router(profile.router, prefix=api_router_prefix)
 app.include_router(jobs.router, prefix=api_router_prefix)
 app.include_router(match.router, prefix=api_router_prefix)
 app.include_router(applications.router, prefix=api_router_prefix)
+app.include_router(apply_agent.router, prefix=api_router_prefix)
 app.include_router(resumes.router, prefix=api_router_prefix)
 app.include_router(cover_letters.router, prefix=api_router_prefix)
 app.include_router(notifications.router, prefix=api_router_prefix)
