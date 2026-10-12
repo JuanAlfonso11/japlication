@@ -5,3 +5,9 @@ __pycache__/
 .pytest_cache/
 .env
 .git/
+# Se montan en tiempo de ejecucion (docker-compose.yml: ./backend/secrets y
+# ./backend/runtime). Sin estas lineas `COPY . .` las metia en la imagen: la
+# credencial de Firebase, el secreto del heartbeat y, desde el banco de prueba
+# del agente, el perfil exportado del usuario (runtime/apply_bench/).
+secrets/
+runtime/

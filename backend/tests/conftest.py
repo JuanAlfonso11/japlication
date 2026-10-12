@@ -59,6 +59,7 @@ from app.models.user import User
 # resume_version's own dependents, so this list only needs the tables
 # tests actually insert into directly).
 _TABLES_TO_CLEAN = [
+    "application_drafts",
     "applications",
     "job_matches",
     "resume_versions",
