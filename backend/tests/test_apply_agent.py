@@ -484,6 +484,110 @@ def test_profile_country_does_not_answer_citizenship(facts):
     assert campo.status == NEEDS_USER and campo.value is None
 
 
+@pytest.mark.parametrize(
+    "answer,expected",
+    [
+        ("Si", "yes"),
+        ("Sí, lo necesito", "yes"),
+        ("No", "no"),
+        # Regresion: la respuesta real de un usuario. Sin tildes, el "Si"
+        # condicional parecia un "Si" afirmativo.
+        ("Si es trabajo es remoto, entonces si debería tener autorización", None),
+        ("Sí, si el puesto es remoto y puedo trabajar desde República Dominicana. No, si exige vivir en EE. UU.", None),
+        ("Depende del país del puesto", None),
+    ],
+)
+def test_conditional_saved_answers_are_not_yes_or_no(answer, expected):
+    assert draft_mod._yes_no(answer) == expected
+
+
+@pytest.mark.parametrize(
+    "location,expected",
+    [
+        ("Home based - Worldwide", "home"),
+        ("Remote, EMEA/LATAM", "home"),
+        ("Remote - Americas", "home"),
+        ("Santo Domingo, República Dominicana", "home"),
+        ("Remote - US", "abroad"),
+        ("Remote-Friendly, United States", "abroad"),
+        ("Remote, Canada; Remote, United States", "abroad"),
+        ("Home based - EMEA", "abroad"),
+        ("San Francisco, CA", "abroad"),
+        ("Remote", None),
+        ("", None),
+    ],
+)
+def test_job_scope(location, expected):
+    assert draft_mod.job_scope(location, "República Dominicana") == expected
+
+
+#: Las respuestas guardadas reales del usuario (2026-10-12), con las dos
+#: situaciones: trabajar desde su pais o tener que trabajar en otro.
+AUTH_SCOPED = (
+    "Sí, si el puesto es remoto y puedo trabajar desde República Dominicana, donde tengo autorización "
+    "para trabajar. No, si el puesto exige vivir o trabajar físicamente en Estados Unidos u otro país."
+)
+SPONSOR_SCOPED = (
+    "No, si el puesto es remoto y trabajo desde República Dominicana. Sí, si el puesto exige vivir o "
+    "trabajar físicamente en Estados Unidos u otro país."
+)
+
+
+def test_scoped_answers():
+    assert draft_mod._scoped_answers(AUTH_SCOPED) == {"home": "yes", "abroad": "no"}
+    assert draft_mod._scoped_answers(SPONSOR_SCOPED) == {"home": "no", "abroad": "yes"}
+
+
+@pytest.mark.parametrize(
+    "location,label,auth,sponsor",
+    [
+        # Remoto mundial o LATAM: trabaja desde su pais.
+        ("Home based - Worldwide", "the country where this position is located", "Yes", "No"),
+        ("Remote, EMEA/LATAM", "the country where this position is located", "Yes", "No"),
+        # Remoto pero en EE. UU.: exige trabajar alli.
+        ("Remote - United States", "the country where this position is located", "No", "Yes"),
+        # La pregunta nombra EE. UU. aunque el puesto sea mundial: esa se
+        # contesta para EE. UU.; la de patrocinio, que no nombra pais, por el
+        # puesto (mundial, desde su pais).
+        ("Home based - Worldwide", "the U.S.", "No", "No"),
+    ],
+)
+async def test_work_authorization_depends_on_where_the_work_is_done(location, label, auth, sponsor, monkeypatch):
+    """Sin IA: en el banco el modelo contestaba "No" a patrocinio y "No" a
+    autorizacion para el mismo puesto en EE. UU."""
+    monkeypatch.setattr(draft_mod, "_ask_llm", lambda *a, **k: (_ for _ in ()).throw(AssertionError("sin IA")))
+    perfil = {**PROFILE, "screening_answers": [
+        {"question": "¿Tienes autorización para trabajar en el país de la vacante?", "answer": AUTH_SCOPED},
+        {"question": "¿Requieres patrocinio de visa ahora o en el futuro?", "answer": SPONSOR_SCOPED},
+    ]}
+    data = _form_data(
+        _yes_no(f"Are you legally authorized to work in {label}?", "question_41"),
+        _yes_no("Will you now or in the future require visa sponsorship?", "question_42"),
+        location={"name": location},
+    )
+    d = await build_draft(parse_form(data, "acme", "1"), build_facts(USER, perfil))
+    assert (_field(d, "question_41").display, _field(d, "question_41").source) == (auth, "screening")
+    assert _field(d, "question_42").display == sponsor
+    assert "work_auth" in d.review_reasons
+
+
+async def test_unclear_location_leaves_legal_questions_to_the_user(monkeypatch):
+    monkeypatch.setattr(draft_mod, "_ask_llm", lambda *a, **k: (_ for _ in ()).throw(AssertionError("sin IA")))
+    perfil = {**PROFILE, "screening_answers": [
+        {"question": "¿Requieres patrocinio de visa ahora o en el futuro?", "answer": SPONSOR_SCOPED},
+    ]}
+    data = _form_data(
+        _yes_no("Will you require visa sponsorship to work with us?", "question_43"),
+        _q("What is the source of your right to work?", "question_44"),
+        location={"name": "Remote"},
+    )
+    d = await build_draft(parse_form(data, "acme", "1"), build_facts(USER, perfil))
+    # "Remote" a secas no dice desde donde, y "with us" no es EE. UU.
+    assert _field(d, "question_43").status == NEEDS_USER
+    assert "depende de dónde" in _field(d, "question_43").reason
+    assert _field(d, "question_44").status == NEEDS_USER
+
+
 def test_filler_helpers_need_no_browser():
     """El llenador corre en su propio contenedor, pero sus reglas se prueban
     aqui: importarlo no carga Playwright."""
