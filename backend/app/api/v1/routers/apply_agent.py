@@ -17,12 +17,14 @@ lo que la app usa despues. Ver services/apply_agent/pipeline.py y submit.py.
 
 from __future__ import annotations
 
+import copy
 from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.api.deps import get_current_user
 from app.core.config import settings
@@ -220,7 +222,7 @@ async def answer_draft(
     draft = await _draft(db, current_user, application_id)
     if draft.status in (DRAFT_SUBMITTED, DRAFT_SUBMITTING, DRAFT_PREPARING):
         raise HTTPException(status_code=409, detail="Ahora mismo no se puede cambiar esta aplicación.")
-    contenido = dict(draft.content or {})
+    contenido = copy.deepcopy(draft.content or {})
     try:
         review.apply_answers(contenido, payload.answers)
     except review.AnswerError as exc:
@@ -232,6 +234,7 @@ async def answer_draft(
     auto_ok, _ = review.refresh(contenido, draft.channel)
     draft.auto_eligible = auto_ok
     draft.content = contenido
+    flag_modified(draft, "content")
     if draft.status in (DRAFT_NEEDS_USER, DRAFT_READY):
         draft.status = DRAFT_NEEDS_USER if review.pending_required(contenido) else DRAFT_READY
     elif draft.status == DRAFT_SCHEDULED and review.pending_required(contenido):
@@ -272,9 +275,10 @@ async def cancel_draft(
     if draft.status in (DRAFT_SUBMITTED, DRAFT_SUBMITTING):
         raise HTTPException(status_code=409, detail="Ya salió: no se puede deshacer.")
     draft.status, draft.scheduled_for = DRAFT_CANCELLED, None
-    contenido = dict(draft.content or {})
+    contenido = copy.deepcopy(draft.content or {})
     contenido["auto"] = False
     draft.content = contenido
+    flag_modified(draft, "content")
     await db.commit()
     await db.refresh(draft)
     return draft

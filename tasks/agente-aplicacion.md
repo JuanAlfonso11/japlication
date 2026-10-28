@@ -17,8 +17,60 @@ CAPTCHA o un login.
 |---|---|---|---|
 | 1 | Ofertas de Greenhouse, Lever y Ashby y perfil con lo básico | Ofertas reales en el swipe y perfil confirmado | Ofertas: hecho (`ats_boards.py`). Perfil: falta completar respuestas guardadas (ver abajo) |
 | 2 | Borradores para Greenhouse, sin enviar | 90 % de campos correctos en 20 formularios | Borradores y llenado con navegador hechos; falta que el usuario califique `bench.md` |
-| 3 | Revisión en la app (teléfono y PC) o en la página real (PC), envío tras aprobar | 5 aplicaciones propias enviadas sin error | Pendiente |
-| 4 | Lever, Ashby, modo automático con frenos, límite diario, páginas legales | Checklist legal completo | Pendiente |
+| 3 | Revisión en la app (teléfono y PC) o en la página real (PC), envío tras aprobar | 5 aplicaciones propias enviadas sin error | Hecho en código (2026-10-27, "aplicar al deslizar"); falta la puerta: 5 envíos reales |
+| 4 | Lever, Ashby, modo automático con frenos, límite diario, páginas legales | Checklist legal completo | Modo automático, frenos y límite diario hechos; Lever, Ashby y páginas legales pendientes |
+
+## Aplicar al deslizar (2026-10-27)
+
+Un swipe a la derecha ya no solo guarda: según `users.apply_mode` (Perfil →
+Ajustes, o la bandeja `/apply`) prepara la aplicación y, si toca, la envía.
+
+| Modo | Qué hace la derecha |
+|---|---|
+| `save` | Solo guardar, como antes. |
+| `review` (por defecto) | Prepara la aplicación y espera el toque en **Enviar**. |
+| `auto` | Si no falta nada y nada pide revisión, sale sola a los `APPLY_UNDO_MINUTES` (10) con opción de deshacer, hasta `APPLY_DAILY_AUTO_LIMIT` (15) al día. Si algo pide revisión, espera como en `review`. |
+
+El swipe responde al instante; la preparación corre después
+(`BackgroundTasks` → `pipeline.prepare_in_background`). Lo que hace, tomado
+del flujo `/apply` de ai-job-search:
+
+1. **Puertas** (`gates.py`, del "Eligibility Gate" y el "Language Gate" de
+   `04-job-evaluation.md`): permiso de trabajo de otro país, ciudadanía o
+   habilitación, idioma que el perfil no tiene, oferta cerrada o vencida.
+   Bloquean el envío automático y se enseñan con la frase de la oferta.
+2. **CV a medida** (`resume_adapter`, o sin IA si la empresa la prohíbe) y
+   **carta** solo si el destino la usa.
+3. **Auditoría de hechos** (`grounding.py`, el paso 3 de `/apply`): empleador,
+   cargo, fechas, institución y cada cifra del CV y la carta contra el perfil.
+   Las habilidades de más se quitan solas; lo demás se reporta y frena el
+   envío automático. Un CV editado a mano no se audita: son palabras del usuario.
+4. **Borrador por canal**: `greenhouse` (formulario, `draft.py`), `email`
+   (vista previa con huella) o `external` (cualquier otro sitio).
+
+Estados del borrador: `preparing → needs_user | ready | scheduled | handoff`,
+y al enviar `submitting → submitted | handoff`. `handoff` = lo envía el
+usuario en la página (la extensión llena el formulario) y luego toca "Ya la envié".
+
+**Envío** (`submit.py`): el correo vuelve a armarse y se compara su huella;
+Greenhouse lo envía el contenedor `agent` (`agent_server.py` + `filler.py`,
+servicio `agent` de compose, sin puerto publicado): llena, y solo si todo lo
+listo se llenó pulsa enviar **una vez** y espera la confirmación. Si aparece
+el desafío de reCAPTCHA, o no ve confirmación, o la página rechaza campos,
+devuelve el control al usuario sin reintentar. Nada toca un CAPTCHA.
+
+Respuestas del usuario (`review.py`): las que da en la revisión llevan
+`source = "user"` y dejan de frenar, consentimientos incluidos: los marca él,
+con el texto delante. El agente sigue sin responder ninguno.
+
+Reloj (`submit.run_due`, cada 30 s dentro del backend): toma los programados
+con `FOR UPDATE SKIP LOCKED` y los pasa a `submitting` en la misma
+transacción, así que cada uno sale una vez.
+
+Pruebas: `tests/test_apply_on_swipe.py` (de punta a punta, agente sustituido),
+`tests/test_apply_gates_grounding.py` y `tests/test_agent_submit.py` (Chromium
+contra un formulario falso local: confirmación, CAPTCHA, errores, sin
+confirmación, y que el modo llenar nunca envía; se salta sin Playwright).
 
 ## Lo que hay (fase 2)
 
@@ -175,7 +227,10 @@ La calificación campo por campo (la puerta del 90 %) la hace el usuario en
 - [x] Llenado real con navegador, sin enviar, y captura de pantalla
       (`Dockerfile.agent` + `filler.py`).
 - [ ] Mostrar en el borrador el "Country" que Greenhouse añade fuera de la API.
-- [ ] Pantalla de revisión del borrador en la app (fase 3).
+- [x] Pantalla de revisión del borrador en la app (fase 3): `/apply/[id]`.
+- [ ] Puerta de la fase 3: 5 aplicaciones propias enviadas sin error.
+- [ ] Lever y Ashby como canales con formulario (hoy salen como `external`).
+- [ ] Páginas legales (fase 4).
 - [ ] La clave de Anthropic de `.env` devuelve 401 (`invalid x-api-key`): todas
       las funciones de IA de producción están cayendo a su ruta sin IA.
 - [ ] Tras mezclar: aplicar `db/schema.sql` a `jobflow_test` de producción

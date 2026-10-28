@@ -29,6 +29,7 @@ from typing import Any, Optional
 import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.core.config import settings
 from app.models.application import Application
@@ -56,6 +57,14 @@ logger = logging.getLogger("jobflow.apply")
 
 class SubmitBlocked(RuntimeError):
     """No se puede enviar ahora. El mensaje va tal cual a la interfaz."""
+
+
+def _store(draft: ApplicationDraft, content: dict[str, Any]) -> None:
+    """Guarda el contenido. flag_modified porque a menudo es el MISMO dict que
+    ya estaba asignado (y luego se modifico): sin esto SQLAlchemy no ve el
+    cambio en una columna JSONB y no lo escribe."""
+    draft.content = content
+    flag_modified(draft, "content")
 
 
 def _now() -> datetime:
@@ -116,12 +125,12 @@ async def submit(
         draft.status, draft.scheduled_for = DRAFT_READY, None
         content["auto"] = False
         _note(content, "No salió sola: ahora hay algo que revisar.")
-        draft.content = content
+        _store(draft, content)
         await db.commit()
         return draft
 
     draft.status = DRAFT_SUBMITTING
-    draft.content = content
+    _store(draft, content)
     await db.commit()
 
     try:
@@ -134,14 +143,14 @@ async def submit(
     except SubmitBlocked as exc:
         draft.status = DRAFT_READY
         _note(content, str(exc))
-        draft.content = content
+        _store(draft, content)
         await db.commit()
         raise
     except Exception:  # noqa: BLE001 - nunca dejar un borrador en "enviando"
         logger.exception("Fallo al enviar la aplicacion %s", draft.application_id)
         _handoff(draft, content, "Algo falló al enviarla. Envíala tú en la página; nada se marcó como enviado.")
 
-    draft.content = content
+    _store(draft, content)
     await db.commit()
     await db.refresh(draft)
     await _notify_result(db, user, job, draft, automatic)
@@ -268,7 +277,7 @@ async def mark_sent_by_user(db: AsyncSession, draft: ApplicationDraft) -> Applic
     content = dict(draft.content or {})
     nota = f"Enviada por ti en la página de la empresa el {_now():%Y-%m-%d %H:%M} UTC."
     _sent(draft, content, nota)
-    draft.content = content
+    _store(draft, content)
     await mark_applied(db, application, nota)
     await db.commit()
     await db.refresh(draft)
@@ -330,7 +339,7 @@ async def run_due(db: AsyncSession, limit: int = 5) -> int:
             if draft.status == DRAFT_SUBMITTING:
                 contenido = dict(draft.content or {})
                 _handoff(draft, contenido, "Algo falló al enviarla sola. Revísala; nada se marcó como enviado.")
-                draft.content = contenido
+                _store(draft, contenido)
                 await db.commit()
         hechos += 1
     return hechos

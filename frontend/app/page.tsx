@@ -674,11 +674,11 @@ function HomeContent() {
         <div className="flex items-center gap-5">
           {/* Labelled, not just iconographic. "✕ / ✓" alone reads as
               delete/confirm; here the left action is a soft "pass" that's
-              undoable and the right one only saves to the pipeline (it
-              never submits an application), so the words carry meaning the
-              icons can't. With "aplicar al deslizar" on, the right one
-              says so: it prepares the application, and it only goes out
-              after a tap on Enviar (or by itself in auto mode, with undo). */}
+              undoable and the right one says what it does: "Guardar" saves
+              to the pipeline, "Aplicar" (aplicar al deslizar) prepares the
+              application, which only goes out after a tap on Enviar, or by
+              itself in auto mode with an undo window. The words carry
+              meaning the icons can't. */}
           <DecisionButton
             onClick={() => requestDecision("left")}
             disabled={pending || !!pendingDecision}
@@ -775,7 +775,11 @@ function HomeContent() {
             <p className="text-xs leading-relaxed text-brand-900 dark:text-brand-200">
               Guardado en tu pipeline. Para aplicar a{" "}
               <strong className="font-bold">{justApplied.job.title}</strong> hazlo en el sitio original, o
-              activa <Link href="/profile?tab=settings" className="font-semibold underline">aplicar al deslizar</Link>.
+              activa{" "}
+              <Link href="/profile?tab=settings" className="font-semibold underline">
+                aplicar al deslizar
+              </Link>
+              .
             </p>
             <button
               type="button"
@@ -798,51 +802,6 @@ function HomeContent() {
           ) : (
             <Link
               href={`/jobs/${justApplied.job.id}`}
-              className={buttonClass({ variant: "secondary", size: "sm", className: "mt-2.5" })}
-            >
-              Ver detalles del trabajo →
-            </Link>
-          )}
-        </div>
-      )}
-
-      {justPassed && (
-            <span className="flex items-center gap-1.5 text-brand-500 dark:text-brand-300">
-              <Kbd>U</Kbd> Deshacer
-            </span>
-          )}
-        </div>
-      )}
-
-      {justApplied && (
-        <div className="w-full max-w-md animate-slide-up rounded-2xl bg-brand-50 p-3.5 ring-1 ring-inset ring-brand-100 dark:bg-brand-500/10 dark:ring-brand-500/20">
-          <div className="flex items-start justify-between gap-2">
-            <p className="text-xs leading-relaxed text-brand-900 dark:text-brand-200">
-              Guardado en tu pipeline. JobPilot no lo envía por ti: para aplicar de verdad a{" "}
-              <strong className="font-bold">{justApplied.title}</strong> tienes que hacerlo en el sitio
-              original.
-            </p>
-            <button
-              type="button"
-              onClick={() => setJustApplied(null)}
-              aria-label="Cerrar"
-              className="-mr-1 -mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-brand-400 transition-colors hover:bg-brand-100 hover:text-brand-700 dark:hover:bg-brand-500/20"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
-            </button>
-          </div>
-          {justApplied.source_url ? (
-            <a
-              href={justApplied.source_url}
-              target="_blank"
-              rel="noreferrer"
-              className={buttonClass({ size: "sm", className: "mt-2.5" })}
-            >
-              Aplicar en el sitio original ↗
-            </a>
-          ) : (
-            <Link
-              href={`/jobs/${justApplied.id}`}
               className={buttonClass({ variant: "secondary", size: "sm", className: "mt-2.5" })}
             >
               Ver detalles del trabajo →

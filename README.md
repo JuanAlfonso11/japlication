@@ -7,7 +7,8 @@
 **Tu asistente personal para buscar trabajo y postularte, desde el teléfono.**
 
 Busca en 15 bolsas de empleo a la vez, te muestra qué tanto encaja cada vacante con tu CV
-y te deja decidir con un swipe. Tú postulas; JobPilot te ahorra todo lo repetitivo.
+y te deja decidir con un swipe. Desliza a la derecha y JobPilot prepara la aplicación
+—CV a medida, carta y formulario— para que la envíes con un toque, o sola si quieres.
 
 [**Descargar para Android**](https://github.com/JuanAlfonso11/japlication/releases/latest)
 
@@ -45,7 +46,7 @@ y te deja decidir con un swipe. Tú postulas; JobPilot te ahorra todo lo repetit
   (Compartir → JobPilot).
 
 ### Decide rápido
-- **Swipe**: a la derecha guardas, a la izquierda pasas.
+- **Swipe**: a la derecha aplicas (o solo guardas, si lo prefieres), a la izquierda pasas.
 - **Puntaje de match** de cada vacante con tu perfil, explicado: habilidades que coinciden,
   las que te faltan, y años de experiencia que pide contra los tuyos.
 - **Avisos útiles**: fecha límite, si la vacante sigue abierta y si pide un permiso de trabajo
@@ -65,8 +66,22 @@ y te deja decidir con un swipe. Tú postulas; JobPilot te ahorra todo lo repetit
 - **Recordatorios** de las postulaciones que llevan tiempo sin respuesta.
 - **Qué te falta para subir tu puntaje**, sumado sobre las vacantes que quisiste.
 
-> JobPilot **no postula por ti**. Los bots de "auto-apply" responden en tu nombre cosas que
-> nunca dijiste; aquí el texto lo escribes tú y la app solo evita que lo escribas dos veces.
+### Aplicar al deslizar
+- **Tres modos** (Perfil → Ajustes): solo guardar, preparar y revisar, o aplicar
+  automáticamente.
+- **Lo prepara todo tras el swipe**: CV a medida, carta cuando la piden, y el formulario de
+  Greenhouse respondido con tu perfil y tus respuestas guardadas.
+- **Revisa antes de que salga**: requisitos que no cumples (permiso de trabajo, idioma)
+  con la frase de la oferta, y una revisión de hechos que compara tu CV y tu carta con tu
+  perfil.
+- **Envío**: por correo cuando la oferta lo pide, por el formulario de Greenhouse, y en
+  cualquier otro sitio te lo deja listo para enviarlo tú (la extensión llena el formulario).
+- **En automático, con frenos**: solo sale sola si no falta nada y nada pide revisión,
+  espera unos minutos para que puedas deshacerla, y tiene un tope diario.
+
+> JobPilot **nunca responde por ti** consentimientos, preguntas sensibles ni legales sin una
+> respuesta tuya guardada, **no inventa** experiencia, y **no toca un CAPTCHA**: si un
+> formulario pide demostrar que eres una persona, te lo devuelve para que lo envíes tú.
 
 ## Instalación (Android)
 
