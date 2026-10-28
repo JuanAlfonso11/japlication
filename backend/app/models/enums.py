@@ -31,6 +31,7 @@ class JobSource(str, enum.Enum):
     # Especializadas en AI/ML (migration 0017)
     aidevboard = "aidevboard"
     aijobs = "aijobs"
+    freehire = "freehire"  # migration 0021
     manual = "manual"
 
 
