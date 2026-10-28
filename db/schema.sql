@@ -17,7 +17,11 @@ CREATE TABLE users (
     email_verified      BOOLEAN NOT NULL DEFAULT false,
     email_verified_at   TIMESTAMPTZ,
     created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+    -- migration 0020. Que hace un swipe a la derecha: save (solo guardar),
+    -- review (preparar la aplicacion y esperar aprobacion) o auto (enviarla
+    -- sola si no falta nada). Ver app/services/apply_agent/pipeline.py.
+    apply_mode          TEXT NOT NULL DEFAULT 'review' CHECK (apply_mode IN ('save', 'review', 'auto'))
 );
 
 -- =========================================================
@@ -234,28 +238,6 @@ CREATE INDEX idx_applications_user_status ON applications (user_id, status);
 -- every DELETE FROM jobs.
 CREATE INDEX idx_applications_job ON applications (job_id);
 
--- Borrador del agente de aplicacion (migration 0019, app/models/application_draft.py,
--- app/services/apply_agent/). Uno por candidatura: rehacerlo lo reemplaza.
--- `content` es el borrador entero (campos, respuestas, motivos de revision).
--- Los estados de envio (approved..cancelled) los usan las fases siguientes;
--- estan ya en el CHECK para no tener que migrar la restriccion por cada fase.
-CREATE TABLE application_drafts (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    application_id  UUID NOT NULL UNIQUE REFERENCES applications(id) ON DELETE CASCADE,
-    ats             TEXT NOT NULL,
-    form_url        TEXT NOT NULL,
-    status          TEXT NOT NULL DEFAULT 'ready' CHECK (status IN (
-        'ready', 'needs_user', 'failed', 'approved', 'scheduled', 'submitted', 'cancelled'
-    )),
-    auto_eligible   BOOLEAN NOT NULL DEFAULT false,
-    content         JSONB NOT NULL DEFAULT '{}'::jsonb,
-    error           TEXT,
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE INDEX idx_application_drafts_user ON application_drafts (user_id);
 
 -- =========================================================
 -- resume_versions (ATS-safe, job-tailored resume snapshots)
@@ -348,6 +330,40 @@ CREATE TABLE cover_letters (
 
 CREATE INDEX idx_cover_letters_user ON cover_letters (user_id);
 CREATE INDEX idx_cover_letters_job ON cover_letters (job_id);
+
+-- Borrador del agente de aplicacion (migration 0019, app/models/application_draft.py,
+-- app/services/apply_agent/). Uno por candidatura: rehacerlo lo reemplaza.
+-- `content` es el borrador entero (campos, respuestas, motivos de revision).
+-- Los estados de envio (approved..cancelled) los usan las fases siguientes;
+-- estan ya en el CHECK para no tener que migrar la restriccion por cada fase.
+CREATE TABLE application_drafts (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    application_id  UUID NOT NULL UNIQUE REFERENCES applications(id) ON DELETE CASCADE,
+    ats             TEXT NOT NULL,
+    form_url        TEXT NOT NULL,
+    -- migration 0020 anadio preparing, submitting y handoff (el usuario la
+    -- envia en la pagina real).
+    status          TEXT NOT NULL DEFAULT 'ready' CHECK (status IN (
+        'preparing', 'ready', 'needs_user', 'failed', 'approved', 'scheduled',
+        'submitting', 'submitted', 'handoff', 'cancelled'
+    )),
+    auto_eligible   BOOLEAN NOT NULL DEFAULT false,
+    content         JSONB NOT NULL DEFAULT '{}'::jsonb,
+    error           TEXT,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    -- migration 0020: por donde sale (greenhouse | email | external), cuando
+    -- sale un envio automatico, cuando salio, y el CV y la carta que lleva.
+    channel         TEXT NOT NULL DEFAULT 'greenhouse' CHECK (channel IN ('greenhouse', 'email', 'external')),
+    scheduled_for   TIMESTAMPTZ,
+    submitted_at    TIMESTAMPTZ,
+    resume_version_id UUID REFERENCES resume_versions(id) ON DELETE SET NULL,
+    cover_letter_id UUID REFERENCES cover_letters(id) ON DELETE SET NULL
+);
+
+CREATE INDEX idx_application_drafts_user ON application_drafts (user_id);
+CREATE INDEX idx_application_drafts_scheduled ON application_drafts (scheduled_for) WHERE status = 'scheduled';
 
 -- =========================================================
 -- system_heartbeats — one row per scheduled background job

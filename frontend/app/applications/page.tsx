@@ -249,10 +249,22 @@ function ApplicationRow({
                 </option>
               ))}
             </Select>
+            {/* La aplicación que preparó el swipe (si la hay): CV a medida,
+                respuestas del formulario, enviar o deshacer. */}
+            {application.status === "saved" && (
+              <Link
+                href={`/apply/${application.id}`}
+                className="ml-auto text-xs font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+              >
+                Aplicación →
+              </Link>
+            )}
             {job && (
               <Link
                 href={`/jobs/${job.id}`}
-                className="ml-auto text-xs font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+                className={`${
+                  application.status === "saved" ? "" : "ml-auto "
+                }text-xs font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300`}
               >
                 Ver trabajo →
               </Link>

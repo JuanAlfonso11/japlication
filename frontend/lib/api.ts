@@ -1,4 +1,8 @@
 import type {
+  ApplicationDraft,
+  ApplicationDraftListItem,
+  ApplyMode,
+  ApplySettings,
   AtsReport,
   EmailApplyPreview,
   ProfileLanguage,
@@ -620,6 +624,42 @@ export const applicationsApi = {
   // staleness definition as the daily push reminder, in case the user
   // missed or dismissed that notification.
   staleCount: () => request<{ count: number }>("/applications/stale-count"),
+};
+
+// ---------- Aplicar al deslizar (backend: routers/apply_agent.py) ----------
+
+export const applyAgentApi = {
+  settings: () => request<ApplySettings>("/apply-agent/settings"),
+  setMode: (apply_mode: ApplyMode) =>
+    request<ApplySettings>("/apply-agent/settings", { method: "PUT", body: { apply_mode } }),
+  /** La bandeja: lo que aún pide algo o está por salir (`active`), o todo. */
+  drafts: (active = true) =>
+    request<ApplicationDraftListItem[]>("/apply-agent/drafts", { query: { active } }),
+  get: (applicationId: string) => request<ApplicationDraft>(`/applications/${applicationId}/draft`),
+  /** Prepara o rehace (CV a medida, carta, formulario). Nunca envía. */
+  prepare: (applicationId: string) =>
+    request<ApplicationDraft>(`/applications/${applicationId}/draft`, {
+      method: "POST",
+      timeoutMs: SLOW_TIMEOUT_MS,
+    }),
+  answer: (applicationId: string, answers: Record<string, unknown>, coverLetterReviewed?: boolean) =>
+    request<ApplicationDraft>(`/applications/${applicationId}/draft/answers`, {
+      method: "PATCH",
+      body: { answers, cover_letter_reviewed: coverLetterReviewed },
+    }),
+  /** El toque en "Enviar": la aprobación de esta aplicación. */
+  submit: (applicationId: string) =>
+    request<ApplicationDraft>(`/applications/${applicationId}/draft/submit`, {
+      method: "POST",
+      // El agente abre el formulario real, lo llena y espera la confirmación.
+      timeoutMs: 180000,
+    }),
+  /** Descartar, o deshacer un envío automático que aún no salió. */
+  cancel: (applicationId: string) =>
+    request<ApplicationDraft>(`/applications/${applicationId}/draft/cancel`, { method: "POST" }),
+  /** "Ya la envié en la página de la empresa". */
+  markSent: (applicationId: string) =>
+    request<ApplicationDraft>(`/applications/${applicationId}/draft/mark-sent`, { method: "POST" }),
 };
 
 // ---------- Resume / Cover letters ----------

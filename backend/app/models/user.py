@@ -21,6 +21,9 @@ class User(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+    #: Que hace un swipe a la derecha: save | review | auto (migracion 0020).
+    #: Ver app/services/apply_agent/pipeline.py.
+    apply_mode: Mapped[str] = mapped_column(String, nullable=False, default="review", server_default="review")
 
     career_profile = relationship(
         "CareerProfile", back_populates="user", uselist=False, cascade="all, delete-orphan"

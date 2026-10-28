@@ -26,11 +26,14 @@ vi.mock("@/components/SwipeCard", () => ({
     ) : null,
 }));
 
-const { me, matches, listApplications, decide } = vi.hoisted(() => ({
+const { me, matches, listApplications, decide, applySettings, applyDrafts, getDraft } = vi.hoisted(() => ({
   me: vi.fn(),
   matches: vi.fn(),
   listApplications: vi.fn(),
   decide: vi.fn(),
+  applySettings: vi.fn(),
+  applyDrafts: vi.fn(),
+  getDraft: vi.fn(),
 }));
 
 vi.mock("@/lib/api", async (importOriginal) => {
@@ -40,6 +43,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
     authApi: { ...actual.authApi, me },
     jobsApi: { ...actual.jobsApi, matches, decide },
     applicationsApi: { ...actual.applicationsApi, list: listApplications },
+    applyAgentApi: { ...actual.applyAgentApi, settings: applySettings, drafts: applyDrafts, get: getDraft },
   };
 });
 
@@ -71,6 +75,15 @@ describe("Home swipe/decision flow", () => {
     // so a bare array silently left the stats row unrendered.
     listApplications.mockResolvedValue({ items: [], total: 0 });
     decide.mockReset();
+    applySettings.mockResolvedValue({
+      apply_mode: "save",
+      daily_auto_limit: 15,
+      undo_minutes: 10,
+      agent_available: true,
+      auto_sent_today: 0,
+    });
+    applyDrafts.mockResolvedValue([]);
+    getDraft.mockReset();
   });
 
   it("removes the current job from the queue after a successful decision", async () => {
@@ -119,5 +132,48 @@ describe("Home swipe/decision flow", () => {
     await userEvent.click(screen.getByText("mock-save"));
 
     await waitFor(() => expect(screen.getByText(/ya estás al día/i)).toBeInTheDocument());
+  });
+
+  it("with apply-on-swipe on, the right button applies and the banner follows the draft", async () => {
+    applySettings.mockResolvedValue({
+      apply_mode: "review",
+      daily_auto_limit: 15,
+      undo_minutes: 10,
+      agent_available: true,
+      auto_sent_today: 0,
+    });
+    matches.mockResolvedValue({ items: [job("a", "Backend Engineer"), job("b", "Data Engineer")], total: 2 });
+    decide.mockResolvedValue({ id: "app1", status: "saved" });
+    getDraft.mockResolvedValue({
+      id: "d1",
+      application_id: "app1",
+      ats: "greenhouse",
+      form_url: "https://job-boards.greenhouse.io/acme/jobs/1",
+      status: "needs_user",
+      channel: "greenhouse",
+      auto_eligible: false,
+      content: { pending_required: ["question_1", "question_2"] },
+      error: null,
+      scheduled_for: null,
+      submitted_at: null,
+      resume_version_id: "cv1",
+      cover_letter_id: null,
+    });
+
+    renderHome();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Aplicar" })).toBeInTheDocument());
+    expect(screen.getByText(/derecha para aplicar/i)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByText("mock-save"));
+    await waitFor(() => expect(screen.getByText(/Faltan 2 respuestas/)).toBeInTheDocument());
+    expect(getDraft).toHaveBeenCalledWith("app1");
+    expect(screen.getByRole("link", { name: "Responder" })).toHaveAttribute("href", "/apply/app1");
+  });
+
+  it("in save mode the right button only saves", async () => {
+    matches.mockResolvedValue({ items: [job("a", "Backend Engineer")], total: 1 });
+    renderHome();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Guardar" })).toBeInTheDocument());
+    expect(getDraft).not.toHaveBeenCalled();
   });
 });

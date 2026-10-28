@@ -12,7 +12,8 @@ import { useAnnounce } from "@/components/LiveRegion";
 import Button, { buttonClass } from "@/components/ui/Button";
 import { Skeleton, SwipeCardSkeleton } from "@/components/ui/Skeleton";
 import { useAuth } from "@/context/AuthContext";
-import { applicationsApi, ApiError, jobsApi, profileApi } from "@/lib/api";
+import ApplyProgress from "@/components/ApplyProgress";
+import { applicationsApi, applyAgentApi, ApiError, jobsApi, profileApi } from "@/lib/api";
 import {
   detectUserLocation,
   jobMatchesScope,
@@ -20,7 +21,7 @@ import {
   SCOPE_LEVELS,
   type UserLocation,
 } from "@/lib/geoScope";
-import type { Application, Job } from "@/lib/types";
+import type { Application, ApplyMode, Job } from "@/lib/types";
 import {
   buildWidgetPayload,
   countPipeline,
@@ -149,7 +150,16 @@ const COUNT_LABELS: Record<string, string> = {
 /** Small muted chips instead of the old bordered/shadowed stat cards —
  * the counts are still all there, just no longer competing with the job
  * cards for visual weight. */
-function StatsRow({ applications, queueCount }: { applications: Application[]; queueCount: number }) {
+function StatsRow({
+  applications,
+  queueCount,
+  inProgress,
+}: {
+  applications: Application[];
+  queueCount: number;
+  /** Aplicaciones del swipe que aún piden algo (responder, enviar, deshacer). */
+  inProgress: number;
+}) {
   const counts = PIPELINE_STATUSES.reduce<Record<string, number>>((acc, status) => {
     acc[status] = applications.filter((a) => a.status === status).length;
     return acc;
@@ -160,6 +170,14 @@ function StatsRow({ applications, queueCount }: { applications: Application[]; q
       <span className="tabular flex min-h-[30px] shrink-0 items-center rounded-full bg-gray-100 px-2.5 text-[11px] font-semibold text-gray-500 dark:bg-gray-800 dark:text-gray-400">
         {queueCount} en cola
       </span>
+      {inProgress > 0 && (
+        <Link
+          href="/apply"
+          className="tabular flex min-h-[30px] shrink-0 items-center rounded-full bg-amber-50 px-2.5 text-[11px] font-bold text-amber-800 ring-1 ring-inset ring-amber-100 transition-colors hover:bg-amber-100 active:scale-95 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/20"
+        >
+          {inProgress} por enviar
+        </Link>
+      )}
       {PIPELINE_STATUSES.map((status) => (
         <Link
           key={status}
@@ -227,6 +245,37 @@ function HomeContent() {
   // that has nothing to do with having reviewed everything — see the empty
   // state below.
   const [hasProfile, setHasProfile] = useState<boolean | null>(null);
+
+  // Qué hace la derecha (Perfil → Ajustes). null mientras carga: hasta
+  // saberlo, el botón dice "Guardar", que es lo que nunca promete de más.
+  const [applyMode, setApplyMode] = useState<ApplyMode | null>(null);
+  const applies = applyMode !== null && applyMode !== "save";
+  const [inProgress, setInProgress] = useState(0);
+
+  const loadInProgress = useCallback(async () => {
+    try {
+      const drafts = await applyAgentApi.drafts(true);
+      setInProgress(drafts.filter((d) => d.status !== "preparing" && d.status !== "submitting").length);
+    } catch {
+      // Solo es un contador: sin él Inicio funciona igual.
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    applyAgentApi
+      .settings()
+      .then((s) => {
+        if (!cancelled) setApplyMode(s.apply_mode);
+      })
+      .catch(() => {
+        if (!cancelled) setApplyMode("save");
+      });
+    loadInProgress();
+    return () => {
+      cancelled = true;
+    };
+  }, [loadInProgress]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -313,7 +362,7 @@ function HomeContent() {
   // triggers its own exit internally and calls `decide` directly once the
   // animation finishes, so this stays null in that path.
   const [pendingDecision, setPendingDecision] = useState<"left" | "right" | null>(null);
-  const [justApplied, setJustApplied] = useState<Job | null>(null);
+  const [justApplied, setJustApplied] = useState<{ job: Job; applicationId: string } | null>(null);
   const [justPassed, setJustPassed] = useState<{ job: Job; applicationId: string } | null>(null);
   const [undoing, setUndoing] = useState(false);
 
@@ -326,13 +375,19 @@ function HomeContent() {
       try {
         const application = await jobsApi.decide(target.id, { decision });
         setQueue((prev) => (prev ? prev.filter((j) => j.id !== target.id) : prev));
-        setJustApplied(decision === "right" ? target : null);
+        setJustApplied(decision === "right" ? { job: target, applicationId: application.id } : null);
         setJustPassed(decision === "left" ? { job: target, applicationId: application.id } : null);
         announce(
           decision === "right"
-            ? `Guardado: ${target.title} en ${target.company}.`
+            ? applies
+              ? `Preparando tu aplicación a ${target.title} en ${target.company}.`
+              : `Guardado: ${target.title} en ${target.company}.`
             : `Pasaste: ${target.title} en ${target.company}. Pulsa U para deshacer.`
         );
+        if (decision === "right" && applies) {
+          // La bandeja cuenta cuando la preparación termina, no al instante.
+          setTimeout(loadInProgress, 8000);
+        }
       } catch (err) {
         const message =
           err instanceof ApiError ? err.message : "No se pudo registrar tu decisión. Intenta de nuevo.";
@@ -343,7 +398,7 @@ function HomeContent() {
         setPendingDecision(null);
       }
     },
-    [current, pending, announce]
+    [current, pending, announce, applies, loadInProgress]
   );
 
   const handleUndoPass = useCallback(async () => {
@@ -505,7 +560,9 @@ function HomeContent() {
         </h1>
         <p className="mt-0.5 text-[13px] text-gray-500 dark:text-gray-400">
           {current
-            ? "Desliza a la derecha para guardar, a la izquierda para pasar."
+            ? applies
+              ? "Desliza a la derecha para aplicar, a la izquierda para pasar."
+              : "Desliza a la derecha para guardar, a la izquierda para pasar."
             : hasProfile === false
             ? "Así funciona: subes tu CV, te buscamos vacantes y aquí decides cuáles guardar."
             : "Tu cola está al día."}
@@ -527,7 +584,11 @@ function HomeContent() {
 
       {applications && (
         <div className="-mt-1 flex w-full max-w-md">
-          <StatsRow applications={applications} queueCount={filteredQueue?.length ?? 0} />
+          <StatsRow
+            applications={applications}
+            queueCount={filteredQueue?.length ?? 0}
+            inProgress={inProgress}
+          />
         </div>
       )}
 
@@ -615,7 +676,9 @@ function HomeContent() {
               delete/confirm; here the left action is a soft "pass" that's
               undoable and the right one only saves to the pipeline (it
               never submits an application), so the words carry meaning the
-              icons can't. */}
+              icons can't. With "aplicar al deslizar" on, the right one
+              says so: it prepares the application, and it only goes out
+              after a tap on Enviar (or by itself in auto mode, with undo). */}
           <DecisionButton
             onClick={() => requestDecision("left")}
             disabled={pending || !!pendingDecision}
@@ -625,7 +688,7 @@ function HomeContent() {
           <DecisionButton
             onClick={() => requestDecision("right")}
             disabled={pending || !!pendingDecision}
-            label="Guardar"
+            label={applies ? "Aplicar" : "Guardar"}
             tone="save"
           />
         </div>
@@ -681,12 +744,69 @@ function HomeContent() {
             <Kbd>←</Kbd> Pasar
           </span>
           <span className="flex items-center gap-1.5">
-            <Kbd>→</Kbd> Guardar
+            <Kbd>→</Kbd> {applies ? "Aplicar" : "Guardar"}
           </span>
           <span className="flex items-center gap-1.5">
             <Kbd>Enter</Kbd> Ver detalle
           </span>
           {justPassed && (
+            <span className="flex items-center gap-1.5 text-brand-500 dark:text-brand-300">
+              <Kbd>U</Kbd> Deshacer
+            </span>
+          )}
+        </div>
+      )}
+
+      {justApplied && applies && (
+        <ApplyProgress
+          key={justApplied.applicationId}
+          applicationId={justApplied.applicationId}
+          job={justApplied.job}
+          onClose={() => {
+            setJustApplied(null);
+            loadInProgress();
+          }}
+        />
+      )}
+
+      {justApplied && !applies && (
+        <div className="w-full max-w-md animate-slide-up rounded-2xl bg-brand-50 p-3.5 ring-1 ring-inset ring-brand-100 dark:bg-brand-500/10 dark:ring-brand-500/20">
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-xs leading-relaxed text-brand-900 dark:text-brand-200">
+              Guardado en tu pipeline. Para aplicar a{" "}
+              <strong className="font-bold">{justApplied.job.title}</strong> hazlo en el sitio original, o
+              activa <Link href="/profile?tab=settings" className="font-semibold underline">aplicar al deslizar</Link>.
+            </p>
+            <button
+              type="button"
+              onClick={() => setJustApplied(null)}
+              aria-label="Cerrar"
+              className="-mr-1 -mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-brand-400 transition-colors hover:bg-brand-100 hover:text-brand-700 dark:hover:bg-brand-500/20"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+            </button>
+          </div>
+          {justApplied.job.source_url ? (
+            <a
+              href={justApplied.job.source_url}
+              target="_blank"
+              rel="noreferrer"
+              className={buttonClass({ size: "sm", className: "mt-2.5" })}
+            >
+              Aplicar en el sitio original ↗
+            </a>
+          ) : (
+            <Link
+              href={`/jobs/${justApplied.job.id}`}
+              className={buttonClass({ variant: "secondary", size: "sm", className: "mt-2.5" })}
+            >
+              Ver detalles del trabajo →
+            </Link>
+          )}
+        </div>
+      )}
+
+      {justPassed && (
             <span className="flex items-center gap-1.5 text-brand-500 dark:text-brand-300">
               <Kbd>U</Kbd> Deshacer
             </span>

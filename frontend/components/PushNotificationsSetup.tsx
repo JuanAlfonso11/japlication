@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { Capacitor, type PluginListenerHandle } from "@capacitor/core";
 import { PushNotifications } from "@capacitor/push-notifications";
 import { useAuth } from "@/context/AuthContext";
@@ -12,6 +13,7 @@ import { notificationsApi } from "@/lib/api";
  * nothing, just runs the registration side effect. */
 export default function PushNotificationsSetup() {
   const { token } = useAuth();
+  const router = useRouter();
   const attempted = useRef(false);
 
   useEffect(() => {
@@ -20,6 +22,7 @@ export default function PushNotificationsSetup() {
 
     let registrationHandle: PluginListenerHandle | undefined;
     let errorHandle: PluginListenerHandle | undefined;
+    let actionHandle: PluginListenerHandle | undefined;
 
     async function setup() {
       registrationHandle = await PushNotifications.addListener("registration", (result) => {
@@ -29,6 +32,15 @@ export default function PushNotificationsSetup() {
       });
       errorHandle = await PushNotifications.addListener("registrationError", () => {
         // Non-fatal — same as above.
+      });
+      // Tocar el aviso de una aplicación en curso ("faltan 2 respuestas",
+      // "sale sola en 10 min") abre su revisión. El backend manda el id en
+      // `data` (services/apply_agent/notify.py).
+      actionHandle = await PushNotifications.addListener("pushNotificationActionPerformed", (action) => {
+        const data = (action.notification.data ?? {}) as Record<string, string>;
+        if (data.type === "apply_draft" && data.application_id) {
+          router.push(`/apply/${encodeURIComponent(data.application_id)}`);
+        }
       });
 
       let permStatus = await PushNotifications.checkPermissions();
@@ -47,8 +59,9 @@ export default function PushNotificationsSetup() {
     return () => {
       registrationHandle?.remove();
       errorHandle?.remove();
+      actionHandle?.remove();
     };
-  }, [token]);
+  }, [token, router]);
 
   return null;
 }

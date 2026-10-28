@@ -26,7 +26,7 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request, status
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -229,12 +229,15 @@ async def widget_summary(
 @router.post("/decision")
 async def widget_decision(
     payload: WidgetDecisionRequest,
+    background_tasks: BackgroundTasks,
     user: User = Depends(get_widget_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
+    # El widget tambien aplica al deslizar: mismo swipe, mismas tareas.
     application = await swipe_decision(
         job_id=payload.job_id,
         payload=DecisionRequest(decision=payload.decision),
+        background_tasks=background_tasks,
         current_user=user,
         db=db,
     )

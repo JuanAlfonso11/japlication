@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import ThemeToggle from "@/components/ThemeToggle";
+import ApplyModeSettings from "@/components/ApplyModeSettings";
 
 function LockIcon({ className }: { className?: string }) {
   return (
@@ -57,7 +58,7 @@ export default function SettingsPanel() {
       <div>
         <h2 className="font-semibold text-gray-900 dark:text-gray-100">Ajustes</h2>
         <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-          Tu cuenta, el tema de la app y el diagnóstico técnico.
+          Tu cuenta, qué hace el swipe, el tema de la app y el diagnóstico técnico.
         </p>
       </div>
 
@@ -102,6 +103,8 @@ export default function SettingsPanel() {
           </div>
         </div>
       )}
+
+      <ApplyModeSettings />
 
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Tema</p>
