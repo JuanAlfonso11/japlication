@@ -97,6 +97,22 @@ class Settings(BaseSettings):
     OLLAMA_NUM_CTX: int = 16384
     OLLAMA_KEEP_ALIVE: str = "30m"
 
+    #: Aplicar al deslizar (services/apply_agent/pipeline.py y submit.py).
+    #: El navegador que envia los formularios de Greenhouse vive en su propio
+    #: contenedor (backend/Dockerfile.agent, servicio `agent` de compose).
+    #: Vacio = sin envio desde el servidor: el borrador se prepara igual y el
+    #: usuario lo envia en la pagina real (con la extension llenando).
+    APPLY_AGENT_URL: Optional[str] = None
+    APPLY_AGENT_TIMEOUT_SECONDS: float = 150.0
+    #: Envios AUTOMATICOS por usuario y dia (modo "auto"). Los que el usuario
+    #: aprueba a mano no cuentan: cada uno ya es su decision.
+    APPLY_DAILY_AUTO_LIMIT: int = 15
+    #: Ventana para deshacer un envio automatico antes de que salga.
+    APPLY_UNDO_MINUTES: int = 10
+    #: El bucle que envia los programados. Los tests no lo arrancan (no hay
+    #: lifespan con ASGITransport), pero un script puede apagarlo.
+    APPLY_SCHEDULER_ENABLED: bool = True
+
     #: JobPilot Admin (dashboard de tokens). Con ambos definidos, cada llamada
     #: a la IA reporta sus tokens a ADMIN_URL/api/events; sin ellos no se
     #: envía nada. Desde docker compose: http://host.docker.internal:3030

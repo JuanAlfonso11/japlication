@@ -33,6 +33,7 @@ from app.services import (
     adzuna,
     aidevboard,
     aijobs,
+    freehire,
     arbeitnow,
     ats_boards,
     experience_level,
@@ -295,6 +296,13 @@ async def _search_aijobs(p: SearchParams) -> dict[str, Any]:
     return await aijobs.search_aijobs_jobs(**kwargs)
 
 
+async def _search_freehire(p: SearchParams) -> dict[str, Any]:
+    kwargs = _common(p)
+    if p.paginating:
+        kwargs["page"] = p.page_or_1
+    return await freehire.search_freehire_jobs(**kwargs)
+
+
 def _ats_search(ats: str):
     """Greenhouse, Lever y Ashby comparten conector: solo cambia el ATS.
     No paginan -- recorren todos los tableros de app/data/ats_companies.json
@@ -343,6 +351,10 @@ _SPECS: tuple[ProviderSpec, ...] = (
                  aidevboard.get_cached_result, _search_aidevboard),
     ProviderSpec("aijobs", "aijobs_job_id", aijobs.AIJobsError,
                  aijobs.get_cached_result, _search_aijobs),
+    # El agregador de la skill /freehire de ai-job-search: millones de ofertas
+    # de IT con enlace a la original. Solo las frescas.
+    ProviderSpec("freehire", "freehire_job_id", freehire.FreehireError,
+                 freehire.get_cached_result, _search_freehire),
     # Directo del ATS de cada empresa: cada oferta trae su formulario real.
     ProviderSpec("greenhouse", "ats_job_id", ats_boards.AtsBoardError,
                  ats_boards.get_cached_result, _ats_search("greenhouse")),

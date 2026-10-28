@@ -36,6 +36,11 @@ os.environ["ANTHROPIC_WORKSPACE_ID"] = ""
 # the suite would call the real Ollama — slow, and the results would depend on
 # whether the PC's model happens to be running.
 os.environ["OLLAMA_BASE_URL"] = ""
+# Y el agente de envio: el backend de compose lo tiene apuntando al contenedor
+# `agent`, que ENVIA formularios reales. Ningun test puede llegar a el; los que
+# prueban el envio sustituyen submit.call_agent.
+os.environ["APPLY_AGENT_URL"] = ""
+os.environ["APPLY_SCHEDULER_ENABLED"] = "false"
 
 import sys
 from pathlib import Path

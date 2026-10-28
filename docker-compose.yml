@@ -81,6 +81,12 @@ services:
       ANDROID_UPDATE_APK_URL: ${ANDROID_UPDATE_APK_URL:-}
       ANDROID_UPDATE_NOTES: ${ANDROID_UPDATE_NOTES:-}
       SYSTEM_HEARTBEAT_SECRET: ${SYSTEM_HEARTBEAT_SECRET:-}
+      # Aplicar al deslizar (services/apply_agent/). APPLY_AGENT_URL vacio =
+      # sin envio desde el servidor: se prepara todo y el usuario envia en la
+      # pagina real.
+      APPLY_AGENT_URL: ${APPLY_AGENT_URL:-http://agent:8800}
+      APPLY_DAILY_AUTO_LIMIT: ${APPLY_DAILY_AUTO_LIMIT:-15}
+      APPLY_UNDO_MINUTES: ${APPLY_UNDO_MINUTES:-10}
     volumes:
       - ./backend/secrets:/app/secrets:ro
       - ./backend/runtime:/app/runtime
@@ -101,6 +107,24 @@ services:
       # proxea a http://localhost:3000 y :8000 (verificado con `serve status`),
       # asi que sigue alcanzando ambos.
       - "127.0.0.1:${BACKEND_PORT:-8000}:8000"
+
+  # El navegador que envia los formularios de Greenhouse que el usuario
+  # aprueba (o deja programados en modo automatico). Aparte del backend porque
+  # Chromium pesa mas de 1 GB. Sin `ports`: solo el backend lo alcanza, por la
+  # red interna de compose. Ver backend/Dockerfile.agent y
+  # app/services/apply_agent/agent_server.py.
+  agent:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.agent
+    restart: unless-stopped
+    # Chromium necesita memoria compartida; sin esto se cae en paginas pesadas.
+    ipc: host
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8800/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 
   frontend:
     build:

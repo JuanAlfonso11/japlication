@@ -12,6 +12,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
+from app.api.v1.routers.match import still_open
 from app.core.rate_limit import limiter
 from app.db.session import get_db
 from app.models.application import Application
@@ -744,18 +745,25 @@ def _profile_search_query(profile: CareerProfile) -> Optional[str]:
 
 _HOME_QUEUE_TARGET = 30  # Home's swipe queue is topped up to this many undecided matches, never left to grow past it.
 _AUTO_IMPORT_LIMIT = 20  # Hard ceiling per sweep regardless of queue headroom, so one run can't dump 30 at once.
+#: Una vacante que lleva mas que esto en la cola sin decidirse sigue en Inicio,
+#: pero deja de ocupar sitio en el tope: si no, una cola llena que nadie desliza
+#: bloqueaba el barrido para siempre -- cero vacantes nuevas y, por tanto, cero
+#: avisos de "vacantes nuevas" (paso del 10 al 27 de octubre de 2026).
+_QUEUE_FRESH_DAYS = 14
 
 
 async def _undecided_queue_size(user_id: UUID, db: AsyncSession) -> int:
-    """How many jobs are currently sitting in this user's Home queue —
-    matched but not yet swiped on. Same shape as GET /matches' own count
-    query, kept separate since that endpoint also supports a min_score
-    filter this one doesn't need."""
+    """How many jobs take up room in this user's Home queue: matched, not yet
+    swiped on, still open (same filter as GET /matches) and imported in the
+    last _QUEUE_FRESH_DAYS days."""
     decided_job_ids_subq = select(Application.job_id).where(Application.user_id == user_id)
     count_stmt = (
         select(func.count())
         .select_from(JobMatch)
+        .join(Job, Job.id == JobMatch.job_id)
         .where(JobMatch.user_id == user_id, JobMatch.job_id.not_in(decided_job_ids_subq))
+        .where(still_open())
+        .where(Job.created_at >= func.now() - timedelta(days=_QUEUE_FRESH_DAYS))
     )
     return (await db.execute(count_stmt)).scalar_one()
 

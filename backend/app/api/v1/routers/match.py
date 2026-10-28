@@ -30,6 +30,14 @@ from app.services.interview_prep import build_interview_prep
 from app.services.match_engine import compute_and_persist_match
 from app.services.skill_gaps import aggregate_skill_gaps, summarize
 
+def still_open():
+    """Ni las que la empresa ya cerro (services/liveness.py) ni las que pasaron
+    su fecha limite: un swipe a la derecha ahi es tiempo perdido. Lo comparten
+    la cola de Inicio y el tope del barrido (jobs.py), que antes contaba las
+    cerradas que Inicio ya no ensenaba."""
+    return Job.closed_at.is_(None) & (Job.deadline.is_(None) | (Job.deadline >= func.current_date()))
+
+
 router = APIRouter(tags=["match"])
 
 # Statuses that mean "the user wanted this job", i.e. everything from a
@@ -96,17 +104,11 @@ async def list_match_queue(
 ) -> JobListResponse:
     # Exclude jobs the user has already swiped/decided on.
     decided_job_ids_subq = select(Application.job_id).where(Application.user_id == current_user.id)
-    # Ni las que la empresa ya cerro (services/liveness.py) ni las que pasaron
-    # su fecha limite: un swipe a la derecha ahi es tiempo perdido.
-    still_open = (Job.closed_at.is_(None)) & (
-        Job.deadline.is_(None) | (Job.deadline >= func.current_date())
-    )
-
     stmt = (
         select(Job, JobMatch)
         .join(JobMatch, (JobMatch.job_id == Job.id) & (JobMatch.user_id == current_user.id))
         .where(Job.id.not_in(decided_job_ids_subq))
-        .where(still_open)
+        .where(still_open())
     )
     if min_score is not None:
         stmt = stmt.where(JobMatch.overall_score >= min_score)
@@ -115,7 +117,7 @@ async def list_match_queue(
         select(Job.id)
         .join(JobMatch, (JobMatch.job_id == Job.id) & (JobMatch.user_id == current_user.id))
         .where(Job.id.not_in(decided_job_ids_subq))
-        .where(still_open)
+        .where(still_open())
     )
     if min_score is not None:
         count_stmt = count_stmt.where(JobMatch.overall_score >= min_score)

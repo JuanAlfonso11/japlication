@@ -5,11 +5,16 @@
 # pre-commit) no tiene por que cargarlos. Este contenedor solo necesita el
 # llenador, que no importa nada de app/.
 #
-#   docker build -f backend/Dockerfile.agent -t jobpilot-agent backend
-#   docker run --rm --ipc=host -v <carpeta>:/work jobpilot-agent \
-#       --draft /work/draft.json --resume /work/cv.pdf --out /work/captura.png
+# Por defecto corre agent_server.py: el servicio `agent` de docker compose,
+# que el backend llama para ENVIAR una aplicacion que el usuario aprobo (o
+# dejo programada en modo automatico). Solo por la red interna de compose.
 #
-# Nunca pulsa "Enviar": ver app/services/apply_agent/filler.py.
+# El banco de prueba sigue usando el llenador suelto, que NUNCA envia:
+#   docker build -f backend/Dockerfile.agent -t jobpilot-agent backend
+#   docker run --rm --ipc=host -v <carpeta>:/work --entrypoint python jobpilot-agent \
+#       /agent/filler.py --draft /work/draft.json --resume /work/cv.pdf --out /work/captura.png
+#
+# Ninguno de los dos toca un CAPTCHA: ver app/services/apply_agent/filler.py.
 FROM mcr.microsoft.com/playwright/python:v1.49.1-noble
 
 # La imagen oficial trae los navegadores pero no el paquete de Python. Misma
@@ -18,7 +23,9 @@ RUN pip install --no-cache-dir --break-system-packages playwright==1.49.1
 
 WORKDIR /agent
 COPY app/services/apply_agent/filler.py /agent/filler.py
+COPY app/services/apply_agent/agent_server.py /agent/agent_server.py
 
 # pwuser viene con la imagen: sin root, como el backend.
 USER pwuser
-ENTRYPOINT ["python", "/agent/filler.py"]
+EXPOSE 8800
+ENTRYPOINT ["python", "/agent/agent_server.py"]

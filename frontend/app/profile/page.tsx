@@ -156,6 +156,14 @@ function ProfileContent() {
   // answer bank and landing on the CV form every time is a small, repeated
   // annoyance.
   const [tab, setTab] = useLocalStorageState<ProfileTab>(TAB_STORAGE_KEY, "cv", isProfileTab);
+  // Enlaces que abren una pestaña concreta (/profile?tab=settings, desde el
+  // aviso de Inicio que lleva a "aplicar al deslizar"). Leido de la URL a
+  // mano, sin useSearchParams, para no exigir un Suspense en toda la pagina.
+  useEffect(() => {
+    const pedida = new URLSearchParams(window.location.search).get("tab");
+    if (pedida && isProfileTab(pedida)) setTab(pedida);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [profile, setProfile] = useState<CareerProfile | null>(null);
   const [loading, setLoading] = useState(true);

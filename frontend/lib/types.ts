@@ -288,7 +288,8 @@ export type ExternalProvider =
   | "ashby"
   | "web3career"
   | "aidevboard"
-  | "aijobs";
+  | "aijobs"
+  | "freehire";
 
 export const PROVIDER_LABELS: Record<ExternalProvider, string> = {
   himalayas: "Himalayas",
@@ -312,6 +313,7 @@ export const PROVIDER_LABELS: Record<ExternalProvider, string> = {
   web3career: "Web3.career",
   aidevboard: "AI Dev Jobs",
   aijobs: "Artificial Intelligence Jobs",
+  freehire: "freehire",
 };
 
 export type ExperienceLevel = "internship" | "entry" | "mid" | "senior" | "lead";
@@ -812,3 +814,126 @@ export type EmailApplyPreview = {
   fingerprint: string | null;
   blockers: string[];
 };
+
+// ---------- Aplicar al deslizar (backend: services/apply_agent/) ----------
+
+/** Qué hace un swipe a la derecha. */
+export type ApplyMode = "save" | "review" | "auto";
+
+export interface ApplySettings {
+  apply_mode: ApplyMode;
+  daily_auto_limit: number;
+  undo_minutes: number;
+  /** El servidor tiene el navegador que envía formularios de Greenhouse. */
+  agent_available: boolean;
+  auto_sent_today: number;
+}
+
+export type DraftStatus =
+  | "preparing"
+  | "needs_user"
+  | "ready"
+  | "scheduled"
+  | "submitting"
+  | "submitted"
+  | "handoff"
+  | "failed"
+  | "cancelled"
+  | "approved";
+
+export type DraftChannel = "greenhouse" | "email" | "external";
+
+export interface DraftOption {
+  label: string;
+  value: string | number;
+}
+
+export interface DraftField {
+  key: string;
+  label: string;
+  type: "text" | "textarea" | "file" | "select" | "multiselect";
+  required: boolean;
+  section: string;
+  /** identity | document | consent | sensitive | personal | salary | work_auth | open_text | choice | text */
+  kind: string;
+  options: DraftOption[];
+  value: unknown;
+  display: string | null;
+  /** profile | screening | ai | user | none */
+  source: string;
+  /** filled | needs_user | skipped */
+  status: string;
+  reason: string | null;
+}
+
+export interface DraftGate {
+  code: string;
+  level: "block" | "warn";
+  message: string;
+  evidence: string[];
+}
+
+export interface DraftDocument {
+  id: string;
+  kind: "resume" | "cover_letter";
+  language?: string | null;
+  generated_by: string;
+  reviewed?: boolean;
+}
+
+export interface DraftContent {
+  title?: string;
+  company?: string;
+  url?: string;
+  form_url?: string;
+  ai_policy?: boolean;
+  fields?: DraftField[];
+  notices?: string[];
+  gates?: DraftGate[];
+  grounding?: { ok: boolean; issues: string[]; fixed: string[] };
+  documents?: { resume?: DraftDocument | null; cover_letter?: DraftDocument | null };
+  email?: EmailApplyPreview;
+  review_reasons?: string[];
+  review_reason_texts?: string[];
+  pending_required?: string[];
+  handoff_reason?: string;
+  channel_notice?: string;
+  auto_limit_reached?: boolean;
+  stats?: Record<string, number>;
+  log?: { at: string; text: string }[];
+}
+
+export interface ApplicationDraft {
+  id: string;
+  application_id: string;
+  ats: string;
+  form_url: string;
+  status: DraftStatus;
+  channel: DraftChannel;
+  auto_eligible: boolean;
+  content: DraftContent;
+  error: string | null;
+  scheduled_for: string | null;
+  submitted_at: string | null;
+  resume_version_id: string | null;
+  cover_letter_id: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface ApplicationDraftListItem {
+  id: string;
+  application_id: string;
+  job_id: string;
+  status: DraftStatus;
+  channel: DraftChannel;
+  auto_eligible: boolean;
+  error: string | null;
+  pending_count: number;
+  review_reason_texts: string[];
+  handoff_reason: string | null;
+  scheduled_for: string | null;
+  submitted_at: string | null;
+  updated_at: string | null;
+  job: Job | null;
+}

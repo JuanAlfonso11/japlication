@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -37,12 +37,14 @@ from app.services.cover_letter_generator import generate_cover_letter
 
 router = APIRouter(tags=["applications"])
 
-# A right swipe only SAVES to the pipeline. It used to go straight to
-# `applied`, but nothing in JobPilot submits anything to an employer and the
-# button the user presses says "Guardar" — so `applied` was the app claiming
-# an application that had not happened, which then fed the stale-application
-# reminders. The job-detail page's "Apply" button, which opens the real
-# posting, is what marks it applied (DecisionRequest.mark_applied).
+# A right swipe SAVES to the pipeline; it never claims `applied` by itself.
+# It used to go straight to `applied` before anything had been sent, which fed
+# the stale-application reminders with applications that had not happened.
+# With "aplicar al deslizar" (users.apply_mode) the swipe also prepares the
+# application in the background, and the status only becomes `applied` when
+# it actually goes out (services/apply_agent/submit.py) -- or when the
+# job-detail page's "Apply" button says the user applied on the posting
+# (DecisionRequest.mark_applied).
 DECISION_TO_STATUS = {
     SwipeDecision.right: ApplicationStatus.saved,
     SwipeDecision.left: ApplicationStatus.passed,
@@ -113,6 +115,7 @@ async def _reuse_or_generate_cover_letter(
 async def swipe_decision(
     job_id: UUID,
     payload: DecisionRequest,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> ApplicationSchema:
@@ -212,6 +215,23 @@ async def swipe_decision(
             .execution_options(populate_existing=True)
         )
     ).scalar_one()
+
+    # Aplicar al deslizar: con el modo "review" o "auto", la derecha tambien
+    # PREPARA la aplicacion (CV a medida, carta, formulario) despues de
+    # responder, para que el swipe siga siendo instantaneo. Enviar es otra
+    # cosa: en "review" espera el toque del usuario; en "auto" sale sola tras
+    # la ventana de deshacer, y solo si no hay nada que revisar. Ver
+    # services/apply_agent/pipeline.py. "mark_applied" es el boton de la
+    # ficha que abre la oferta: ahi el usuario aplica por su cuenta.
+    if (
+        payload.decision == SwipeDecision.right
+        and not payload.mark_applied
+        and (current_user.apply_mode or "review") != "save"
+        and app_row.status == ApplicationStatus.saved
+    ):
+        from app.services.apply_agent.pipeline import prepare_in_background
+
+        background_tasks.add_task(prepare_in_background, current_user.id, app_row.id)
     return _serialize(app_row)
 
 

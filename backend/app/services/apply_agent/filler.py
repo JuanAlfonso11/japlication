@@ -19,8 +19,17 @@ Lo que se comprobo en vivo en job-boards.greenhouse.io (2026-10-12):
   * Hay un reCAPTCHA Enterprise invisible que se dispara al enviar. Por eso el
     envio (fase 3) tiene que contar con pasarle el control al usuario.
 
-Lo que NUNCA hace: pulsar "Submit application", ni ningun boton de enviar. Y
-por si acaso, aborta cualquier POST de envio antes de que salga del navegador.
+Dos modos:
+
+  * Llenar (por defecto, y el del banco de prueba): NUNCA pulsa "Submit
+    application" ni ningun boton de enviar, y por si acaso aborta cualquier
+    POST de envio antes de que salga del navegador.
+  * Enviar (submit=True, solo desde agent_server.py, que lo llama el backend
+    cuando el usuario aprobo ESA aplicacion o la dejo programada): llena, y
+    solo si cada campo listo se pudo llenar, pulsa enviar y espera la
+    confirmacion. Si aparece un desafio de CAPTCHA no lo toca: devuelve
+    "challenge" y el usuario la envia en la pagina. Nada aqui intenta
+    resolver, esquivar o enganar un CAPTCHA.
 
 --safe escribe datos ficticios en vez de los del usuario y sube un PDF de
 prueba: un formulario de terceros puede registrar lo que se teclea aunque no
@@ -109,8 +118,102 @@ def _value_for(field: dict[str, Any], safe: bool) -> Any:
     return field.get("value")
 
 
-def fill(draft: dict[str, Any], resume: Path, out: Path, *, safe: bool, country: str, timeout: int = 8000) -> dict[str, Any]:
+#: Lo que Greenhouse (y casi todo ATS) ensena al recibir una candidatura.
+_CONFIRMED = re.compile(
+    r"thank(s| you) for (applying|your application|your interest|submitting)"
+    r"|application (has been |was )?(submitted|received)"
+    r"|we('ve| have) received your application"
+    r"|gracias por (postular|tu (postulaci[oó]n|solicitud))",
+    re.I,
+)
+#: El desafio visible de reCAPTCHA (bframe) o hCaptcha. El reCAPTCHA
+#: invisible de Greenhouse vive en un iframe "anchor" que no se ve; solo
+#: cuenta cuando aparece el desafio.
+_CHALLENGE_IFRAMES = "iframe[src*='recaptcha'][src*='bframe'], iframe[src*='hcaptcha'][src*='challenge']"
+_ERRORS = "[aria-invalid='true'], .error, .field-error, .helper-text--error, [class*='error-message']"
+
+
+def _challenge_visible(page) -> bool:
+    for frame in page.locator(_CHALLENGE_IFRAMES).all():
+        try:
+            caja = frame.bounding_box()
+        except Exception:  # noqa: BLE001
+            caja = None
+        if frame.is_visible() and caja and caja["height"] > 50 and caja["width"] > 50:
+            return True
+    return False
+
+
+def _visible_errors(page) -> list[str]:
+    errores = []
+    for el in page.locator(_ERRORS).all()[:20]:
+        try:
+            if el.is_visible():
+                texto = (el.inner_text() or el.get_attribute("aria-label") or "").strip()
+                if texto:
+                    errores.append(texto[:120])
+        except Exception:  # noqa: BLE001
+            continue
+    return list(dict.fromkeys(errores))
+
+
+def _submit_button(page):
+    for nombre in (re.compile(r"submit application", re.I), re.compile(r"^\s*(submit|apply|send)\b", re.I)):
+        boton = page.get_by_role("button", name=nombre)
+        if boton.count():
+            return boton.first
+    boton = page.locator("button[type=submit], input[type=submit]")
+    return boton.first if boton.count() else None
+
+
+def _press_submit_and_wait(page, informe: dict[str, Any], wait_seconds: int) -> None:
+    """Pulsa enviar UNA vez y mira que pasa. Nunca repite el clic: un segundo
+    envio duplicaria la candidatura."""
+    boton = _submit_button(page)
+    if boton is None:
+        informe["outcome"] = "error"
+        informe["detail"] = "No se encontró el botón de enviar."
+        return
+    url_antes = page.url
+    boton.click(timeout=10000)
+    informe["clicked_submit"] = True
+    for i in range(wait_seconds * 2):
+        page.wait_for_timeout(500)
+        try:
+            texto = page.locator("body").inner_text(timeout=2000)
+        except Exception:  # noqa: BLE001 - la pagina puede estar navegando
+            texto = ""
+        if _CONFIRMED.search(texto) or ("confirmation" in page.url and page.url != url_antes):
+            informe["outcome"] = "submitted"
+            return
+        if _challenge_visible(page):
+            informe["outcome"] = "challenge"
+            return
+        if i >= 6:  # 3 s: lo que tarda en pintar los errores de validacion
+            errores = _visible_errors(page)
+            if errores and page.url == url_antes:
+                informe["outcome"] = "invalid"
+                informe["errors"] = errores
+                return
+    informe["outcome"] = "unconfirmed"
+
+
+def fill(
+    draft: dict[str, Any],
+    resume: Path,
+    out: Path,
+    *,
+    safe: bool,
+    country: str,
+    timeout: int = 8000,
+    submit: bool = False,
+    cover_letter: Path | None = None,
+    wait_seconds: int = 45,
+) -> dict[str, Any]:
     from playwright.sync_api import sync_playwright
+
+    if submit and safe:
+        raise ValueError("--safe escribe datos ficticios: nunca se envia en ese modo.")
 
     url = draft.get("form_url") or draft["url"]
     informe: dict[str, Any] = {
@@ -120,6 +223,7 @@ def fill(draft: dict[str, Any], resume: Path, out: Path, *, safe: bool, country:
         "untouched": [],
         "blocked_posts": [],
         "captcha_iframe": False,
+        "outcome": None,
     }
     with sync_playwright() as p:
         browser = p.chromium.launch()
@@ -131,7 +235,8 @@ def fill(draft: dict[str, Any], resume: Path, out: Path, *, safe: bool, country:
                 return route.abort()
             return route.continue_()
 
-        page.route("**/*", _guard)
+        if not submit:
+            page.route("**/*", _guard)
         page.goto(url, wait_until="networkidle", timeout=60000)
 
         for field in draft["fields"]:
@@ -143,7 +248,8 @@ def fill(draft: dict[str, Any], resume: Path, out: Path, *, safe: bool, country:
                 if page.locator(_css_id(element_id)).count() == 0:
                     raise LookupError("no está en la página")
                 if field["type"] == "file":
-                    page.set_input_files(_css_id(element_id), str(resume), timeout=timeout)
+                    archivo = cover_letter if field.get("value") == "cover_letter" and cover_letter else resume
+                    page.set_input_files(_css_id(element_id), str(archivo), timeout=timeout)
                 elif field["key"] in _ELEMENT_IDS:
                     _fill_autocomplete(page, element_id, str(_value_for(field, safe)), timeout)
                 elif field["type"] in ("text", "textarea"):
@@ -167,6 +273,20 @@ def fill(draft: dict[str, Any], resume: Path, out: Path, *, safe: bool, country:
 
         informe["captcha_iframe"] = page.locator("iframe[src*='recaptcha'], iframe[src*='hcaptcha']").count() > 0
         informe["submit_buttons_seen"] = [t for t in page.locator("button").all_inner_texts() if _SUBMIT.search(t or "")]
+
+        if submit:
+            obligatorios_fallidos = [
+                f["key"] for f in informe["failed"]
+                if any(d["key"] == f["key"] and d.get("required") for d in draft["fields"])
+            ]
+            if obligatorios_fallidos:
+                # Un formulario a medias no se envia: lo termina el usuario.
+                informe["outcome"] = "error"
+                informe["detail"] = "No se pudieron llenar campos obligatorios: " + ", ".join(obligatorios_fallidos)
+            elif _challenge_visible(page):
+                informe["outcome"] = "challenge"
+            else:
+                _press_submit_and_wait(page, informe, wait_seconds)
         page.screenshot(path=str(out), full_page=True)
         informe["screenshot"] = str(out)
         browser.close()

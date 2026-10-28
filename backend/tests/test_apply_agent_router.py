@@ -7,7 +7,6 @@ que lo que no resuelve el perfil queda para el usuario.
 
 from sqlalchemy import select
 
-from app.api.v1.routers import apply_agent as router_mod
 from app.core.security import create_access_token, hash_password
 from app.db.session import AsyncSessionLocal
 from app.models.application import Application
@@ -16,6 +15,7 @@ from app.models.career_profile import CareerProfile
 from app.models.enums import ApplicationStatus, JobSource
 from app.models.job import Job
 from app.models.user import User
+from app.services.apply_agent import pipeline as router_mod
 from app.services.apply_agent.greenhouse import FormUnavailable, parse_form
 
 FORM = {
@@ -108,12 +108,19 @@ async def test_prepare_and_read_draft(async_client, user_and_headers, monkeypatc
     assert leido.status_code == 200 and leido.json()["id"] == body["id"]
 
 
-async def test_only_greenhouse_for_now(async_client, user_and_headers, monkeypatch):
+async def test_other_destinations_are_prepared_for_the_user_to_send(async_client, user_and_headers, monkeypatch):
+    """Lever, Workday, la web de la empresa: el agente no las envia, pero el
+    CV a medida queda listo y la aplicacion pasa a "envíala tú"."""
     user, headers = user_and_headers
     app_id = await _setup(user, apply_url="https://jobs.lever.co/acme/abc")
     _fake_form(monkeypatch)
     resp = await async_client.post(f"/applications/{app_id}/draft", headers=headers)
-    assert resp.status_code == 422
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["channel"] == "external"
+    assert body["status"] == "handoff"
+    assert body["resume_version_id"] is not None
+    assert "channel" in body["content"]["review_reasons"]
 
 
 async def test_needs_a_profile(async_client, user_and_headers, monkeypatch):
@@ -124,7 +131,7 @@ async def test_needs_a_profile(async_client, user_and_headers, monkeypatch):
     assert resp.status_code == 409
 
 
-async def test_form_unavailable_is_a_502(async_client, user_and_headers, monkeypatch):
+async def test_form_unavailable_falls_back_to_the_page(async_client, user_and_headers, monkeypatch):
     user, headers = user_and_headers
     app_id = await _setup(user)
 
@@ -133,8 +140,12 @@ async def test_form_unavailable_is_a_502(async_client, user_and_headers, monkeyp
 
     monkeypatch.setattr(router_mod, "fetch_greenhouse_form", gone)
     resp = await async_client.post(f"/applications/{app_id}/draft", headers=headers)
-    assert resp.status_code == 502
-    assert resp.json()["detail"] == "La oferta ya no existe en Greenhouse."
+    # El formulario no se pudo leer: la aplicacion se prepara igual y sale por
+    # la pagina de la empresa, diciendo por que.
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["channel"] == "external"
+    assert body["content"]["channel_notice"] == "La oferta ya no existe en Greenhouse."
 
 
 async def test_cannot_touch_someone_elses_application(async_client, user_and_headers, monkeypatch):

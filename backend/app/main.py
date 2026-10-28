@@ -1,3 +1,7 @@
+import asyncio
+import contextlib
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -23,12 +27,35 @@ from app.core.error_middleware import ErrorLoggingMiddleware
 from app.core.rate_limit import limiter
 
 _docs = settings.ENABLE_API_DOCS
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """El reloj de los envios programados (modo automatico de "aplicar al
+    deslizar", services/apply_agent/submit.py). Un solo proceso uvicorn, asi
+    que corre aqui mismo; el FOR UPDATE SKIP LOCKED de run_due lo hace seguro
+    aunque algun dia haya mas. Los tests no arrancan el lifespan."""
+    tarea = None
+    if settings.APPLY_SCHEDULER_ENABLED:
+        from app.services.apply_agent.submit import scheduler_loop
+
+        tarea = asyncio.create_task(scheduler_loop())
+    try:
+        yield
+    finally:
+        if tarea is not None:
+            tarea.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await tarea
+
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version="1.0.0",
     docs_url="/docs" if _docs else None,
     redoc_url="/redoc" if _docs else None,
     openapi_url="/openapi.json" if _docs else None,
+    lifespan=lifespan,
 )
 app.state.limiter = limiter
 

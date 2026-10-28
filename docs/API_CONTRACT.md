@@ -127,7 +127,7 @@ Search results are **not persisted** — pick one and call the import endpoint t
 
 **21 providers.** Seventeen need **zero credentials** (no API key, no OAuth, no signup):
 `himalayas`, `arbeitnow`, `remotive`, `jobicy`, `remotejobs_org`, `themuse`, `weworkremotely`,
-`hackernews`, `getonbrd`, `workingnomads`, `remoteok`, `linkedin`, `aidevboard`, `aijobs`,
+`hackernews`, `getonbrd`, `workingnomads`, `remoteok`, `linkedin`, `aidevboard`, `aijobs`, `freehire`,
 `greenhouse`, `lever`, `ashby`.
 
 Four need their own key in `.env` and are skipped — reported in `sources`, never a hard failure —
